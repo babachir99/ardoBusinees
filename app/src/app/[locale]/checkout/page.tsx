@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
+import CheckoutSummary from "@/components/cart/CheckoutSummary";
 
 export default function CheckoutPage() {
   const t = useTranslations("Checkout");
@@ -49,27 +50,7 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/15 via-zinc-900 to-zinc-900 p-8">
-          <h2 className="text-xl font-semibold">{t("summary.title")}</h2>
-          <div className="mt-5 grid gap-3 text-sm text-zinc-300">
-            <div className="flex items-center justify-between">
-              <span>{t("summary.subtotal")}</span>
-              <span>154,500 CFA</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>{t("summary.fees")}</span>
-              <span>6,500 CFA</span>
-            </div>
-            <div className="flex items-center justify-between font-semibold text-white">
-              <span>{t("summary.total")}</span>
-              <span>161,000 CFA</span>
-            </div>
-          </div>
-          <button className="mt-6 w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950">
-            {t("summary.pay")}
-          </button>
-          <p className="mt-3 text-xs text-zinc-400">{t("summary.note")}</p>
-        </aside>
+        <CheckoutSummary />
       </main>
     </div>
   );

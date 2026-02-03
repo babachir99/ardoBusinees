@@ -1,8 +1,37 @@
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import AddToCartButton from "@/components/cart/AddToCartButton";
+import { formatMoney } from "@/lib/format";
 
-export default function ProductPage() {
+export default async function ProductPage({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}) {
+  const { locale, slug } = await params;
   const t = useTranslations("Product");
+  const product = await prisma.product.findFirst({
+    where: { slug, isActive: true },
+    include: { seller: true },
+  });
+
+  if (!product) {
+    notFound();
+  }
+
+  const typeLabel =
+    product.type === "PREORDER" ? t("badge.preorder") : t("badge.dropship");
+  const etaLabel =
+    product.type === "PREORDER"
+      ? t("badge.preorderEta", { days: product.preorderLeadDays ?? 14 })
+      : t("badge.dropshipEta");
+  const priceLabel = formatMoney(
+    product.priceCents,
+    product.currency,
+    locale
+  );
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -22,22 +51,24 @@ export default function ProductPage() {
         <section className="flex-1 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/10 via-zinc-900 to-zinc-900 p-8">
           <div className="flex items-center gap-3 text-xs text-zinc-300">
             <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-emerald-200">
-              {t("badge.dropship")}
+              {typeLabel}
             </span>
-            <span>{t("badge.eta")}</span>
+            <span>{etaLabel}</span>
           </div>
-          <h1 className="mt-6 text-3xl font-semibold">{t("title")}</h1>
-          <p className="mt-3 text-sm text-zinc-300">{t("subtitle")}</p>
+          <h1 className="mt-6 text-3xl font-semibold">{product.title}</h1>
+          <p className="mt-3 text-sm text-zinc-300">
+            {product.description ?? t("subtitle")}
+          </p>
           <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/70 p-5 text-sm text-zinc-300">
             <div className="flex items-center justify-between">
               <span>{t("details.price")}</span>
               <span className="text-base font-semibold text-emerald-200">
-                89,000 CFA
+                {priceLabel}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span>{t("details.seller")}</span>
-              <span>{t("details.sellerValue")}</span>
+              <span>{product.seller?.displayName ?? t("details.sellerValue")}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>{t("details.stock")}</span>
@@ -45,9 +76,16 @@ export default function ProductPage() {
             </div>
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950">
-              {t("cta.add")}
-            </button>
+            <AddToCartButton
+              id={product.id}
+              slug={product.slug}
+              title={product.title}
+              priceCents={product.priceCents}
+              currency={product.currency}
+              type={product.type}
+              sellerName={product.seller?.displayName}
+              label={t("cta.add")}
+            />
             <button className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold">
               {t("cta.wishlist")}
             </button>

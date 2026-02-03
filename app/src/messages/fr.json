@@ -94,7 +94,9 @@
     "cart": "Panier",
     "badge": {
       "dropship": "Dropshipping",
-      "eta": "Livraison estimee 5-10 jours"
+      "preorder": "Precommande",
+      "dropshipEta": "Livraison estimee 5-10 jours",
+      "preorderEta": "Livraison estimee {days} jours"
     },
     "title": "Atlas Studio Headphones",
     "subtitle": "Audio premium, confort longue duree, livraison rapide depuis nos partenaires.",
@@ -128,11 +130,18 @@
     "nav": {
       "shop": "Retour boutique"
     },
+    "emptyTitle": "Panier vide",
+    "emptyDesc": "Ajoute des produits pour demarrer ta commande.",
+    "continue": "Explorer la boutique",
     "title": "Ton panier",
     "subtitle": "Verifie les produits avant de finaliser.",
     "labels": {
-      "qty": "Qte"
+      "qty": "Qte",
+      "preorder": "Precommande",
+      "dropship": "Dropshipping"
     },
+    "remove": "Retirer",
+    "clear": "Vider le panier",
     "items": {
       "0": {
         "name": "Atlas Studio Headphones",
@@ -157,6 +166,9 @@
     "nav": {
       "cart": "Panier"
     },
+    "emptyTitle": "Panier vide",
+    "emptyDesc": "Ajoute des produits pour continuer.",
+    "emptyCta": "Retour boutique",
     "title": "Paiement",
     "subtitle": "Finalise ta commande en quelques etapes.",
     "form": {
