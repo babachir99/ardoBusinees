@@ -1,9 +1,10 @@
 import { Link } from "@/i18n/navigation";
-import { useTranslations } from "next-intl";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import AddToCartButton from "@/components/cart/AddToCartButton";
+import CartBadge from "@/components/cart/CartBadge";
 import { formatMoney } from "@/lib/format";
+import { getTranslations } from "next-intl/server";
 
 export default async function ProductPage({
   params,
@@ -11,7 +12,7 @@ export default async function ProductPage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const t = useTranslations("Product");
+  const t = await getTranslations("Product");
   const product = await prisma.product.findFirst({
     where: { slug, isActive: true },
     include: { seller: true },
@@ -44,6 +45,7 @@ export default async function ProductPage({
           className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
         >
           {t("cart")}
+          <CartBadge />
         </Link>
       </header>
 
@@ -85,6 +87,7 @@ export default async function ProductPage({
               type={product.type}
               sellerName={product.seller?.displayName}
               label={t("cta.add")}
+              addedLabel={t("cta.added")}
             />
             <button className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold">
               {t("cta.wishlist")}

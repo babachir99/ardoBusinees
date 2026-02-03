@@ -48,12 +48,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
-    const stored = parseStored(localStorage.getItem(STORAGE_KEY));
-    setItems(stored);
+    try {
+      const stored = parseStored(localStorage.getItem(STORAGE_KEY));
+      setItems(stored);
+    } catch {
+      setItems([]);
+    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch {
+      // Ignore write errors (storage disabled)
+    }
   }, [items]);
 
   const addItem = useCallback(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useCart } from "./CartProvider";
 
 type AddToCartButtonProps = {
@@ -11,6 +12,7 @@ type AddToCartButtonProps = {
   type: "PREORDER" | "DROPSHIP";
   sellerName?: string;
   label: string;
+  addedLabel?: string;
 };
 
 export default function AddToCartButton({
@@ -22,26 +24,32 @@ export default function AddToCartButton({
   type,
   sellerName,
   label,
+  addedLabel = "Added",
 }: AddToCartButtonProps) {
   const { addItem } = useCart();
+  const [added, setAdded] = useState(false);
+
+  const handleClick = () => {
+    addItem({
+      id,
+      slug,
+      title,
+      priceCents,
+      currency,
+      type,
+      sellerName,
+    });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1400);
+  };
 
   return (
     <button
       type="button"
-      onClick={() =>
-        addItem({
-          id,
-          slug,
-          title,
-          priceCents,
-          currency,
-          type,
-          sellerName,
-        })
-      }
+      onClick={handleClick}
       className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
     >
-      {label}
+      {added ? addedLabel : label}
     </button>
   );
 }
