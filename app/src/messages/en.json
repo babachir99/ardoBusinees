@@ -1,0 +1,272 @@
+{
+  "Home": {
+    "nav": {
+      "market": "Marketplace",
+      "services": "Services",
+      "sellers": "Sellers",
+      "contact": "Contact",
+      "cart": "Cart"
+    },
+    "hero": {
+      "kicker": "Hybrid marketplace",
+      "title": "Imported products, pre-orders, and services in one place.",
+      "subtitle": "A platform built to sell international goods locally, with dropshipping and secure pre-orders.",
+      "ctaPrimary": "Explore the shop",
+      "ctaSecondary": "Become a seller",
+      "card1Title": "Active pre-orders",
+      "card1Value": "128+",
+      "card1Note": "Import and ETA by seller",
+      "card2Title": "Average lead time",
+      "card2Value": "7-21 days",
+      "card2Note": "Based on supplier and shipping mode"
+    },
+    "features": {
+      "0": {
+        "title": "Secure payments",
+        "desc": "PayDunya with split payments for clear sharing between sellers and the platform."
+      },
+      "1": {
+        "title": "Two product modes",
+        "desc": "Manual pre-order or automated dropshipping depending on the source."
+      },
+      "2": {
+        "title": "Integrated services",
+        "desc": "Local service management with after-sales support."
+      }
+    },
+    "flow": {
+      "title": "How it works",
+      "subtitle": "A simple journey for both customers and sellers.",
+      "steps": {
+        "0": {
+          "title": "Customer orders",
+          "desc": "Secure payment and automatic tracking."
+        },
+        "1": {
+          "title": "Seller fulfills",
+          "desc": "Validation, sourcing, and shipping."
+        },
+        "2": {
+          "title": "Delivery + service",
+          "desc": "Receive the product and get help if needed."
+        }
+      }
+    },
+    "preorder": {
+      "title": "Manual pre-order",
+      "desc": "Great for rare or on-demand imports. You set lead times and margins."
+    },
+    "dropship": {
+      "title": "Dropshipping",
+      "desc": "Automated fulfillment with partner suppliers."
+    },
+    "seller": {
+      "title": "Sell on ardoBusiness",
+      "desc": "Open your store, manage orders, and get paid automatically.",
+      "cta": "Create my seller space"
+    }
+  }
+  ,
+  "Shop": {
+    "filters": {
+      "all": "All",
+      "preorder": "Pre-order",
+      "dropship": "Dropship"
+    },
+    "cart": "Cart",
+    "hero": {
+      "kicker": "Global selection",
+      "title": "Trending products, imported or pre-ordered.",
+      "subtitle": "Choose the mode that fits you, meet sellers, and reserve with confidence.",
+      "metrics": {
+        "title": "Products",
+        "note": "available"
+      }
+    },
+    "labels": {
+      "preorder": "Pre-order",
+      "dropship": "Dropshipping",
+      "eta": "Delivery {days}",
+      "seller": "Verified seller",
+      "view": "View product"
+    }
+  },
+  "Product": {
+    "cart": "Cart",
+    "badge": {
+      "dropship": "Dropshipping",
+      "eta": "Estimated delivery 5-10 days"
+    },
+    "title": "Atlas Studio Headphones",
+    "subtitle": "Premium audio, long-wear comfort, fast delivery from partners.",
+    "details": {
+      "price": "Price",
+      "seller": "Seller",
+      "sellerValue": "Nova Supply",
+      "stock": "Availability",
+      "stockValue": "Supplier stock"
+    },
+    "cta": {
+      "add": "Add to cart",
+      "wishlist": "Save"
+    },
+    "aside": {
+      "title": "Smart tracking",
+      "desc": "We sync order steps in real time.",
+      "steps": {
+        "0": {
+          "title": "Supplier validation",
+          "desc": "Auto-confirmation after payment."
+        },
+        "1": {
+          "title": "Shipping",
+          "desc": "Tracking starts right away."
+        }
+      }
+    }
+  },
+  "Cart": {
+    "nav": {
+      "shop": "Back to shop"
+    },
+    "title": "Your cart",
+    "subtitle": "Review items before checkout.",
+    "labels": {
+      "qty": "Qty"
+    },
+    "items": {
+      "0": {
+        "name": "Atlas Studio Headphones",
+        "type": "Dropshipping",
+        "price": "89,000 CFA"
+      },
+      "1": {
+        "name": "Lune Smartwatch Pro",
+        "type": "Pre-order",
+        "price": "65,500 CFA"
+      }
+    },
+    "summary": {
+      "title": "Summary",
+      "subtotal": "Subtotal",
+      "fees": "Estimated fees",
+      "total": "Total",
+      "cta": "Proceed to checkout"
+    }
+  },
+  "Checkout": {
+    "nav": {
+      "cart": "Cart"
+    },
+    "title": "Checkout",
+    "subtitle": "Complete your order in a few steps.",
+    "form": {
+      "contact": "Contact",
+      "email": "Email",
+      "phone": "Phone",
+      "shipping": "Shipping",
+      "address": "Address",
+      "city": "City"
+    },
+    "summary": {
+      "title": "Total",
+      "subtotal": "Subtotal",
+      "fees": "Fees",
+      "total": "Total to pay",
+      "pay": "Pay with PayDunya",
+      "note": "Payment is automatically split between sellers and the platform."
+    }
+  }
+  ,
+  "Seller": {
+    "nav": {
+      "admin": "Admin"
+    },
+    "hero": {
+      "kicker": "Seller space",
+      "title": "Manage your shop, products, and orders.",
+      "subtitle": "Pre-order or dropshipping, everything is centralized.",
+      "badges": {
+        "orders": "Active orders",
+        "preorder": "Pre-order tracking",
+        "dropship": "Dropship mode"
+      }
+    },
+    "stats": {
+      "0": {
+        "label": "Monthly revenue",
+        "value": "2.4M CFA",
+        "note": "Evolving with sales"
+      },
+      "1": {
+        "label": "Orders",
+        "value": "68",
+        "note": "Preparing and shipped"
+      },
+      "2": {
+        "label": "Satisfaction",
+        "value": "98%",
+        "note": "Based on customer reviews"
+      }
+    },
+    "cards": {
+      "products": "Products",
+      "productsDesc": "Add products, define mode and lead times.",
+      "productsLine1": "Create a pre-order listing with target ETA.",
+      "productsLine2": "Link a supplier for dropshipping.",
+      "orders": "Orders",
+      "ordersDesc": "Track each order and update statuses.",
+      "ordersLine1": "Automatic tracking updates.",
+      "ordersLine2": "Customer follow-ups if needed."
+    },
+    "payouts": {
+      "title": "Payouts and commissions",
+      "desc": "PayDunya split payments calculate shares automatically.",
+      "badge1": "Auto payout",
+      "badge2": "Detailed history"
+    }
+  },
+  "Admin": {
+    "nav": {
+      "seller": "Seller"
+    },
+    "hero": {
+      "kicker": "Back-office",
+      "title": "Global marketplace supervision.",
+      "subtitle": "Approve sellers, track orders, and manage categories."
+    },
+    "stats": {
+      "0": {
+        "label": "Active sellers",
+        "value": "24",
+        "note": "Verification in progress"
+      },
+      "1": {
+        "label": "Total orders",
+        "value": "312",
+        "note": "This quarter"
+      },
+      "2": {
+        "label": "Disputes",
+        "value": "3",
+        "note": "To handle"
+      }
+    },
+    "cards": {
+      "vendors": "Sellers",
+      "vendorsDesc": "Onboarding, approval, and commission management.",
+      "vendorsLine1": "Activate or suspend a seller account.",
+      "vendorsLine2": "KYC and document tracking.",
+      "catalog": "Catalog",
+      "catalogDesc": "Categories, featured products, and listing quality.",
+      "catalogLine1": "Highlight premium products.",
+      "catalogLine2": "Monitor pre-order lead times."
+    },
+    "compliance": {
+      "title": "Compliance and security",
+      "desc": "Transaction monitoring and fraud prevention.",
+      "badge1": "Real-time alerts",
+      "badge2": "Full audit trail"
+    }
+  }
+}

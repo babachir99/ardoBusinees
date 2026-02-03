@@ -1,0 +1,271 @@
+{
+  "Home": {
+    "nav": {
+      "market": "Marketplace",
+      "services": "Services",
+      "sellers": "Vendeurs",
+      "contact": "Contact",
+      "cart": "Panier"
+    },
+    "hero": {
+      "kicker": "Marketplace hybride",
+      "title": "Produits importes, precommandes et services en un seul endroit.",
+      "subtitle": "Une plateforme pensee pour vendre localement des produits internationaux, avec dropshipping et precommandes securisees.",
+      "ctaPrimary": "Explorer la boutique",
+      "ctaSecondary": "Devenir vendeur",
+      "card1Title": "Precommandes actives",
+      "card1Value": "128+",
+      "card1Note": "Import et estimation par vendeur",
+      "card2Title": "Delai moyen",
+      "card2Value": "7-21 jours",
+      "card2Note": "Selon fournisseur et mode livraison"
+    },
+    "features": {
+      "0": {
+        "title": "Paiement securise",
+        "desc": "PayDunya + split payments pour une repartition claire entre vendeurs et plateforme."
+      },
+      "1": {
+        "title": "Deux modes produits",
+        "desc": "Precommande manuelle ou dropshipping automatique selon la source."
+      },
+      "2": {
+        "title": "Service client integre",
+        "desc": "Gestion des services locaux et accompagnement post-achat."
+      }
+    },
+    "flow": {
+      "title": "Comment ca marche",
+      "subtitle": "Un parcours simple cote client et vendeur.",
+      "steps": {
+        "0": {
+          "title": "Client commande",
+          "desc": "Paiement securise et suivi automatique."
+        },
+        "1": {
+          "title": "Vendeur traite",
+          "desc": "Validation, sourcing et expedition."
+        },
+        "2": {
+          "title": "Livraison + service",
+          "desc": "Reception et support si besoin."
+        }
+      }
+    },
+    "preorder": {
+      "title": "Precommande manuelle",
+      "desc": "Ideal pour les produits rares ou import a la demande. Tu fixes les delais et marges."
+    },
+    "dropship": {
+      "title": "Dropshipping",
+      "desc": "Automatisation de la livraison grace aux fournisseurs partenaires."
+    },
+    "seller": {
+      "title": "Vendre sur ardoBusiness",
+      "desc": "Ouvre ta boutique, gere tes commandes et recois ton paiement automatiquement.",
+      "cta": "Creer mon espace vendeur"
+    }
+  },
+  "Shop": {
+    "filters": {
+      "all": "Tout",
+      "preorder": "Precommande",
+      "dropship": "Dropshipping"
+    },
+    "cart": "Panier",
+    "hero": {
+      "kicker": "Selection internationale",
+      "title": "Des produits tendance, importes ou precommandes.",
+      "subtitle": "Choisis le mode qui te convient, decouvre les vendeurs, et reserve en toute confiance.",
+      "metrics": {
+        "title": "Produits",
+        "note": "disponibles"
+      }
+    },
+    "labels": {
+      "preorder": "Precommande",
+      "dropship": "Dropshipping",
+      "eta": "Livraison {days}",
+      "seller": "Vendeur verifie",
+      "view": "Voir le produit"
+    }
+  },
+  "Product": {
+    "cart": "Panier",
+    "badge": {
+      "dropship": "Dropshipping",
+      "eta": "Livraison estimee 5-10 jours"
+    },
+    "title": "Atlas Studio Headphones",
+    "subtitle": "Audio premium, confort longue duree, livraison rapide depuis nos partenaires.",
+    "details": {
+      "price": "Prix",
+      "seller": "Vendeur",
+      "sellerValue": "Nova Supply",
+      "stock": "Disponibilite",
+      "stockValue": "Stock fournisseur"
+    },
+    "cta": {
+      "add": "Ajouter au panier",
+      "wishlist": "Sauvegarder"
+    },
+    "aside": {
+      "title": "Suivi intelligent",
+      "desc": "Nous synchronisons les etapes de commande en temps reel.",
+      "steps": {
+        "0": {
+          "title": "Validation fournisseur",
+          "desc": "Confirmation automatique apres paiement."
+        },
+        "1": {
+          "title": "Expedition",
+          "desc": "Tracking disponible des le depart."
+        }
+      }
+    }
+  },
+  "Cart": {
+    "nav": {
+      "shop": "Retour boutique"
+    },
+    "title": "Ton panier",
+    "subtitle": "Verifie les produits avant de finaliser.",
+    "labels": {
+      "qty": "Qte"
+    },
+    "items": {
+      "0": {
+        "name": "Atlas Studio Headphones",
+        "type": "Dropshipping",
+        "price": "89,000 CFA"
+      },
+      "1": {
+        "name": "Lune Smartwatch Pro",
+        "type": "Precommande",
+        "price": "65,500 CFA"
+      }
+    },
+    "summary": {
+      "title": "Resume",
+      "subtotal": "Sous-total",
+      "fees": "Frais estimes",
+      "total": "Total",
+      "cta": "Aller au paiement"
+    }
+  },
+  "Checkout": {
+    "nav": {
+      "cart": "Panier"
+    },
+    "title": "Paiement",
+    "subtitle": "Finalise ta commande en quelques etapes.",
+    "form": {
+      "contact": "Contact",
+      "email": "Email",
+      "phone": "Telephone",
+      "shipping": "Livraison",
+      "address": "Adresse",
+      "city": "Ville"
+    },
+    "summary": {
+      "title": "Total",
+      "subtotal": "Sous-total",
+      "fees": "Frais",
+      "total": "Total a payer",
+      "pay": "Payer avec PayDunya",
+      "note": "Le paiement sera partage automatiquement entre vendeurs et plateforme."
+    }
+  }
+  ,
+  "Seller": {
+    "nav": {
+      "admin": "Admin"
+    },
+    "hero": {
+      "kicker": "Espace vendeur",
+      "title": "Gere ta boutique, tes produits et tes commandes.",
+      "subtitle": "Precommande ou dropshipping, tout est centralise dans ton espace.",
+      "badges": {
+        "orders": "Commandes en cours",
+        "preorder": "Suivi precommandes",
+        "dropship": "Mode dropshipping"
+      }
+    },
+    "stats": {
+      "0": {
+        "label": "Chiffre du mois",
+        "value": "2,4M CFA",
+        "note": "Evolutif selon les ventes"
+      },
+      "1": {
+        "label": "Commandes",
+        "value": "68",
+        "note": "En preparation et expediees"
+      },
+      "2": {
+        "label": "Taux satisfaction",
+        "value": "98%",
+        "note": "D apres les avis clients"
+      }
+    },
+    "cards": {
+      "products": "Produits",
+      "productsDesc": "Ajoute des produits, definis le mode et les delais.",
+      "productsLine1": "Creer une fiche precommande avec delai cible.",
+      "productsLine2": "Associer un fournisseur pour le dropshipping.",
+      "orders": "Commandes",
+      "ordersDesc": "Suit chaque commande et communique le statut.",
+      "ordersLine1": "Mise a jour automatique du tracking.",
+      "ordersLine2": "Relances client si besoin."
+    },
+    "payouts": {
+      "title": "Paiements et commissions",
+      "desc": "Le split payment PayDunya calcule automatiquement les parts.",
+      "badge1": "Payout automatique",
+      "badge2": "Historique detaille"
+    }
+  },
+  "Admin": {
+    "nav": {
+      "seller": "Vendeur"
+    },
+    "hero": {
+      "kicker": "Back-office",
+      "title": "Supervision globale de la marketplace.",
+      "subtitle": "Valide les vendeurs, suis les commandes et gere les categories."
+    },
+    "stats": {
+      "0": {
+        "label": "Vendeurs actifs",
+        "value": "24",
+        "note": "Verification en cours"
+      },
+      "1": {
+        "label": "Commandes totales",
+        "value": "312",
+        "note": "Ce trimestre"
+      },
+      "2": {
+        "label": "Litiges",
+        "value": "3",
+        "note": "A traiter"
+      }
+    },
+    "cards": {
+      "vendors": "Vendeurs",
+      "vendorsDesc": "Onboarding, validation et gestion des commissions.",
+      "vendorsLine1": "Activer ou suspendre un compte vendeur.",
+      "vendorsLine2": "Suivi des KYC et documents.",
+      "catalog": "Catalogue",
+      "catalogDesc": "Categories, featured products et qualite des fiches.",
+      "catalogLine1": "Mettre en avant les produits premium.",
+      "catalogLine2": "Surveiller les delais precommande."
+    },
+    "compliance": {
+      "title": "Conformite et securite",
+      "desc": "Controle des transactions et prevention des fraudes.",
+      "badge1": "Alertes temps reel",
+      "badge2": "Audit complet"
+    }
+  }
+}
