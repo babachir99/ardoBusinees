@@ -67,6 +67,68 @@ async function main() {
     },
   });
 
+  const marketplaceStore = await prisma.store.upsert({
+    where: { slug: "marketplace" },
+    update: { name: "JONTAADO Marketplace", type: "MARKETPLACE" },
+    create: {
+      name: "JONTAADO Marketplace",
+      slug: "marketplace",
+      type: "MARKETPLACE",
+    },
+  });
+
+  await prisma.store.upsert({
+    where: { slug: "jontaado-immo" },
+    update: { name: "JONTAADO IMMO", type: "IMMO" },
+    create: { name: "JONTAADO IMMO", slug: "jontaado-immo", type: "IMMO" },
+  });
+
+  await prisma.store.upsert({
+    where: { slug: "jontaado-cars" },
+    update: { name: "JONTAADO CARS", type: "CARS" },
+    create: { name: "JONTAADO CARS", slug: "jontaado-cars", type: "CARS" },
+  });
+
+  await prisma.store.upsert({
+    where: { slug: "jontaado-presta" },
+    update: { name: "JONTAADO PRESTA", type: "PRESTA" },
+    create: { name: "JONTAADO PRESTA", slug: "jontaado-presta", type: "PRESTA" },
+  });
+
+  await prisma.store.upsert({
+    where: { slug: "jontaado-tiak-tiak" },
+    update: { name: "JONTAADO TIAK TIAK", type: "TIAK_TIAK" },
+    create: {
+      name: "JONTAADO TIAK TIAK",
+      slug: "jontaado-tiak-tiak",
+      type: "TIAK_TIAK",
+    },
+  });
+
+  await prisma.store.upsert({
+    where: { slug: "jontaado-gp" },
+    update: { name: "JONTAADO GP", type: "GP" },
+    create: { name: "JONTAADO GP", slug: "jontaado-gp", type: "GP" },
+  });
+
+  const catTech = await prisma.category.upsert({
+    where: { slug: "tech" },
+    update: { name: "Tech" },
+    create: { name: "Tech", slug: "tech" },
+  });
+
+  const catLifestyle = await prisma.category.upsert({
+    where: { slug: "lifestyle" },
+    update: { name: "Lifestyle" },
+    create: { name: "Lifestyle", slug: "lifestyle" },
+  });
+
+  const catLocal = await prisma.category.upsert({
+    where: { slug: "local" },
+    update: { name: "Local" },
+    create: { name: "Local", slug: "local" },
+  });
+
   const atlas = await prisma.product.upsert({
     where: { sellerId_slug: { sellerId: seller.id, slug: "atlas-headphones" } },
     update: {
@@ -77,6 +139,7 @@ async function main() {
     },
     create: {
       sellerId: seller.id,
+      storeId: marketplaceStore.id,
       title: "Atlas Studio Headphones",
       slug: "atlas-headphones",
       description: "Audio premium, confort longue duree.",
@@ -96,6 +159,7 @@ async function main() {
     },
     create: {
       sellerId: seller.id,
+      storeId: marketplaceStore.id,
       title: "Lune Smartwatch Pro",
       slug: "lune-smartwatch",
       description: "Montre connectee en precommande.",
@@ -103,6 +167,39 @@ async function main() {
       type: "PREORDER",
       preorderLeadDays: 14,
     },
+  });
+
+  const localProduct = await prisma.product.upsert({
+    where: { sellerId_slug: { sellerId: seller.id, slug: "jonta-basket" } },
+    update: {
+      title: "Panier artisanal Jonta",
+      priceCents: 18000,
+      type: "LOCAL",
+      stockQuantity: 12,
+      pickupLocation: "Dakar - Medina",
+      deliveryOptions: "Retrait ou livraison locale",
+    },
+    create: {
+      sellerId: seller.id,
+      storeId: marketplaceStore.id,
+      title: "Panier artisanal Jonta",
+      slug: "jonta-basket",
+      description: "Produit local fait main.",
+      priceCents: 18000,
+      type: "LOCAL",
+      stockQuantity: 12,
+      pickupLocation: "Dakar - Medina",
+      deliveryOptions: "Retrait ou livraison locale",
+    },
+  });
+
+  await prisma.productCategory.createMany({
+    data: [
+      { productId: atlas.id, categoryId: catTech.id },
+      { productId: atlas.id, categoryId: catLifestyle.id },
+      { productId: localProduct.id, categoryId: catLocal.id },
+    ],
+    skipDuplicates: true,
   });
 
   await prisma.serviceListing.upsert({

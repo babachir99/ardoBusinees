@@ -2,6 +2,7 @@
   "Home": {
     "nav": {
       "market": "Marketplace",
+      "stores": "Sous-boutiques",
       "services": "Services",
       "sellers": "Vendeurs",
       "contact": "Contact",
@@ -61,7 +62,7 @@
       "desc": "Automatisation de la livraison grace aux fournisseurs partenaires."
     },
     "seller": {
-      "title": "Vendre sur ardoBusiness",
+      "title": "Vendre sur JONTAADO",
       "desc": "Ouvre ta boutique, gere tes commandes et recois ton paiement automatiquement.",
       "cta": "Creer mon espace vendeur"
     }
@@ -70,7 +71,11 @@
     "filters": {
       "all": "Tout",
       "preorder": "Precommande",
-      "dropship": "Dropshipping"
+      "dropship": "Dropshipping",
+      "local": "Local",
+      "categories": "Categories",
+      "stores": "Sous-boutiques",
+      "storesLink": "Voir les boutiques"
     },
     "cart": "Panier",
     "hero": {
@@ -86,17 +91,22 @@
       "preorder": "Precommande",
       "dropship": "Dropshipping",
       "eta": "Livraison {days}",
+      "local": "Local",
+      "localEta": "Disponibilite locale",
       "seller": "Vendeur verifie",
       "view": "Voir le produit"
-    }
+    },
+    "empty": "Aucun produit pour ce filtre pour le moment."
   },
   "Product": {
     "cart": "Panier",
     "badge": {
       "dropship": "Dropshipping",
       "preorder": "Precommande",
+      "local": "Local",
       "dropshipEta": "Livraison estimee 5-10 jours",
-      "preorderEta": "Livraison estimee {days} jours"
+      "preorderEta": "Livraison estimee {days} jours",
+      "localEta": "Disponible localement"
     },
     "title": "Atlas Studio Headphones",
     "subtitle": "Audio premium, confort longue duree, livraison rapide depuis nos partenaires.",
@@ -105,7 +115,8 @@
       "seller": "Vendeur",
       "sellerValue": "Nova Supply",
       "stock": "Disponibilite",
-      "stockValue": "Stock fournisseur"
+      "stockValue": "Stock fournisseur",
+      "stockLocal": "{count} en stock"
     },
     "cta": {
       "add": "Ajouter au panier",
@@ -174,6 +185,7 @@
     "subtitle": "Finalise ta commande en quelques etapes.",
     "form": {
       "contact": "Contact",
+      "name": "Nom complet",
       "email": "Email",
       "phone": "Telephone",
       "shipping": "Livraison",
@@ -185,8 +197,18 @@
       "subtotal": "Sous-total",
       "fees": "Frais",
       "total": "Total a payer",
+      "loading": "Traitement...",
       "pay": "Payer avec PayDunya",
       "note": "Le paiement sera partage automatiquement entre vendeurs et plateforme."
+    },
+    "errors": {
+      "email": "Email requis pour finaliser la commande.",
+      "empty": "Ton panier est vide.",
+      "generic": "Une erreur est survenue."
+    },
+    "success": {
+      "title": "Commande enregistree",
+      "desc": "Merci ! Nous preparons ta commande."
     }
   }
   ,
@@ -236,6 +258,43 @@
       "desc": "Le split payment PayDunya calcule automatiquement les parts.",
       "badge1": "Payout automatique",
       "badge2": "Historique detaille"
+    },
+    "cta": {
+      "newProduct": "Ajouter un produit"
+    }
+  },
+  "SellerProduct": {
+    "back": "Retour vendeur",
+    "title": "Nouveau produit",
+    "subtitle": "Ajoute un produit et une image.",
+    "sellerId": "Identifiant vendeur",
+    "storeId": "Identifiant boutique (optionnel)",
+    "titleLabel": "Titre",
+    "slug": "Slug",
+    "description": "Description",
+    "price": "Prix (en CFA)",
+    "type": "Type",
+    "types": {
+      "local": "Local",
+      "preorder": "Precommande",
+      "dropship": "Dropshipping"
+    },
+    "preorderLeadDays": "Delai precommande (jours)",
+    "dropshipSupplier": "Fournisseur dropshipping",
+    "stockQuantity": "Stock local",
+    "pickupLocation": "Lieu de retrait",
+    "deliveryOptions": "Options de livraison",
+    "imageUrl": "URL image produit",
+    "imageFile": "Importer une image",
+    "dropzone": "Glisse une image ici ou clique pour choisir",
+    "uploading": "Upload {percent}%",
+    "imageUrlDisabled": "L'URL image est desactivee tant qu'un fichier est selectionne.",
+    "submit": "Enregistrer",
+    "loading": "Enregistrement...",
+    "success": "Produit cree avec succes.",
+    "errors": {
+      "fileType": "Format non supporte. Autorises : {formats}.",
+      "fileSize": "Image trop lourde (max {max})."
     }
   },
   "Admin": {
@@ -279,6 +338,80 @@
       "desc": "Controle des transactions et prevention des fraudes.",
       "badge1": "Alertes temps reel",
       "badge2": "Audit complet"
+    }
+  },
+  "Stores": {
+    "shop": "Boutique",
+    "kicker": "Sous-boutiques",
+    "title": "Explore les univers JONTAADO.",
+    "subtitle": "Chaque verticale a ses propres offres et services.",
+    "defaultDesc": "Une boutique specialisee au sein de JONTAADO.",
+    "view": "Voir la boutique"
+  },
+  "Store": {
+    "stores": "Sous-boutiques",
+    "shop": "Boutique",
+    "defaultDesc": "Selection de produits et services pour cette verticale.",
+    "view": "Voir",
+    "empty": "Aucun produit dans cette boutique pour le moment.",
+    "notFound": "Cette boutique n'existe pas.",
+    "back": "Retour aux boutiques"
+  },
+  "Verticals": {
+    "immo": {
+      "back": "Retour aux boutiques",
+      "kicker": "JONTAADO IMMO",
+      "title": "Achete, loue ou vends en toute confiance.",
+      "subtitle": "Des annonces verifiees et des transactions securisees.",
+      "features": [
+        "Annonces de location et de vente",
+        "Photos, prix, surface et localisation",
+        "Contact direct et prise de rendez-vous"
+      ]
+    },
+    "cars": {
+      "back": "Retour aux boutiques",
+      "kicker": "JONTAADO CARS",
+      "title": "Trouve le vehicule qu'il te faut.",
+      "subtitle": "Annonces detaillees, controle des infos, prix transparents.",
+      "features": [
+        "Marque, modele, annee, kilometrage",
+        "Historique et etat du vehicule",
+        "Comparaison rapide des offres"
+      ]
+    },
+    "presta": {
+      "back": "Retour aux boutiques",
+      "kicker": "JONTAADO PRESTA",
+      "title": "Des services locaux fiables.",
+      "subtitle": "Professionnels verifiés, disponibilites claires.",
+      "features": [
+        "Prestations par categorie",
+        "Reservation rapide",
+        "Avis et notation"
+      ]
+    },
+    "tiak": {
+      "back": "Retour aux boutiques",
+      "kicker": "JONTAADO TIAK TIAK",
+      "title": "Livraison express par motards.",
+      "subtitle": "Disponibilite en temps reel, suivi et prix au km.",
+      "features": [
+        "Motards avec disponibilites live",
+        "Suivi de la livraison",
+        "Tarification simple"
+      ]
+    },
+    "gp": {
+      "back": "Retour aux boutiques",
+      "kicker": "JONTAADO GP",
+      "title": "Transport de colis par voyageurs.",
+      "subtitle": "Suivi strict du bagage et infos de vol.",
+      "features": [
+        "Infos vol et tracking bagage",
+        "Controle poids/volume",
+        "Historique des trajets"
+      ]
     }
   }
 }

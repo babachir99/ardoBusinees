@@ -1,14 +1,23 @@
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
+import Footer from "@/components/layout/Footer";
 
 export default function SellerPage() {
   const t = useTranslations("Seller");
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          ardoBusiness
+    <div className="min-h-screen bg-jonta text-zinc-100">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="JONTAADO logo"
+            width={140}
+            height={140}
+            className="h-[115px] w-auto md:h-[135px]"
+            priority
+          />
         </Link>
         <Link
           href="/admin"
@@ -38,6 +47,12 @@ export default function SellerPage() {
               {t("hero.badges.dropship")}
             </span>
           </div>
+          <Link
+            href="/seller/products/new"
+            className="mt-6 inline-flex rounded-full bg-emerald-400 px-5 py-2 text-xs font-semibold text-zinc-950"
+          >
+            {t("cta.newProduct")}
+          </Link>
         </section>
 
         <section className="grid gap-6 md:grid-cols-3">
@@ -103,6 +118,7 @@ export default function SellerPage() {
           </div>
         </section>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const allowedTypes = new Set(["PREORDER", "DROPSHIP"]);
+const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
   const typeParam = searchParams.get("type");
   const type = typeParam ? typeParam.toUpperCase() : undefined;
   const sellerId = searchParams.get("sellerId") ?? undefined;
+  const categorySlug = searchParams.get("category") ?? undefined;
+  const storeSlug = searchParams.get("store") ?? undefined;
 
   const where: Record<string, unknown> = { isActive: true };
   if (type && allowedTypes.has(type)) {
@@ -20,6 +22,12 @@ export async function GET(request: NextRequest) {
   }
   if (sellerId) {
     where.sellerId = sellerId;
+  }
+  if (storeSlug) {
+    where.store = { slug: storeSlug };
+  }
+  if (categorySlug) {
+    where.categories = { some: { category: { slug: categorySlug } } };
   }
 
   const products = await prisma.product.findMany({
@@ -47,7 +55,7 @@ export async function POST(request: NextRequest) {
   const type = String(body.type ?? "").toUpperCase();
   if (!allowedTypes.has(type)) {
     return NextResponse.json(
-      { error: "type must be PREORDER or DROPSHIP" },
+      { error: "type must be PREORDER, DROPSHIP, or LOCAL" },
       { status: 400 }
     );
   }
@@ -67,6 +75,7 @@ export async function POST(request: NextRequest) {
   const product = await prisma.product.create({
     data: {
       sellerId,
+      storeId: body.storeId ?? undefined,
       title,
       slug,
       description: body.description ?? undefined,
@@ -75,7 +84,21 @@ export async function POST(request: NextRequest) {
       type,
       preorderLeadDays: body.preorderLeadDays ?? undefined,
       dropshipSupplier: body.dropshipSupplier ?? undefined,
+      stockQuantity: body.stockQuantity ?? undefined,
+      pickupLocation: body.pickupLocation ?? undefined,
+      deliveryOptions: body.deliveryOptions ?? undefined,
       isActive: body.isActive ?? true,
+      images: body.imageUrl
+        ? {
+            create: [
+              {
+                url: body.imageUrl,
+                alt: body.imageAlt ?? body.title,
+                position: 0,
+              },
+            ],
+          }
+        : undefined,
     },
   });
 

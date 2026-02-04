@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const allowedTypes = new Set(["PREORDER", "DROPSHIP"]);
+const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
 export async function GET(
   _request: NextRequest,
@@ -52,11 +52,21 @@ export async function PATCH(
     const type = String(body.type).toUpperCase();
     if (!allowedTypes.has(type)) {
       return NextResponse.json(
-        { error: "type must be PREORDER or DROPSHIP" },
+        { error: "type must be PREORDER, DROPSHIP, or LOCAL" },
         { status: 400 }
       );
     }
     data.type = type;
+  }
+
+  if (body.stockQuantity !== undefined) {
+    data.stockQuantity = Number(body.stockQuantity);
+  }
+  if (body.pickupLocation !== undefined) {
+    data.pickupLocation = body.pickupLocation;
+  }
+  if (body.deliveryOptions !== undefined) {
+    data.deliveryOptions = body.deliveryOptions;
   }
 
   const product = await prisma.product.update({

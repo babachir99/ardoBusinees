@@ -2,6 +2,7 @@
   "Home": {
     "nav": {
       "market": "Marketplace",
+      "stores": "Stores",
       "services": "Services",
       "sellers": "Sellers",
       "contact": "Contact",
@@ -61,7 +62,7 @@
       "desc": "Automated fulfillment with partner suppliers."
     },
     "seller": {
-      "title": "Sell on ardoBusiness",
+      "title": "Sell on JONTAADO",
       "desc": "Open your store, manage orders, and get paid automatically.",
       "cta": "Create my seller space"
     }
@@ -71,7 +72,11 @@
     "filters": {
       "all": "All",
       "preorder": "Pre-order",
-      "dropship": "Dropship"
+      "dropship": "Dropship",
+      "local": "Local",
+      "categories": "Categories",
+      "stores": "Stores",
+      "storesLink": "View stores"
     },
     "cart": "Cart",
     "hero": {
@@ -87,17 +92,22 @@
       "preorder": "Pre-order",
       "dropship": "Dropshipping",
       "eta": "Delivery {days}",
+      "local": "Local",
+      "localEta": "Local availability",
       "seller": "Verified seller",
       "view": "View product"
-    }
+    },
+    "empty": "No products found for this filter yet."
   },
   "Product": {
     "cart": "Cart",
     "badge": {
       "dropship": "Dropshipping",
       "preorder": "Pre-order",
+      "local": "Local",
       "dropshipEta": "Estimated delivery 5-10 days",
-      "preorderEta": "Estimated delivery {days} days"
+      "preorderEta": "Estimated delivery {days} days",
+      "localEta": "Available locally"
     },
     "title": "Atlas Studio Headphones",
     "subtitle": "Premium audio, long-wear comfort, fast delivery from partners.",
@@ -106,7 +116,8 @@
       "seller": "Seller",
       "sellerValue": "Nova Supply",
       "stock": "Availability",
-      "stockValue": "Supplier stock"
+      "stockValue": "Supplier stock",
+      "stockLocal": "{count} in stock"
     },
     "cta": {
       "add": "Add to cart",
@@ -175,6 +186,7 @@
     "subtitle": "Complete your order in a few steps.",
     "form": {
       "contact": "Contact",
+      "name": "Full name",
       "email": "Email",
       "phone": "Phone",
       "shipping": "Shipping",
@@ -186,8 +198,18 @@
       "subtotal": "Subtotal",
       "fees": "Fees",
       "total": "Total to pay",
+      "loading": "Processing...",
       "pay": "Pay with PayDunya",
       "note": "Payment is automatically split between sellers and the platform."
+    },
+    "errors": {
+      "email": "Email is required to place the order.",
+      "empty": "Your cart is empty.",
+      "generic": "Something went wrong."
+    },
+    "success": {
+      "title": "Order recorded",
+      "desc": "Thanks! We are preparing your order."
     }
   }
   ,
@@ -237,6 +259,43 @@
       "desc": "PayDunya split payments calculate shares automatically.",
       "badge1": "Auto payout",
       "badge2": "Detailed history"
+    },
+    "cta": {
+      "newProduct": "Add product"
+    }
+  },
+  "SellerProduct": {
+    "back": "Back to seller",
+    "title": "New product",
+    "subtitle": "Add a product and an image.",
+    "sellerId": "Seller ID",
+    "storeId": "Store ID (optional)",
+    "titleLabel": "Title",
+    "slug": "Slug",
+    "description": "Description",
+    "price": "Price (CFA)",
+    "type": "Type",
+    "types": {
+      "local": "Local",
+      "preorder": "Pre-order",
+      "dropship": "Dropshipping"
+    },
+    "preorderLeadDays": "Preorder lead time (days)",
+    "dropshipSupplier": "Dropship supplier",
+    "stockQuantity": "Local stock",
+    "pickupLocation": "Pickup location",
+    "deliveryOptions": "Delivery options",
+    "imageUrl": "Product image URL",
+    "imageFile": "Upload an image",
+    "dropzone": "Drop an image here or click to choose",
+    "uploading": "Uploading {percent}%",
+    "imageUrlDisabled": "Image URL is disabled while a file is selected.",
+    "submit": "Save",
+    "loading": "Saving...",
+    "success": "Product created successfully.",
+    "errors": {
+      "fileType": "Unsupported format. Allowed: {formats}.",
+      "fileSize": "Image too large (max {max})."
     }
   },
   "Admin": {
@@ -280,6 +339,80 @@
       "desc": "Transaction monitoring and fraud prevention.",
       "badge1": "Real-time alerts",
       "badge2": "Full audit trail"
+    }
+  },
+  "Stores": {
+    "shop": "Shop",
+    "kicker": "Stores",
+    "title": "Explore JONTAADO universes.",
+    "subtitle": "Each vertical has its own offers and services.",
+    "defaultDesc": "A specialized store inside JONTAADO.",
+    "view": "View store"
+  },
+  "Store": {
+    "stores": "Stores",
+    "shop": "Shop",
+    "defaultDesc": "Selection of products and services for this vertical.",
+    "view": "View",
+    "empty": "No products in this store yet.",
+    "notFound": "This store does not exist.",
+    "back": "Back to stores"
+  },
+  "Verticals": {
+    "immo": {
+      "back": "Back to stores",
+      "kicker": "JONTAADO IMMO",
+      "title": "Buy, rent, or sell with confidence.",
+      "subtitle": "Verified listings and secure transactions.",
+      "features": [
+        "Rent and sale listings",
+        "Photos, price, size, and location",
+        "Direct contact and scheduling"
+      ]
+    },
+    "cars": {
+      "back": "Back to stores",
+      "kicker": "JONTAADO CARS",
+      "title": "Find the right vehicle for you.",
+      "subtitle": "Detailed listings, verified info, clear pricing.",
+      "features": [
+        "Brand, model, year, mileage",
+        "History and vehicle condition",
+        "Quick comparison of offers"
+      ]
+    },
+    "presta": {
+      "back": "Back to stores",
+      "kicker": "JONTAADO PRESTA",
+      "title": "Reliable local services.",
+      "subtitle": "Verified pros with clear availability.",
+      "features": [
+        "Services by category",
+        "Fast booking",
+        "Ratings and reviews"
+      ]
+    },
+    "tiak": {
+      "back": "Back to stores",
+      "kicker": "JONTAADO TIAK TIAK",
+      "title": "Express motorbike delivery.",
+      "subtitle": "Real-time availability, tracking, and per-km pricing.",
+      "features": [
+        "Riders with live availability",
+        "Delivery tracking",
+        "Simple pricing"
+      ]
+    },
+    "gp": {
+      "back": "Back to stores",
+      "kicker": "JONTAADO GP",
+      "title": "Traveler-led parcel transport.",
+      "subtitle": "Strict baggage tracking and flight details.",
+      "features": [
+        "Flight details and baggage tracking",
+        "Weight/volume checks",
+        "Trip history"
+      ]
     }
   }
 }

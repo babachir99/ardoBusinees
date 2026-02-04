@@ -1,11 +1,11 @@
+import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { useTranslations } from "next-intl";
-import CheckoutForm from "@/components/cart/CheckoutForm";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
+import NewProductForm from "@/components/seller/NewProductForm";
 
-export default function CheckoutPage() {
-  const t = useTranslations("Checkout");
+export default async function NewProductPage() {
+  const t = await getTranslations("SellerProduct");
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -21,16 +21,22 @@ export default function CheckoutPage() {
           />
         </Link>
         <Link
-          href="/cart"
+          href="/seller"
           className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
         >
-          {t("nav.cart")}
+          {t("back")}
         </Link>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-24">
-        <CheckoutForm />
+      <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 pb-24">
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8 card-glow fade-up">
+          <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          <p className="mt-2 text-sm text-zinc-300">{t("subtitle")}</p>
+        </section>
+
+        <NewProductForm />
       </main>
+
       <Footer />
     </div>
   );

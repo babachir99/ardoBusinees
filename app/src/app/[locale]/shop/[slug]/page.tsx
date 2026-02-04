@@ -5,6 +5,8 @@ import AddToCartButton from "@/components/cart/AddToCartButton";
 import CartBadge from "@/components/cart/CartBadge";
 import { formatMoney } from "@/lib/format";
 import { getTranslations } from "next-intl/server";
+import Image from "next/image";
+import Footer from "@/components/layout/Footer";
 
 export default async function ProductPage({
   params,
@@ -23,10 +25,16 @@ export default async function ProductPage({
   }
 
   const typeLabel =
-    product.type === "PREORDER" ? t("badge.preorder") : t("badge.dropship");
+    product.type === "PREORDER"
+      ? t("badge.preorder")
+      : product.type === "LOCAL"
+      ? t("badge.local")
+      : t("badge.dropship");
   const etaLabel =
     product.type === "PREORDER"
       ? t("badge.preorderEta", { days: product.preorderLeadDays ?? 14 })
+      : product.type === "LOCAL"
+      ? t("badge.localEta")
       : t("badge.dropshipEta");
   const priceLabel = formatMoney(
     product.priceCents,
@@ -35,10 +43,17 @@ export default async function ProductPage({
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          ardoBusiness
+    <div className="min-h-screen bg-jonta text-zinc-100">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="JONTAADO logo"
+            width={140}
+            height={140}
+            className="h-[115px] w-auto md:h-[135px]"
+            priority
+          />
         </Link>
         <Link
           href="/cart"
@@ -50,7 +65,7 @@ export default async function ProductPage({
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-24 md:flex-row">
-        <section className="flex-1 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/10 via-zinc-900 to-zinc-900 p-8">
+        <section className="flex-1 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/10 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
           <div className="flex items-center gap-3 text-xs text-zinc-300">
             <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-emerald-200">
               {typeLabel}
@@ -74,7 +89,13 @@ export default async function ProductPage({
             </div>
             <div className="flex items-center justify-between">
               <span>{t("details.stock")}</span>
-              <span>{t("details.stockValue")}</span>
+              <span>
+                {product.type === "LOCAL" && product.stockQuantity !== null
+                  ? t("details.stockLocal", {
+                      count: product.stockQuantity ?? 0,
+                    })
+                  : t("details.stockValue")}
+              </span>
             </div>
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -95,7 +116,7 @@ export default async function ProductPage({
           </div>
         </section>
 
-        <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+        <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-8 fade-up">
           <h2 className="text-xl font-semibold">{t("aside.title")}</h2>
           <p className="mt-3 text-sm text-zinc-300">{t("aside.desc")}</p>
           <div className="mt-6 grid gap-4 text-xs text-zinc-400">
@@ -114,6 +135,7 @@ export default async function ProductPage({
           </div>
         </aside>
       </main>
+      <Footer />
     </div>
   );
 }

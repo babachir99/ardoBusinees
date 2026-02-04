@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b0f14;
+  --foreground: #ecf2f8;
+  --accent: #2fe4c3;
+  --accent-strong: #e7b96b;
+  --surface: #111824;
+  --surface-strong: #0f141d;
 }
 
 @theme inline {
@@ -12,15 +16,34 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+.bg-jonta {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(47, 228, 195, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, rgba(231, 185, 107, 0.12), transparent 55%),
+    linear-gradient(180deg, #0b0f14 0%, #0c1119 60%, #0b0f14 100%);
+}
+
+.card-glow {
+  box-shadow: 0 20px 60px rgba(5, 10, 20, 0.45);
+}
+
+.fade-up {
+  animation: fadeUp 0.7s ease both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

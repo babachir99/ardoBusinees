@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const allowedTypes = new Set(["PREORDER", "DROPSHIP"]);
+const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -32,16 +32,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const userId = String(body.userId ?? "");
+  let userId = body.userId ? String(body.userId) : "";
   const sellerId = body.sellerId ? String(body.sellerId) : undefined;
   const currency = body.currency ?? "XOF";
   const items = Array.isArray(body.items) ? body.items : [];
 
-  if (!userId || items.length === 0) {
+  if (!userId && !body.email) {
     return NextResponse.json(
-      { error: "userId and items are required" },
+      { error: "userId or email is required" },
       { status: 400 }
     );
+  }
+
+  if (items.length === 0) {
+    return NextResponse.json(
+      { error: "items are required" },
+      { status: 400 }
+    );
+  }
+
+  if (!userId) {
+    const email = String(body.email);
+    const name = body.name ? String(body.name) : undefined;
+    const phone = body.phone ? String(body.phone) : undefined;
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { name, phone, role: "CUSTOMER" },
+      create: { email, name, phone, role: "CUSTOMER" },
+    });
+
+    userId = user.id;
   }
 
   let subtotalCents = 0;
