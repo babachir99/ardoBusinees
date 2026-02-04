@@ -15,7 +15,7 @@ export type CartItem = {
   title: string;
   priceCents: number;
   currency: string;
-  type: "PREORDER" | "DROPSHIP";
+  type: "PREORDER" | "DROPSHIP" | "LOCAL";
   quantity: number;
   sellerName?: string;
 };

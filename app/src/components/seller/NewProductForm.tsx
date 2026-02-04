@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 export default function NewProductForm() {
@@ -22,10 +22,12 @@ export default function NewProductForm() {
     deliveryOptions: "",
     imageUrl: "",
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [sellerReady, setSellerReady] = useState(false);
+  const addInputRef = useRef<HTMLInputElement | null>(null);
 
   const allowedTypes = [
     "image/jpeg",
@@ -33,17 +35,61 @@ export default function NewProductForm() {
     "image/webp",
     "image/gif",
   ];
+  const maxFileSize = 2 * 1024 * 1024;
+  const maxFiles = 5;
+
+  useEffect(() => {
+    const loadSeller = async () => {
+      try {
+        const res = await fetch("/api/seller/me");
+        if (!res.ok) {
+          setSellerReady(false);
+          setError(t("errors.sellerMissing"));
+          return;
+        }
+        const data = (await res.json()) as { id: string };
+        setForm((prev) => ({ ...prev, sellerId: data.id }));
+        setSellerReady(true);
+      } catch {
+        setSellerReady(false);
+        setError(t("errors.sellerMissing"));
+      }
+    };
+    loadSeller();
+  }, [t]);
 
   const handleChange = (field: keyof typeof form) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const setFileState = (file: File | null) => {
-    setImageFile(file);
-    setImagePreview(file ? URL.createObjectURL(file) : null);
-    if (file) {
+  const setFilesState = (files: File[]) => {
+    setImageFiles(files);
+    setImagePreviews(files.map((file) => URL.createObjectURL(file)));
+    if (files.length > 0) {
       setForm((prev) => ({ ...prev, imageUrl: "" }));
     }
+  };
+
+  const removeImageAt = (index: number) => {
+    const nextFiles = imageFiles.filter((_, i) => i !== index);
+    setImageFiles(nextFiles);
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearImages = () => {
+    setImageFiles([]);
+    setImagePreviews([]);
+  };
+
+  const addMoreImages = (files: FileList | File[]) => {
+    const incoming = Array.from(files);
+    const remainingSlots = Math.max(0, maxFiles - imageFiles.length);
+    if (remainingSlots === 0) {
+      setError(t("errors.maxFiles", { max: String(maxFiles) }));
+      return;
+    }
+    const next = [...imageFiles, ...incoming.slice(0, remainingSlots)];
+    setFilesState(next);
   };
 
   const uploadFile = (file: File) =>
@@ -81,6 +127,56 @@ export default function NewProductForm() {
       request.send(data);
     });
 
+  const validateImage = async (file: File) => {
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(
+        t("errors.fileType", {
+          formats: "JPG, PNG, WEBP, GIF",
+        })
+      );
+    }
+    const bitmap = await createImageBitmap(file);
+    if (bitmap.width < 800 || bitmap.height < 800) {
+      bitmap.close();
+      throw new Error(t("errors.dimensions", { min: "800x800" }));
+    }
+    bitmap.close();
+  };
+
+  const compressImage = async (file: File) => {
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        (b) => resolve(b),
+        "image/webp",
+        0.85
+      );
+    });
+
+    if (!blob) {
+      return file;
+    }
+    return new File([blob], file.name.replace(/\.[^.]+$/, ".webp"), {
+      type: "image/webp",
+    });
+  };
+
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setStatus("loading");
@@ -89,18 +185,22 @@ export default function NewProductForm() {
     try {
       let imageUrl = form.imageUrl || undefined;
 
-      if (imageFile) {
-        if (!allowedTypes.includes(imageFile.type)) {
-          throw new Error(
-            t("errors.fileType", {
-              formats: "JPG, PNG, WEBP, GIF",
-            })
-          );
+      let imageUrls: string[] | undefined;
+
+      if (imageFiles.length > 0) {
+        imageUrls = [];
+        for (const file of imageFiles) {
+          await validateImage(file);
+          const processed =
+            file.size > maxFileSize ? await compressImage(file) : file;
+          if (processed.size > maxFileSize) {
+            throw new Error(t("errors.fileSize", { max: "2MB" }));
+          }
+          const uploadedUrl = await uploadFile(processed);
+          imageUrls.push(uploadedUrl);
         }
-        if (imageFile.size > 2 * 1024 * 1024) {
-          throw new Error(t("errors.fileSize", { max: "2MB" }));
-        }
-        imageUrl = await uploadFile(imageFile);
+      } else if (imageUrl) {
+        imageUrls = [imageUrl];
       }
 
       const payload = {
@@ -120,7 +220,7 @@ export default function NewProductForm() {
           : undefined,
         pickupLocation: form.pickupLocation || undefined,
         deliveryOptions: form.deliveryOptions || undefined,
-        imageUrl,
+        imageUrls,
       };
 
       const res = await fetch("/api/products", {
@@ -147,14 +247,11 @@ export default function NewProductForm() {
       className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8"
     >
       <div className="grid gap-4">
-        <div className="grid gap-2">
-          <label className="text-xs text-zinc-400">{t("sellerId")}</label>
-          <input
-            className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-            value={form.sellerId}
-            onChange={(e) => handleChange("sellerId")(e.target.value)}
-          />
-        </div>
+        {!sellerReady && (
+          <div className="rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-xs text-rose-100">
+            {t("errors.sellerMissing")}
+          </div>
+        )}
         <div className="grid gap-2">
           <label className="text-xs text-zinc-400">{t("storeId")}</label>
           <input
@@ -263,9 +360,12 @@ export default function NewProductForm() {
             onDrop={(e) => {
               e.preventDefault();
               setDragActive(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) {
-                setFileState(file);
+              const files = Array.from(e.dataTransfer.files || []).slice(
+                0,
+                maxFiles
+              );
+              if (files.length > 0) {
+                setFilesState(files);
               }
             }}
           >
@@ -273,10 +373,14 @@ export default function NewProductForm() {
             <input
               type="file"
               accept="image/*"
+              multiple
               className="mt-3 block w-full text-xs text-zinc-300"
               onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                setFileState(file);
+                const files = Array.from(e.target.files || []).slice(
+                  0,
+                  maxFiles
+                );
+                setFilesState(files);
               }}
             />
           </div>
@@ -293,15 +397,56 @@ export default function NewProductForm() {
               </span>
             </div>
           )}
-          {imagePreview && (
-            <div className="overflow-hidden rounded-2xl border border-white/10">
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="h-40 w-full object-cover"
-              />
+          {imagePreviews.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {imagePreviews.map((preview, index) => (
+                <div
+                  key={preview}
+                  className="relative overflow-hidden rounded-2xl border border-white/10"
+                >
+                  <img
+                    src={preview}
+                    alt={`Preview ${index + 1}`}
+                    className="h-36 w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImageAt(index)}
+                    className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[11px] text-white transition hover:bg-black"
+                  >
+                    {t("removeImage")}
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={clearImages}
+                className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-200 transition hover:border-white/20"
+              >
+                {t("clearImages")}
+              </button>
+              <button
+                type="button"
+                onClick={() => addInputRef.current?.click()}
+                className="rounded-2xl border border-dashed border-white/15 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 transition hover:border-white/30"
+              >
+                {t("addMoreImages")}
+              </button>
             </div>
           )}
+          <input
+            ref={addInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) {
+                addMoreImages(e.target.files);
+                e.target.value = "";
+              }
+            }}
+          />
         </div>
         <div className="grid gap-2">
           <label className="text-xs text-zinc-400">{t("imageUrl")}</label>
@@ -310,9 +455,9 @@ export default function NewProductForm() {
             className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
             value={form.imageUrl}
             onChange={(e) => handleChange("imageUrl")(e.target.value)}
-            disabled={Boolean(imageFile)}
+            disabled={imageFiles.length > 0}
           />
-          {imageFile && (
+          {imageFiles.length > 0 && (
             <p className="text-[11px] text-zinc-500">{t("imageUrlDisabled")}</p>
           )}
         </div>
@@ -325,7 +470,7 @@ export default function NewProductForm() {
 
       <button
         type="submit"
-        disabled={status === "loading"}
+        disabled={status === "loading" || !sellerReady}
         className="mt-6 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
       >
         {status === "loading" ? t("loading") : t("submit")}

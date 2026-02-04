@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
 import { useLocale } from "next-intl";
+import Link from "next/link";
 
 type CheckoutState = "idle" | "loading" | "success" | "error";
 
@@ -14,6 +15,9 @@ export default function CheckoutForm() {
   const { items, subtotalCents, clear } = useCart();
   const [state, setState] = useState<CheckoutState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<
+    "WAVE" | "ORANGE_MONEY" | "CARD" | "CASH"
+  >("WAVE");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -24,6 +28,7 @@ export default function CheckoutForm() {
 
   const feesCents = Math.round(subtotalCents * 0.04);
   const totalCents = subtotalCents + feesCents;
+  const hasNonLocal = items.some((item) => item.type !== "LOCAL");
 
   const handleChange = (field: keyof typeof form) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -52,6 +57,7 @@ export default function CheckoutForm() {
         shippingAddress: form.address || undefined,
         shippingCity: form.city || undefined,
         feesCents,
+        paymentMethod,
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -71,6 +77,21 @@ export default function CheckoutForm() {
         throw new Error(data?.error || "Order failed");
       }
 
+      const order = (await res.json()) as { id: string };
+
+      if (paymentMethod !== "CASH") {
+        const paymentRes = await fetch("/api/payments/mock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: order.id }),
+        });
+
+        if (!paymentRes.ok) {
+          const data = await paymentRes.json().catch(() => null);
+          throw new Error(data?.error || "Payment failed");
+        }
+      }
+
       clear();
       setState("success");
     } catch (err) {
@@ -86,6 +107,12 @@ export default function CheckoutForm() {
       <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
         <h2 className="text-xl font-semibold">{t("success.title")}</h2>
         <p className="mt-3 text-sm text-zinc-300">{t("success.desc")}</p>
+        <Link
+          href={`/${locale}/orders`}
+          className="mt-6 inline-flex items-center rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40"
+        >
+          {t("success.cta")}
+        </Link>
       </div>
     );
   }
@@ -118,6 +145,38 @@ export default function CheckoutForm() {
               onChange={(e) => handleChange("phone")(e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
+          <p className="text-sm font-semibold">{t("form.payment")}</p>
+          <div className="mt-4 grid gap-3 text-xs text-zinc-400 sm:grid-cols-2">
+            {(["WAVE", "ORANGE_MONEY", "CARD", "CASH"] as const).map(
+              (method) => {
+                const isCash = method === "CASH";
+                const disabled = isCash && hasNonLocal;
+                return (
+                  <button
+                    key={method}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setPaymentMethod(method)}
+                    className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                      paymentMethod === method
+                        ? "border-emerald-400/70 bg-emerald-400/10 text-emerald-100"
+                        : "border-white/10 bg-zinc-900/70 text-white"
+                    } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+                  >
+                    {t(`paymentMethods.${method.toLowerCase()}`)}
+                  </button>
+                );
+              }
+            )}
+          </div>
+          {hasNonLocal && (
+            <p className="mt-3 text-xs text-zinc-500">
+              {t("form.cashNote")}
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">

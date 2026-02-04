@@ -174,6 +174,61 @@
       "cta": "Aller au paiement"
     }
   },
+  "Orders": {
+    "kicker": "Commandes",
+    "title": "Mes commandes",
+    "subtitle": "Entre ton email pour retrouver tes commandes.",
+    "loading": "Chargement...",
+    "signinHint": "Connecte-toi pour voir tout ton historique.",
+    "signinCta": "Se connecter",
+    "form": {
+      "email": "Email",
+      "submit": "Rechercher",
+      "loading": "Recherche..."
+    },
+    "labels": {
+      "order": "Commande",
+      "status": "Statut",
+      "items": "{count} articles",
+      "date": "Date",
+      "payment": "Paiement",
+      "fees": "Frais",
+      "total": "Total",
+      "tracking": "Suivi",
+      "shipping": "Livraison",
+      "shippingEmpty": "Aucune adresse fournie",
+      "products": "Produits",
+      "unknown": "Produit inconnu",
+      "proof": "Preuve disponible"
+    },
+    "payment": {
+      "pending": "En attente",
+      "paid": "Payé",
+      "failed": "Échoué",
+      "refunded": "Remboursé"
+    },
+    "timeline": {
+      "pending": "Commande enregistrée",
+      "confirmed": "Paiement confirmé",
+      "fulfilling": "Préparation",
+      "shipped": "Expédiée",
+      "delivered": "Livrée"
+    },
+    "status": {
+      "pending": "En attente",
+      "confirmed": "Confirmee",
+      "fulfilling": "Preparation",
+      "shipped": "Expediee",
+      "delivered": "Livree",
+      "canceled": "Annulee",
+      "refunded": "Remboursee"
+    },
+    "empty": "Aucune commande trouvee pour cet email.",
+    "errors": {
+      "email": "Email requis.",
+      "generic": "Impossible de charger les commandes."
+    }
+  },
   "Checkout": {
     "nav": {
       "cart": "Panier"
@@ -188,9 +243,17 @@
       "name": "Nom complet",
       "email": "Email",
       "phone": "Telephone",
+      "payment": "Moyen de paiement",
       "shipping": "Livraison",
       "address": "Adresse",
-      "city": "Ville"
+      "city": "Ville",
+      "cashNote": "Le paiement en especes est reserve aux produits locaux."
+    },
+    "paymentMethods": {
+      "wave": "Wave",
+      "orange_money": "Orange Money",
+      "card": "Carte bancaire",
+      "cash": "Especes (local)"
     },
     "summary": {
       "title": "Total",
@@ -208,13 +271,16 @@
     },
     "success": {
       "title": "Commande enregistree",
-      "desc": "Merci ! Nous preparons ta commande."
+      "desc": "Merci ! Nous preparons ta commande.",
+      "cta": "Voir mes commandes"
     }
   }
   ,
   "Seller": {
     "nav": {
-      "admin": "Admin"
+      "admin": "Admin",
+      "products": "Produits",
+      "orders": "Commandes"
     },
     "hero": {
       "kicker": "Espace vendeur",
@@ -261,6 +327,50 @@
     },
     "cta": {
       "newProduct": "Ajouter un produit"
+    },
+    "guard": {
+      "title": "Acces vendeur requis",
+      "subtitle": "Connecte-toi avec un compte vendeur pour acceder a cette page.",
+      "cta": "Se connecter"
+    }
+  },
+  "SellerSpace": {
+    "loading": "Chargement...",
+    "errors": {
+      "seller": "Profil vendeur introuvable.",
+      "loadProducts": "Impossible de charger les produits.",
+      "loadOrders": "Impossible de charger les commandes."
+    },
+    "products": {
+      "title": "Mes produits",
+      "subtitle": "Catalogue de {name}.",
+      "cta": "Nouveau produit",
+      "empty": "Aucun produit pour le moment.",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "view": "Voir",
+      "types": {
+        "preorder": "Precommande",
+        "dropship": "Dropshipping",
+        "local": "Local"
+      }
+    },
+    "orders": {
+      "title": "Mes commandes",
+      "subtitle": "Suivi des commandes liees a ta boutique.",
+      "empty": "Aucune commande pour le moment.",
+      "order": "Commande",
+      "unknown": "Client inconnu",
+      "items": "{count} articles",
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmee",
+        "fulfilling": "Preparation",
+        "shipped": "Expediee",
+        "delivered": "Livree",
+        "canceled": "Annulee",
+        "refunded": "Remboursee"
+      }
     }
   },
   "SellerProduct": {
@@ -289,12 +399,23 @@
     "dropzone": "Glisse une image ici ou clique pour choisir",
     "uploading": "Upload {percent}%",
     "imageUrlDisabled": "L'URL image est desactivee tant qu'un fichier est selectionne.",
+    "removeImage": "Retirer",
+    "clearImages": "Tout supprimer",
+    "addMoreImages": "Ajouter des images",
     "submit": "Enregistrer",
     "loading": "Enregistrement...",
     "success": "Produit cree avec succes.",
     "errors": {
       "fileType": "Format non supporte. Autorises : {formats}.",
-      "fileSize": "Image trop lourde (max {max})."
+      "fileSize": "Image trop lourde (max {max}).",
+      "dimensions": "Image trop petite. Minimum {min}.",
+      "maxFiles": "Maximum {max} images.",
+      "sellerMissing": "Aucun profil vendeur detecte. Active un role vendeur dans ton profil."
+    },
+    "guard": {
+      "title": "Acces vendeur requis",
+      "subtitle": "Connecte-toi avec un compte vendeur pour ajouter des produits.",
+      "cta": "Se connecter"
     }
   },
   "Admin": {
@@ -338,6 +459,330 @@
       "desc": "Controle des transactions et prevention des fraudes.",
       "badge1": "Alertes temps reel",
       "badge2": "Audit complet"
+    },
+    "orders": {
+      "title": "Suivi des commandes",
+      "subtitle": "Mettre a jour les statuts et les preuves.",
+      "cta": "Gerer les commandes"
+    },
+    "users": {
+      "title": "Roles utilisateurs",
+      "subtitle": "Assigner des roles aux vendeurs, livreurs et transporteurs.",
+      "cta": "Gerer les utilisateurs"
+    },
+    "kyc": {
+      "title": "Dossiers KYC",
+      "subtitle": "Verifier les dossiers et approuver les roles.",
+      "cta": "Verifier KYC"
+    },
+    "guard": {
+      "title": "Acces refuse",
+      "subtitle": "Tu dois avoir un compte admin pour acceder a cette page.",
+      "cta": "Se connecter"
+    }
+  },
+  "AdminOrders": {
+    "title": "Tableau des commandes",
+    "subtitle": "Mets a jour les statuts et ajoute des preuves.",
+    "refresh": "Rafraichir",
+    "loading": "Chargement des commandes...",
+    "saving": "Enregistrement...",
+    "submit": "Ajouter un evenement",
+    "uploading": "Upload...",
+    "empty": "Aucune commande pour l'instant.",
+    "filters": {
+      "email": "Rechercher par email",
+      "all": "Tous les statuts",
+      "apply": "Appliquer"
+    },
+    "labels": {
+      "order": "Commande",
+      "date": "Date",
+      "noEmail": "Aucun email",
+      "noMethod": "Aucun moyen",
+      "newEvent": "Nouvel evenement",
+      "note": "Note",
+      "proof": "URL preuve",
+      "shipping": "Livraison",
+      "shippingEmpty": "Aucune adresse fournie",
+      "products": "Produits",
+      "items": "{count} articles",
+      "fees": "Frais",
+      "total": "Total",
+      "upload": "Uploader preuve",
+      "view": "Voir details"
+    },
+    "status": {
+      "pending": "En attente",
+      "confirmed": "Confirmee",
+      "fulfilling": "Preparation",
+      "shipped": "Expediee",
+      "delivered": "Livree",
+      "canceled": "Annulee",
+      "refunded": "Remboursee"
+    },
+    "payment": {
+      "pending": "En attente",
+      "paid": "Payee",
+      "failed": "Echouee",
+      "refunded": "Remboursee"
+    },
+    "detail": {
+      "title": "Details commande",
+      "subtitle": "Voir les articles, le client et le suivi.",
+      "customer": "Client",
+      "noPhone": "Aucun telephone"
+    },
+    "errors": {
+      "load": "Impossible de charger les commandes.",
+      "save": "Impossible d'enregistrer cet evenement.",
+      "upload": "Impossible d'uploader la preuve."
+    }
+  },
+  "AdminUsers": {
+    "title": "Tableau des utilisateurs",
+    "subtitle": "Rechercher et assigner des roles.",
+    "refresh": "Rafraichir",
+    "loading": "Chargement des utilisateurs...",
+    "filters": {
+      "email": "Rechercher par email",
+      "all": "Tous les roles",
+      "apply": "Appliquer"
+    },
+    "labels": {
+      "user": "Utilisateur",
+      "noName": "Sans nom"
+    },
+    "roles": {
+      "admin": "Admin",
+      "seller": "Vendeur",
+      "customer": "Client",
+      "transporter": "Transporteur",
+      "courier": "Livreur"
+    },
+    "errors": {
+      "load": "Impossible de charger les utilisateurs.",
+      "save": "Impossible de mettre a jour le role."
+    }
+  },
+  "AdminKyc": {
+    "title": "Dossiers KYC",
+    "subtitle": "Verifier les documents et approuver les roles.",
+    "refresh": "Rafraichir",
+    "loading": "Chargement des dossiers...",
+    "filters": {
+      "all": "Tous les statuts",
+      "pending": "En attente",
+      "approved": "Approuve",
+      "rejected": "Refuse",
+      "apply": "Appliquer"
+    },
+    "labels": {
+      "user": "Utilisateur",
+      "noName": "Sans nom",
+      "role": "Role",
+      "status": "Statut",
+      "docId": "Piece d'identite",
+      "driver": "Permis",
+      "proof": "Justificatif de domicile",
+      "selfie": "Selfie",
+      "notes": "Notes"
+    },
+    "actions": {
+      "approve": "Approuver",
+      "reject": "Refuser"
+    },
+    "errors": {
+      "load": "Impossible de charger les dossiers.",
+      "save": "Impossible de mettre a jour le dossier."
+    }
+  },
+  "Auth": {
+    "login": {
+      "title": "Bon retour",
+      "subtitle": "Connecte-toi pour gerer ton compte.",
+      "submit": "Se connecter",
+      "loading": "Connexion...",
+      "google": "Continuer avec Google",
+      "forgot": "Mot de passe oublie ?"
+    },
+    "signup": {
+      "title": "Creer un compte",
+      "subtitle": "Rejoins JONTAADO en quelques secondes.",
+      "submit": "Creer mon compte",
+      "loading": "Creation...",
+      "google": "Inscription avec Google",
+      "verifyNote": "Mode dev : verifie ton email pour terminer.",
+      "verifyCta": "Verifier l'email"
+    },
+    "forgot": {
+      "title": "Mot de passe oublie",
+      "subtitle": "Entre ton email pour reinitialiser le mot de passe.",
+      "submit": "Envoyer le lien",
+      "loading": "Envoi...",
+      "devNote": "Mode dev : le lien est affiche ici.",
+      "cta": "Ouvrir le formulaire"
+    },
+    "reset": {
+      "title": "Reinitialiser le mot de passe",
+      "subtitle": "Definis un nouveau mot de passe.",
+      "submit": "Reinitialiser",
+      "loading": "Reinitialisation...",
+      "token": "Token de reset",
+      "success": "Mot de passe mis a jour.",
+      "cta": "Aller a la connexion"
+    },
+    "fields": {
+      "name": "Nom complet",
+      "email": "Email",
+      "password": "Mot de passe",
+      "phone": "Telephone"
+    },
+    "errors": {
+      "invalid": "Email ou mot de passe incorrect.",
+      "generic": "Une erreur est survenue."
+    },
+    "verify": {
+      "title": "Verifier l'email",
+      "subtitle": "Entre le token recu par email.",
+      "submit": "Verifier",
+      "loading": "Verification...",
+      "token": "Token de verification",
+      "success": "Email verifie avec succes.",
+      "cta": "Aller a la connexion"
+    }
+  },
+  "Profile": {
+    "title": "Mon profil",
+    "subtitle": "Gere tes informations personnelles et ton role.",
+    "actions": {
+      "edit": "Modifier mon profil",
+      "orders": "Mes commandes",
+      "favorites": "Favoris",
+      "activity": "Historique"
+    },
+    "shortcuts": {
+      "title": "Acces rapide",
+      "subtitle": "Retrouve tes donnees en un clic.",
+      "orders": "Commandes passees",
+      "ordersDesc": "Historique complet de tes commandes.",
+      "purchases": "Achats",
+      "purchasesDesc": "Toutes tes commandes confirmees.",
+      "favorites": "Favoris",
+      "favoritesDesc": "Produits que tu as sauvegardes."
+    },
+    "favorites": {
+      "title": "Favoris",
+      "subtitle": "Tes produits preferes en un clin d'oeil.",
+      "viewAll": "Tout voir",
+      "count": "{count} favoris",
+      "loading": "Chargement...",
+      "empty": "Aucun favori pour le moment.",
+      "unknown": "Vendeur inconnu",
+      "addToCart": "Ajouter au panier",
+      "added": "Ajoute",
+      "remove": "Retirer"
+    },
+    "fields": {
+      "email": "Email",
+      "name": "Nom complet",
+      "phone": "Telephone",
+      "role": "Role"
+    },
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "loading": "Chargement du profil...",
+    "errors": {
+      "load": "Impossible de charger le profil.",
+      "save": "Impossible d'enregistrer le profil."
+    },
+    "roles": {
+      "title": "Devenir partenaire",
+      "subtitle": "Choisis un role pour debloquer les fonctions pro.",
+      "chooseHint": "Choisis un role pour ouvrir le dossier KYC.",
+      "cta": "Continuer avec ce role",
+      "seller": "Vendeur",
+      "courier": "Livreur (Tiak Tiak)",
+      "transporter": "Transporteur (GP)",
+      "sellerDesc": "Vends des produits locaux ou importes sur JONTAADO.",
+      "courierDesc": "Livre en local a moto avec disponibilite en temps reel.",
+      "transporterDesc": "Transporte des colis avec suivi strict.",
+      "active": "Ton role professionnel est actif.",
+      "goSeller": "Aller a l'espace vendeur",
+      "goCourier": "Aller a Tiak Tiak",
+      "goTransporter": "Aller a GP"
+    },
+    "kyc": {
+      "title": "Verification KYC",
+      "subtitle": "Depose tes documents pour acceder aux roles.",
+      "note": "Upload tes documents puis colle les URLs ici.",
+      "selectedRole": "Role selectionne",
+      "submit": "Envoyer le dossier",
+      "loading": "Envoi...",
+      "upload": "Uploader le document",
+      "uploading": "Upload...",
+      "remove": "Supprimer le document",
+      "approvedNote": "Ton dossier a ete approuve. Aucune action requise.",
+      "resume": "Reprendre le dossier KYC",
+      "status": {
+        "pending": "En attente",
+        "approved": "Approuve",
+        "rejected": "Refuse"
+      },
+      "roles": {
+        "seller": "Vendeur",
+        "transporter": "Transporteur",
+        "courier": "Livreur"
+      },
+      "fields": {
+        "docId": "URL piece d'identite",
+        "driver": "URL permis (optionnel)",
+        "proof": "URL justificatif de domicile",
+        "selfie": "URL selfie",
+        "notes": "Notes"
+      },
+      "errors": {
+        "fileType": "Merci d'uploader une image.",
+        "fileSize": "Fichier trop lourd (max 2MB)."
+      }
+    }
+  },
+  "ProfileEdit": {
+    "title": "Modifier le profil",
+    "subtitle": "Mets a jour tes informations personnelles.",
+    "fields": {
+      "email": "Email",
+      "name": "Nom complet",
+      "phone": "Telephone",
+      "role": "Role"
+    },
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "loading": "Chargement du profil...",
+    "success": "Profil mis a jour.",
+    "errors": {
+      "load": "Impossible de charger le profil.",
+      "save": "Impossible d'enregistrer le profil."
+    }
+  },
+  "Activity": {
+    "title": "Historique d'activite",
+    "subtitle": "Dernieres actions sur ton compte.",
+    "loading": "Chargement...",
+    "empty": "Aucune activite pour le moment.",
+    "errors": {
+      "load": "Impossible de charger l'historique."
+    }
+  },
+  "Favorites": {
+    "title": "Favoris",
+    "subtitle": "Produits que tu as aimés.",
+    "loading": "Chargement des favoris...",
+    "empty": "Aucun favori pour le moment.",
+    "remove": "Retirer",
+    "unknownSeller": "Vendeur inconnu",
+    "errors": {
+      "load": "Impossible de charger les favoris."
     }
   },
   "Stores": {

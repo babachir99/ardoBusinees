@@ -9,7 +9,7 @@ type AddToCartButtonProps = {
   title: string;
   priceCents: number;
   currency: string;
-  type: "PREORDER" | "DROPSHIP";
+  type: "PREORDER" | "DROPSHIP" | "LOCAL";
   sellerName?: string;
   label: string;
   addedLabel?: string;

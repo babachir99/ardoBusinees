@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import CartBadge from "@/components/cart/CartBadge";
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { formatMoney } from "@/lib/format";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
@@ -110,9 +111,7 @@ export default async function ProductPage({
               label={t("cta.add")}
               addedLabel={t("cta.added")}
             />
-            <button className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold">
-              {t("cta.wishlist")}
-            </button>
+            <FavoriteButton productId={product.id} />
           </div>
         </section>
 

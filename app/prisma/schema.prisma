@@ -17,6 +17,8 @@ enum UserRole {
   ADMIN
   SELLER
   CUSTOMER
+  TRANSPORTER
+  COURIER
 }
 
 enum SellerStatus {
@@ -57,6 +59,13 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PaymentMethod {
+  WAVE
+  ORANGE_MONEY
+  CARD
+  CASH
+}
+
 enum PayoutStatus {
   PENDING
   PAID
@@ -70,10 +79,25 @@ enum BookingStatus {
   CANCELED
 }
 
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum KycRole {
+  SELLER
+  TRANSPORTER
+  COURIER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
+  image     String?
+  emailVerified DateTime?
+  passwordHash String?
   phone     String?
   locale    String   @default("fr")
   role      UserRole @default(CUSTOMER)
@@ -81,9 +105,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  accounts      Account[]
+  sessions      Session[]
+  activityLogs  ActivityLog[]
+  kycSubmissions KycSubmission[]
   sellerProfile SellerProfile?
   orders        Order[]
   bookings      ServiceBooking[]
+  favorites     Favorite[]
 }
 
 model SellerProfile {
@@ -129,6 +158,7 @@ model Product {
   images     ProductImage[]
   orderItems OrderItem[]
   categories ProductCategory[]
+  favorites  Favorite[]
 
   @@unique([sellerId, slug])
   @@index([sellerId])
@@ -190,6 +220,12 @@ model Order {
   id            String        @id @default(cuid())
   userId        String
   sellerId      String?
+  buyerName     String?
+  buyerEmail    String?
+  buyerPhone    String?
+  shippingAddress String?
+  shippingCity  String?
+  paymentMethod PaymentMethod?
   status        OrderStatus   @default(PENDING)
   subtotalCents Int
   shippingCents Int           @default(0)
@@ -205,9 +241,11 @@ model Order {
   items    OrderItem[]
   payment  Payment?
   payouts  Payout[]
+  events   OrderEvent[]
 
   @@index([userId])
   @@index([sellerId])
+  @@index([buyerEmail])
 }
 
 model OrderItem {
@@ -234,6 +272,7 @@ model Payment {
   amountCents  Int
   currency     String        @default("XOF")
   status       PaymentStatus @default(PENDING)
+  method       PaymentMethod?
   splitMeta    Json?
   createdAt    DateTime      @default(now())
 
@@ -290,4 +329,106 @@ model ServiceBooking {
 
   @@index([serviceId])
   @@index([customerId])
+}
+
+model OrderEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  status    OrderStatus
+  note      String?
+  proofUrl  String?
+  createdAt DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+model KycSubmission {
+  id             String    @id @default(cuid())
+  userId         String
+  targetRole     KycRole
+  status         KycStatus @default(PENDING)
+  docIdUrl       String?
+  driverLicenseUrl String?
+  proofAddressUrl String?
+  selfieUrl      String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([targetRole])
 }

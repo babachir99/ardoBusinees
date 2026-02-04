@@ -1,0 +1,48 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+
+  if (!body?.orderId) {
+    return NextResponse.json({ error: "orderId is required" }, { status: 400 });
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: String(body.orderId) },
+  });
+
+  if (!order) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  const payment = await prisma.payment.create({
+    data: {
+      orderId: order.id,
+      provider: "paydunya_mock",
+      amountCents: order.totalCents,
+      currency: order.currency,
+      status: "PAID",
+      method: order.paymentMethod ?? undefined,
+      splitMeta: { mode: "mock" },
+    },
+  });
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      status: "CONFIRMED",
+      paymentStatus: "PAID",
+      events: {
+        create: [
+          {
+            status: "CONFIRMED",
+            note: "Payment confirmed",
+          },
+        ],
+      },
+    },
+  });
+
+  return NextResponse.json(payment, { status: 201 });
+}

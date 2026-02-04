@@ -175,6 +175,61 @@
       "cta": "Proceed to checkout"
     }
   },
+  "Orders": {
+    "kicker": "Orders",
+    "title": "My orders",
+    "subtitle": "Enter your email to find your orders.",
+    "loading": "Loading orders...",
+    "signinHint": "Sign in to see your full order history.",
+    "signinCta": "Sign in",
+    "form": {
+      "email": "Email",
+      "submit": "Find orders",
+      "loading": "Searching..."
+    },
+    "labels": {
+      "order": "Order",
+      "status": "Status",
+      "items": "{count} items",
+      "date": "Date",
+      "payment": "Payment",
+      "fees": "Fees",
+      "total": "Total",
+      "tracking": "Tracking",
+      "shipping": "Shipping",
+      "shippingEmpty": "No shipping address provided",
+      "products": "Products",
+      "unknown": "Unknown product",
+      "proof": "Proof available"
+    },
+    "payment": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    },
+    "timeline": {
+      "pending": "Order placed",
+      "confirmed": "Payment confirmed",
+      "fulfilling": "Preparing",
+      "shipped": "Shipped",
+      "delivered": "Delivered"
+    },
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "fulfilling": "Preparing",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "canceled": "Canceled",
+      "refunded": "Refunded"
+    },
+    "empty": "No orders found for this email.",
+    "errors": {
+      "email": "Email is required.",
+      "generic": "Unable to load orders."
+    }
+  },
   "Checkout": {
     "nav": {
       "cart": "Cart"
@@ -189,9 +244,17 @@
       "name": "Full name",
       "email": "Email",
       "phone": "Phone",
+      "payment": "Payment method",
       "shipping": "Shipping",
       "address": "Address",
-      "city": "City"
+      "city": "City",
+      "cashNote": "Cash payment is only available for local products."
+    },
+    "paymentMethods": {
+      "wave": "Wave",
+      "orange_money": "Orange Money",
+      "card": "Bank card",
+      "cash": "Cash (local)"
     },
     "summary": {
       "title": "Total",
@@ -209,13 +272,16 @@
     },
     "success": {
       "title": "Order recorded",
-      "desc": "Thanks! We are preparing your order."
+      "desc": "Thanks! We are preparing your order.",
+      "cta": "See my orders"
     }
   }
   ,
   "Seller": {
     "nav": {
-      "admin": "Admin"
+      "admin": "Admin",
+      "products": "Products",
+      "orders": "Orders"
     },
     "hero": {
       "kicker": "Seller space",
@@ -262,6 +328,50 @@
     },
     "cta": {
       "newProduct": "Add product"
+    },
+    "guard": {
+      "title": "Seller access required",
+      "subtitle": "Connect with a seller account to access this page.",
+      "cta": "Sign in"
+    }
+  },
+  "SellerSpace": {
+    "loading": "Loading...",
+    "errors": {
+      "seller": "Seller profile not found.",
+      "loadProducts": "Unable to load products.",
+      "loadOrders": "Unable to load orders."
+    },
+    "products": {
+      "title": "My products",
+      "subtitle": "{name} catalog.",
+      "cta": "New product",
+      "empty": "No products yet.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "view": "View",
+      "types": {
+        "preorder": "Pre-order",
+        "dropship": "Dropshipping",
+        "local": "Local"
+      }
+    },
+    "orders": {
+      "title": "My orders",
+      "subtitle": "Track orders linked to your store.",
+      "empty": "No orders yet.",
+      "order": "Order",
+      "unknown": "Unknown customer",
+      "items": "{count} items",
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "fulfilling": "Preparing",
+        "shipped": "Shipped",
+        "delivered": "Delivered",
+        "canceled": "Canceled",
+        "refunded": "Refunded"
+      }
     }
   },
   "SellerProduct": {
@@ -290,12 +400,23 @@
     "dropzone": "Drop an image here or click to choose",
     "uploading": "Uploading {percent}%",
     "imageUrlDisabled": "Image URL is disabled while a file is selected.",
+    "removeImage": "Remove",
+    "clearImages": "Clear all images",
+    "addMoreImages": "Add more images",
     "submit": "Save",
     "loading": "Saving...",
     "success": "Product created successfully.",
     "errors": {
       "fileType": "Unsupported format. Allowed: {formats}.",
-      "fileSize": "Image too large (max {max})."
+      "fileSize": "Image too large (max {max}).",
+      "dimensions": "Image too small. Minimum {min}.",
+      "maxFiles": "Maximum {max} images.",
+      "sellerMissing": "No seller profile found. Activate a seller role in your profile."
+    },
+    "guard": {
+      "title": "Seller access required",
+      "subtitle": "Connect with a seller account to add products.",
+      "cta": "Sign in"
     }
   },
   "Admin": {
@@ -339,6 +460,323 @@
       "desc": "Transaction monitoring and fraud prevention.",
       "badge1": "Real-time alerts",
       "badge2": "Full audit trail"
+    },
+    "orders": {
+      "title": "Orders tracking",
+      "subtitle": "Update order statuses and proofs.",
+      "cta": "Manage orders"
+    },
+    "users": {
+      "title": "User roles",
+      "subtitle": "Assign roles to sellers, couriers, and transporters.",
+      "cta": "Manage users"
+    },
+    "kyc": {
+      "title": "KYC reviews",
+      "subtitle": "Review verification files and approve roles.",
+      "cta": "Review KYC"
+    },
+    "guard": {
+      "title": "Access denied",
+      "subtitle": "You need an admin account to access this page.",
+      "cta": "Sign in"
+    }
+  },
+  "AdminOrders": {
+    "title": "Orders board",
+    "subtitle": "Update status and add proof for each order.",
+    "refresh": "Refresh",
+    "loading": "Loading orders...",
+    "saving": "Saving...",
+    "submit": "Add event",
+    "uploading": "Uploading...",
+    "empty": "No orders yet.",
+    "filters": {
+      "email": "Search by email",
+      "all": "All statuses",
+      "apply": "Apply filters"
+    },
+    "labels": {
+      "order": "Order",
+      "noEmail": "No email",
+      "noMethod": "No method",
+      "newEvent": "New event",
+      "note": "Note",
+      "proof": "Proof URL",
+      "upload": "Upload proof",
+      "view": "View details"
+    },
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "fulfilling": "Preparing",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "canceled": "Canceled",
+      "refunded": "Refunded"
+    },
+    "payment": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    },
+    "detail": {
+      "title": "Order details",
+      "subtitle": "View items, customer info, and tracking.",
+      "customer": "Customer",
+      "noPhone": "No phone"
+    },
+    "errors": {
+      "load": "Unable to load orders.",
+      "save": "Unable to save this event.",
+      "upload": "Unable to upload proof."
+    }
+  },
+  "AdminUsers": {
+    "title": "Users board",
+    "subtitle": "Search users and assign roles.",
+    "refresh": "Refresh",
+    "loading": "Loading users...",
+    "filters": {
+      "email": "Search by email",
+      "all": "All roles",
+      "apply": "Apply filters"
+    },
+    "labels": {
+      "user": "User",
+      "noName": "No name"
+    },
+    "roles": {
+      "admin": "Admin",
+      "seller": "Seller",
+      "customer": "Customer",
+      "transporter": "Transporter",
+      "courier": "Courier"
+    },
+    "errors": {
+      "load": "Unable to load users.",
+      "save": "Unable to update role."
+    }
+  },
+  "AdminKyc": {
+    "title": "KYC submissions",
+    "subtitle": "Review documents and approve roles.",
+    "refresh": "Refresh",
+    "loading": "Loading submissions...",
+    "filters": {
+      "all": "All statuses",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "apply": "Apply"
+    },
+    "labels": {
+      "user": "User",
+      "noName": "No name",
+      "role": "Role",
+      "status": "Status",
+      "docId": "ID document",
+      "driver": "Driver license",
+      "proof": "Proof of address",
+      "selfie": "Selfie",
+      "notes": "Notes"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "errors": {
+      "load": "Unable to load submissions.",
+      "save": "Unable to update submission."
+    }
+  },
+  "Auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to manage your account.",
+      "submit": "Sign in",
+      "loading": "Signing in...",
+      "google": "Continue with Google",
+      "forgot": "Forgot password?"
+    },
+    "signup": {
+      "title": "Create an account",
+      "subtitle": "Join JONTAADO in a few seconds.",
+      "submit": "Create account",
+      "loading": "Creating...",
+      "google": "Sign up with Google",
+      "verifyNote": "Dev mode: verify your email to finish signup.",
+      "verifyCta": "Verify email"
+    },
+    "forgot": {
+      "title": "Forgot password",
+      "subtitle": "Enter your email to reset your password.",
+      "submit": "Send reset link",
+      "loading": "Sending...",
+      "devNote": "Dev mode: we show the reset link here.",
+      "cta": "Open reset form"
+    },
+    "reset": {
+      "title": "Reset password",
+      "subtitle": "Set a new password for your account.",
+      "submit": "Reset password",
+      "loading": "Resetting...",
+      "token": "Reset token",
+      "success": "Password updated successfully.",
+      "cta": "Go to login"
+    },
+      "fields": {
+        "name": "Full name",
+        "email": "Email",
+        "password": "Password",
+        "phone": "Phone"
+      },
+      "errors": {
+        "invalid": "Invalid email or password.",
+        "generic": "Something went wrong."
+      },
+      "verify": {
+        "title": "Verify email",
+        "subtitle": "Enter the token sent to your email.",
+        "submit": "Verify",
+        "loading": "Verifying...",
+        "token": "Verification token",
+        "success": "Email verified successfully.",
+        "cta": "Go to login"
+      }
+    },
+  "Profile": {
+    "title": "My profile",
+    "subtitle": "Manage your personal information and role.",
+    "actions": {
+      "edit": "Edit profile",
+      "orders": "My orders",
+      "favorites": "Favorites",
+      "activity": "Activity"
+    },
+    "shortcuts": {
+      "title": "Quick access",
+      "subtitle": "Jump back into your data.",
+      "orders": "Past orders",
+      "ordersDesc": "Full history of your orders.",
+      "purchases": "Purchases",
+      "purchasesDesc": "All confirmed purchases.",
+      "favorites": "Favorites",
+      "favoritesDesc": "Products you saved."
+    },
+    "favorites": {
+      "title": "Favorites",
+      "subtitle": "Your saved products at a glance.",
+      "viewAll": "View all",
+      "count": "{count} favorites",
+      "loading": "Loading...",
+      "empty": "No favorites yet.",
+      "unknown": "Unknown seller",
+      "addToCart": "Add to cart",
+      "added": "Added",
+      "remove": "Remove"
+    },
+    "fields": {
+      "email": "Email",
+      "name": "Full name",
+      "phone": "Phone",
+      "role": "Role"
+    },
+    "save": "Save profile",
+    "saving": "Saving...",
+    "loading": "Loading profile...",
+    "errors": {
+      "load": "Unable to load profile.",
+      "save": "Unable to save profile."
+    },
+    "roles": {
+      "title": "Become a partner",
+      "subtitle": "Choose a role to unlock seller and delivery features.",
+      "chooseHint": "Pick a role to open the KYC form.",
+      "cta": "Continue with this role",
+      "seller": "Seller",
+      "courier": "Courier (Tiak Tiak)",
+      "transporter": "Transporter (GP)",
+      "sellerDesc": "Sell local or imported products on JONTAADO.",
+      "courierDesc": "Deliver locally by motorbike with real-time availability.",
+      "transporterDesc": "Carry parcels for travelers with strict tracking.",
+      "active": "Your professional role is active.",
+      "goSeller": "Go to seller space",
+      "goCourier": "Go to Tiak Tiak",
+      "goTransporter": "Go to GP"
+    },
+    "kyc": {
+      "title": "KYC verification",
+      "subtitle": "Submit documents to access seller/transport roles.",
+      "note": "Upload your documents using the upload button, then paste the URLs here.",
+      "selectedRole": "Selected role",
+      "submit": "Submit KYC",
+      "loading": "Submitting...",
+      "upload": "Upload document",
+      "uploading": "Uploading...",
+      "remove": "Remove document",
+      "approvedNote": "Your KYC has been approved. No further action is required.",
+      "resume": "Resume KYC file",
+      "status": {
+        "pending": "Pending review",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "roles": {
+        "seller": "Seller",
+        "transporter": "Transporter",
+        "courier": "Courier"
+      },
+      "fields": {
+        "docId": "ID document URL",
+        "driver": "Driver license URL (optional)",
+        "proof": "Proof of address URL",
+        "selfie": "Selfie URL",
+        "notes": "Notes"
+      },
+      "errors": {
+        "fileType": "Please upload an image file.",
+        "fileSize": "File too large (max 2MB)."
+      }
+    }
+  },
+  "ProfileEdit": {
+    "title": "Edit profile",
+    "subtitle": "Update your personal information.",
+    "fields": {
+      "email": "Email",
+      "name": "Full name",
+      "phone": "Phone",
+      "role": "Role"
+    },
+    "save": "Save changes",
+    "saving": "Saving...",
+    "loading": "Loading profile...",
+    "success": "Profile updated.",
+    "errors": {
+      "load": "Unable to load profile.",
+      "save": "Unable to save profile."
+    }
+  },
+  "Activity": {
+    "title": "Activity history",
+    "subtitle": "Recent actions on your account.",
+    "loading": "Loading...",
+    "empty": "No activity yet.",
+    "errors": {
+      "load": "Unable to load activity."
+    }
+  },
+  "Favorites": {
+    "title": "Favorites",
+    "subtitle": "Products you liked.",
+    "loading": "Loading favorites...",
+    "empty": "No favorites yet.",
+    "remove": "Remove",
+    "unknownSeller": "Unknown seller",
+    "errors": {
+      "load": "Unable to load favorites."
     }
   },
   "Stores": {

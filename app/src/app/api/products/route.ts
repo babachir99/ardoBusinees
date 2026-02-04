@@ -88,15 +88,13 @@ export async function POST(request: NextRequest) {
       pickupLocation: body.pickupLocation ?? undefined,
       deliveryOptions: body.deliveryOptions ?? undefined,
       isActive: body.isActive ?? true,
-      images: body.imageUrl
+      images: Array.isArray(body.imageUrls) && body.imageUrls.length > 0
         ? {
-            create: [
-              {
-                url: body.imageUrl,
-                alt: body.imageAlt ?? body.title,
-                position: 0,
-              },
-            ],
+            create: body.imageUrls.map((url: string, index: number) => ({
+              url,
+              alt: body.imageAlt ?? body.title,
+              position: index,
+            })),
           }
         : undefined,
     },
