@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
@@ -28,6 +30,28 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const existing = await prisma.product.findUnique({
+    where: { id: params.id },
+    select: { id: true, sellerId: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (session.user.role !== "ADMIN") {
+    const seller = await prisma.sellerProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+    if (!seller || seller.id !== existing.sellerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -35,6 +59,17 @@ export async function PATCH(
   }
 
   const data: Record<string, unknown> = {};
+  const discountRaw = body.discountPercent;
+  const requestBoost = body.requestBoost === true;
+  const addImageUrls = Array.isArray(body.addImageUrls)
+    ? body.addImageUrls.filter(Boolean)
+    : [];
+  const removeImageIds = Array.isArray(body.removeImageIds)
+    ? body.removeImageIds.filter(Boolean)
+    : [];
+  const replaceImageUrls = Array.isArray(body.imageUrls)
+    ? body.imageUrls.filter(Boolean)
+    : [];
 
   if (body.title) data.title = String(body.title);
   if (body.slug) data.slug = String(body.slug);
@@ -67,6 +102,52 @@ export async function PATCH(
   }
   if (body.deliveryOptions !== undefined) {
     data.deliveryOptions = body.deliveryOptions;
+  }
+  if (body.isActive !== undefined) {
+    data.isActive = Boolean(body.isActive);
+  }
+
+  if (discountRaw !== undefined) {
+    const parsed = Number(discountRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 90) {
+      return NextResponse.json(
+        { error: "discountPercent must be between 0 and 90" },
+        { status: 400 }
+      );
+    }
+    data.discountPercent = parsed > 0 ? Math.round(parsed) : null;
+  }
+
+  if (requestBoost || body.boostStatus === "PENDING") {
+    data.boostStatus = "PENDING";
+    data.boostRequestedAt = new Date();
+  }
+
+  if (replaceImageUrls.length > 0) {
+    data.images = {
+      deleteMany: {},
+      create: replaceImageUrls.map((url: string, index: number) => ({
+        url,
+        alt: body.imageAlt ?? body.title ?? undefined,
+        position: index,
+      })),
+    };
+  } else if (addImageUrls.length > 0 || removeImageIds.length > 0) {
+    const imagesOps: Record<string, unknown> = {};
+    if (removeImageIds.length > 0) {
+      imagesOps.deleteMany = { id: { in: removeImageIds } };
+    }
+    if (addImageUrls.length > 0) {
+      const count = await prisma.productImage.count({
+        where: { productId: existing.id },
+      });
+      imagesOps.create = addImageUrls.map((url: string, index: number) => ({
+        url,
+        alt: body.imageAlt ?? body.title ?? undefined,
+        position: count + index,
+      }));
+    }
+    data.images = imagesOps;
   }
 
   const product = await prisma.product.update({

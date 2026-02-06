@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { useCart } from "@/components/cart/CartProvider";
 
 type Profile = {
   id: string;
   email: string;
   name?: string | null;
+  image?: string | null;
   phone?: string | null;
   role: string;
   createdAt: string;
@@ -28,6 +29,7 @@ type Favorite = {
     id: string;
     title: string;
     priceCents: number;
+    discountPercent?: number | null;
     currency: string;
     slug: string;
     type: "PREORDER" | "DROPSHIP" | "LOCAL";
@@ -234,8 +236,35 @@ export default function ProfilePanel() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
       <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="mt-2 text-sm text-zinc-300">{t("subtitle")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold">{t("title")}</h1>
+            <p className="mt-2 text-sm text-zinc-300">{t("subtitle")}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 overflow-hidden rounded-full border border-white/10 bg-zinc-950/60">
+              {profile.image ? (
+                <img
+                  src={profile.image}
+                  alt={profile.name ?? profile.email}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-zinc-300">
+                  {(profile.name ?? profile.email ?? "?")
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="text-xs text-zinc-400">
+              <p className="text-sm font-semibold text-white">
+                {profile.name ?? t("fields.name")}
+              </p>
+              <p>{profile.email}</p>
+            </div>
+          </div>
+        </div>
 
         <div className="mt-6 grid gap-3 text-sm">
           <div className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-300">
@@ -379,10 +408,23 @@ export default function ProfilePanel() {
                       {fav.product.seller?.displayName ?? t("favorites.unknown")}
                     </p>
                     <p className="mt-2 text-xs text-emerald-200">
-                      {formatMoney(
-                        fav.product.priceCents,
-                        fav.product.currency,
-                        locale
+                      {fav.product.discountPercent ? (
+                        <>
+                          {formatMoney(
+                            getDiscountedPrice(
+                              fav.product.priceCents,
+                              fav.product.discountPercent
+                            ),
+                            fav.product.currency,
+                            locale
+                          )}
+                        </>
+                      ) : (
+                        formatMoney(
+                          fav.product.priceCents,
+                          fav.product.currency,
+                          locale
+                        )
                       )}
                     </p>
                   </Link>
@@ -390,11 +432,18 @@ export default function ProfilePanel() {
                     <button
                       type="button"
                       onClick={() => {
+                        const discountedCents = getDiscountedPrice(
+                          fav.product.priceCents,
+                          fav.product.discountPercent
+                        );
+                        const finalPrice = fav.product.discountPercent
+                          ? discountedCents
+                          : fav.product.priceCents;
                         addItem({
                           id: fav.product.id,
                           slug: fav.product.slug,
                           title: fav.product.title,
-                          priceCents: fav.product.priceCents,
+                          priceCents: finalPrice,
                           currency: fav.product.currency,
                           type: fav.product.type,
                           sellerName: fav.product.seller?.displayName ?? undefined,

@@ -16,6 +16,9 @@ type Order = {
   id: string;
   buyerEmail?: string | null;
   buyerName?: string | null;
+  buyerPhone?: string | null;
+  shippingAddress?: string | null;
+  shippingCity?: string | null;
   paymentStatus: string;
   paymentMethod?: string | null;
   status: string;
@@ -23,6 +26,7 @@ type Order = {
   currency: string;
   createdAt: string;
   events?: OrderEvent[];
+  items?: { id: string }[];
 };
 
 const statusOptions = [
@@ -199,6 +203,10 @@ export default function AdminOrdersBoard() {
                   <p className="mt-1 text-xs text-zinc-500">
                     {new Date(order.createdAt).toLocaleString(locale)}
                   </p>
+                  <p className="mt-2 text-xs text-zinc-300">
+                    {t("labels.customer")}:{" "}
+                    {order.buyerName || order.buyerEmail || t("labels.noEmail")}
+                  </p>
                 </div>
                 <div className="text-right text-xs text-zinc-400">
                   <p>{order.buyerEmail || t("labels.noEmail")}</p>
@@ -210,6 +218,41 @@ export default function AdminOrdersBoard() {
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-300">
                 <span>{order.paymentMethod ?? t("labels.noMethod")}</span>
                 <span>{formatMoney(order.totalCents, order.currency, locale)}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
+                <span>
+                  {t("labels.items")} {order.items?.length ?? 0}
+                </span>
+                <span>
+                  {order.shippingAddress
+                    ? `${order.shippingAddress} ${order.shippingCity ?? ""}`
+                    : t("labels.shippingEmpty")}
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-zinc-400">
+                  {t("labels.quickActions")}
+                </span>
+                {["CONFIRMED", "FULFILLING", "SHIPPED", "DELIVERED"].map(
+                  (status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => addEvent(order.id, status, "", "")}
+                      className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-white transition hover:border-emerald-300/60"
+                    >
+                      {t(`status.${status.toLowerCase()}`)}
+                    </button>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => addEvent(order.id, "CANCELED", "", "")}
+                  className="rounded-full border border-rose-300/40 px-3 py-1 text-[11px] text-rose-200 transition hover:border-rose-300/70"
+                >
+                  {t("status.canceled")}
+                </button>
               </div>
 
               <div className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-zinc-900/40 p-4">
@@ -291,7 +334,19 @@ export default function AdminOrdersBoard() {
                         {t(`status.${event.status.toLowerCase()}`)} ·{" "}
                         {new Date(event.createdAt).toLocaleString(locale)}
                       </span>
-                      {event.note && <span>{event.note}</span>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {event.note && <span>{event.note}</span>}
+                        {event.proofUrl && (
+                          <a
+                            href={event.proofUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-emerald-200 underline"
+                          >
+                            {t("labels.proof")}
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

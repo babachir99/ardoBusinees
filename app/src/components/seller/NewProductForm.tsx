@@ -14,6 +14,7 @@ export default function NewProductForm() {
     slug: "",
     description: "",
     priceCents: "",
+    discountPercent: "",
     type: "LOCAL",
     preorderLeadDays: "",
     dropshipSupplier: "",
@@ -21,6 +22,7 @@ export default function NewProductForm() {
     pickupLocation: "",
     deliveryOptions: "",
     imageUrl: "",
+    requestBoost: false,
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -210,6 +212,9 @@ export default function NewProductForm() {
         slug: form.slug,
         description: form.description || undefined,
         priceCents: Number(form.priceCents),
+        discountPercent: form.discountPercent
+          ? Number(form.discountPercent)
+          : undefined,
         type: form.type,
         preorderLeadDays: form.preorderLeadDays
           ? Number(form.preorderLeadDays)
@@ -221,6 +226,7 @@ export default function NewProductForm() {
         pickupLocation: form.pickupLocation || undefined,
         deliveryOptions: form.deliveryOptions || undefined,
         imageUrls,
+        requestBoost: form.requestBoost,
       };
 
       const res = await fetch("/api/products", {
@@ -293,6 +299,20 @@ export default function NewProductForm() {
           />
         </div>
         <div className="grid gap-2">
+          <label className="text-xs text-zinc-400">
+            {t("discountPercent")}
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="90"
+            className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+            value={form.discountPercent}
+            onChange={(e) => handleChange("discountPercent")(e.target.value)}
+          />
+          <p className="text-[11px] text-zinc-500">{t("discountHint")}</p>
+        </div>
+        <div className="grid gap-2">
           <label className="text-xs text-zinc-400">{t("type")}</label>
           <select
             className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
@@ -343,6 +363,24 @@ export default function NewProductForm() {
             value={form.deliveryOptions}
             onChange={(e) => handleChange("deliveryOptions")(e.target.value)}
           />
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-300">
+          <input
+            type="checkbox"
+            checked={form.requestBoost}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, requestBoost: e.target.checked }))
+            }
+            className="h-4 w-4 rounded border-white/20 bg-zinc-900"
+          />
+          <div>
+            <p className="text-sm font-semibold text-white">
+              {t("boostRequest")}
+            </p>
+            <p className="text-[11px] text-zinc-400">
+              {t("boostHint")}
+            </p>
+          </div>
         </div>
         <div className="grid gap-2">
           <label className="text-xs text-zinc-400">{t("imageFile")}</label>

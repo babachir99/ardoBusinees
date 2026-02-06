@@ -44,7 +44,7 @@ export default function SearchBar({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex w-full items-center gap-2 rounded-full border border-white/10 bg-gradient-to-r from-zinc-950/70 via-zinc-950/60 to-zinc-950/70 px-3 py-1.5 text-xs text-zinc-300 shadow-[0_10px_30px_rgba(0,0,0,0.2)]"
+      className="flex w-full items-center gap-1.5 rounded-full border border-white/10 bg-gradient-to-r from-zinc-950/70 via-zinc-950/60 to-zinc-950/70 px-2 py-1 text-xs text-zinc-300 shadow-[0_10px_30px_rgba(0,0,0,0.2)]"
     >
       <span className="text-zinc-500">🔎</span>
       <input
@@ -52,7 +52,7 @@ export default function SearchBar({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Que cherchez-vous aujourd'hui ?"
-        className="min-w-[180px] flex-1 bg-transparent text-xs text-zinc-100 outline-none"
+        className="min-w-[140px] flex-1 bg-transparent text-xs text-zinc-100 outline-none"
       />
       <datalist id="search-suggestions">
         {suggestions.map((item) => (
@@ -63,7 +63,7 @@ export default function SearchBar({
         <select
           value={category}
           onChange={(event) => setCategory(event.target.value)}
-          className="rounded-full border border-white/10 bg-zinc-950/60 px-3 py-1 text-[11px] text-zinc-200"
+          className="rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
         >
           <option value="">Categories</option>
           {categories.map((cat) => (
@@ -75,7 +75,7 @@ export default function SearchBar({
         <select
           value={sort}
           onChange={(event) => setSort(event.target.value)}
-          className="rounded-full border border-white/10 bg-zinc-950/60 px-3 py-1 text-[11px] text-zinc-200"
+          className="rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
         >
           <option value="recent">Recents</option>
           <option value="price_asc">Prix croissant</option>
@@ -89,14 +89,16 @@ export default function SearchBar({
             setSort("recent");
             router.push("/");
           }}
-          className="rounded-full border border-white/15 px-3 py-1 text-[11px] text-zinc-300 transition hover:border-white/40"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-rose-300/40 text-[10px] leading-none text-rose-300 transition hover:border-rose-300/70"
+          aria-label="Effacer"
+          title="Effacer"
         >
-          Effacer
+          🗑️
         </button>
       </div>
       <button
         type="submit"
-        className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 text-xs font-semibold text-zinc-950"
+        className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-[10px] font-semibold leading-none text-zinc-950"
         aria-label="Rechercher"
       >
         🔍

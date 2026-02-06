@@ -42,6 +42,13 @@ enum StoreType {
   GP
 }
 
+enum BoostStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -113,6 +120,7 @@ model User {
   orders        Order[]
   bookings      ServiceBooking[]
   favorites     Favorite[]
+  orderMessages OrderMessage[]
 }
 
 model SellerProfile {
@@ -150,6 +158,10 @@ model Product {
   pickupLocation    String?
   deliveryOptions   String?
   isActive          Boolean     @default(true)
+  discountPercent   Int?
+  boostStatus       BoostStatus @default(NONE)
+  boostRequestedAt  DateTime?
+  boostedUntil      DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -242,10 +254,26 @@ model Order {
   payment  Payment?
   payouts  Payout[]
   events   OrderEvent[]
+  messages OrderMessage[]
 
   @@index([userId])
   @@index([sellerId])
   @@index([buyerEmail])
+}
+
+model OrderMessage {
+  id         String    @id @default(cuid())
+  orderId    String
+  senderId   String?
+  senderRole UserRole?
+  body       String
+  createdAt  DateTime  @default(now())
+
+  order  Order @relation(fields: [orderId], references: [id])
+  sender User? @relation(fields: [senderId], references: [id])
+
+  @@index([orderId])
+  @@index([senderId])
 }
 
 model OrderItem {

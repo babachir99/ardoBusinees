@@ -8,6 +8,7 @@ type User = {
   email: string;
   name?: string | null;
   role: string;
+  isActive: boolean;
   createdAt: string;
 };
 
@@ -54,6 +55,27 @@ export default function AdminUsersBoard() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || t("errors.save"));
+      }
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("errors.save"));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleActive = async (userId: string, isActive: boolean) => {
+    setSavingId(userId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -142,6 +164,14 @@ export default function AdminUsersBoard() {
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(user.id, !user.isActive)}
+                    disabled={savingId === user.id}
+                    className="rounded-full border border-white/20 px-4 py-2 text-[11px] text-white transition hover:border-white/40 disabled:opacity-60"
+                  >
+                    {user.isActive ? t("actions.block") : t("actions.unblock")}
+                  </button>
                 </div>
               </div>
             </div>

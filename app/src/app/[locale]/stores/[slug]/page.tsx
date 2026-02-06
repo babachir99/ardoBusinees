@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 
 export default async function StorePage({
@@ -36,6 +36,17 @@ export default async function StorePage({
   const products = await prisma.product.findMany({
     where: { storeId: store.id, isActive: true },
     orderBy: { createdAt: "desc" },
+  });
+
+  const now = new Date();
+  const isBoosted = (product: typeof products[number]) =>
+    product.boostStatus === "APPROVED" &&
+    (!product.boostedUntil || new Date(product.boostedUntil) > now);
+
+  const sortedProducts = [...products].sort((a, b) => {
+    const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
+    if (boostDiff !== 0) return boostDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   return (
@@ -81,11 +92,17 @@ export default async function StorePage({
         </section>
 
         <section className="grid gap-6 md:grid-cols-2 fade-up">
-          {products.map((product) => (
+          {sortedProducts.map((product) => {
+            const boosted = isBoosted(product);
+            return (
             <Link
               key={product.id}
               href={`/shop/${product.slug}`}
-              className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 transition hover:border-emerald-300/60"
+              className={`rounded-3xl border bg-zinc-900/70 p-6 transition ${
+                boosted
+                  ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
+                  : "border-white/10 hover:border-emerald-300/60"
+              }`}
             >
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
@@ -95,12 +112,38 @@ export default async function StorePage({
                   {t("view")}
                 </span>
               </div>
+              {boosted && (
+                <span className="mt-3 inline-flex rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
+                  {locale === "fr" ? "Booste" : "Boosted"}
+                </span>
+              )}
               <h3 className="mt-4 text-xl font-semibold">{product.title}</h3>
-              <p className="mt-2 text-sm text-zinc-300">
-                {formatMoney(product.priceCents, product.currency, locale)}
-              </p>
+              {product.discountPercent ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-emerald-200">
+                    {formatMoney(
+                      getDiscountedPrice(
+                        product.priceCents,
+                        product.discountPercent
+                      ),
+                      product.currency,
+                      locale
+                    )}
+                  </span>
+                  <span className="text-xs text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                  <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                    -{product.discountPercent}%
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-300">
+                  {formatMoney(product.priceCents, product.currency, locale)}
+                </p>
+              )}
             </Link>
-          ))}
+          )})}
           {products.length === 0 && (
             <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8 text-sm text-zinc-300">
               {t("empty")}

@@ -13,14 +13,20 @@ type Submission = {
   selfieUrl?: string | null;
   notes?: string | null;
   createdAt: string;
-  user: { id: string; email: string; name?: string | null; role: string };
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+    role: string;
+    isActive: boolean;
+  };
 };
 
 export default function AdminKycBoard() {
   const t = useTranslations("AdminKyc");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("PENDING");
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -45,6 +51,23 @@ export default function AdminKycBoard() {
   useEffect(() => {
     load();
   }, []);
+
+  const updateUser = async (id: string, payload: { role?: string; isActive?: boolean }) => {
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || t("errors.save"));
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("errors.save"));
+    }
+  };
 
   const updateStatus = async (id: string, status: "APPROVED" | "REJECTED") => {
     try {
@@ -125,12 +148,35 @@ export default function AdminKycBoard() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-2 text-xs">
-                <p>{t("labels.docId")}: {submission.docIdUrl || "-"}</p>
-                <p>{t("labels.driver")}: {submission.driverLicenseUrl || "-"}</p>
-                <p>{t("labels.proof")}: {submission.proofAddressUrl || "-"}</p>
-                <p>{t("labels.selfie")}: {submission.selfieUrl || "-"}</p>
-                {submission.notes && <p>{t("labels.notes")}: {submission.notes}</p>}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  { key: "docIdUrl", label: t("labels.docId"), url: submission.docIdUrl },
+                  { key: "driverLicenseUrl", label: t("labels.driver"), url: submission.driverLicenseUrl },
+                  { key: "proofAddressUrl", label: t("labels.proof"), url: submission.proofAddressUrl },
+                  { key: "selfieUrl", label: t("labels.selfie"), url: submission.selfieUrl },
+                ].map((doc) => (
+                  <div key={doc.key} className="rounded-2xl border border-white/10 bg-zinc-900/60 p-3">
+                    <p className="text-[11px] text-zinc-400">{doc.label}</p>
+                    {doc.url ? (
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block overflow-hidden rounded-xl border border-white/10"
+                      >
+                        <img src={doc.url} alt={doc.label} className="h-32 w-full object-cover" />
+                      </a>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-zinc-500">{t("labels.missing")}</p>
+                    )}
+                  </div>
+                ))}
+                {submission.notes && (
+                  <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-3 sm:col-span-2">
+                    <p className="text-[11px] text-zinc-400">{t("labels.notes")}</p>
+                    <p className="mt-2 text-xs text-zinc-200">{submission.notes}</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
@@ -148,6 +194,28 @@ export default function AdminKycBoard() {
                 >
                   {t("actions.reject")}
                 </button>
+                {submission.status === "APPROVED" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => updateUser(submission.user.id, { role: "CUSTOMER" })}
+                      className="rounded-full border border-white/20 px-4 py-2 text-[11px] font-semibold text-white"
+                    >
+                      {t("actions.removeRole")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(submission.user.id, { isActive: !submission.user.isActive })
+                      }
+                      className="rounded-full border border-white/20 px-4 py-2 text-[11px] font-semibold text-white"
+                    >
+                      {submission.user.isActive
+                        ? t("actions.block")
+                        : t("actions.unblock")}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

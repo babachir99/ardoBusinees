@@ -1,12 +1,16 @@
 import { Link } from "@/i18n/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
+import AdminTrendsPanel from "@/components/admin/AdminTrendsPanel";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { formatMoney } from "@/lib/format";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
+  const locale = await getLocale();
   const t = await getTranslations("Admin");
 
   if (!session || session.user.role !== "ADMIN") {
@@ -28,6 +32,166 @@ export default async function AdminPage() {
       </div>
     );
   }
+
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const last30Days = new Date(now);
+  last30Days.setDate(last30Days.getDate() - 30);
+  const trendDays = 30;
+  const trendStart = new Date(todayStart);
+  trendStart.setDate(trendStart.getDate() - (trendDays - 1));
+
+  const [
+    usersCount,
+    pendingKycCount,
+    pendingOrdersCount,
+    inactiveProductsCount,
+    failedPaymentsCount,
+    ordersTodayCount,
+    revenueTotal,
+    revenueMonth,
+    avgOrder,
+    recentOrders,
+    recentUsers,
+    topItems,
+    topSellerStats,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.kycSubmission.count({ where: { status: "PENDING" } }),
+    prisma.order.count({ where: { status: "PENDING" } }),
+    prisma.product.count({ where: { isActive: false } }),
+    prisma.order.count({ where: { paymentStatus: "FAILED" } }),
+    prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.order.aggregate({
+      _sum: { totalCents: true },
+      where: { paymentStatus: "PAID" },
+    }),
+    prisma.order.aggregate({
+      _sum: { totalCents: true },
+      where: { paymentStatus: "PAID", createdAt: { gte: last30Days } },
+    }),
+    prisma.order.aggregate({
+      _avg: { totalCents: true },
+      where: { paymentStatus: "PAID" },
+    }),
+    prisma.order.findMany({
+      where: { createdAt: { gte: trendStart } },
+      select: { totalCents: true, paymentStatus: true, createdAt: true },
+    }),
+    prisma.user.findMany({
+      where: { createdAt: { gte: trendStart } },
+      select: { createdAt: true },
+    }),
+    prisma.orderItem.groupBy({
+      by: ["productId"],
+      _sum: { quantity: true },
+      where: { order: { paymentStatus: "PAID" } },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 5,
+    }),
+    prisma.order.groupBy({
+      by: ["sellerId"],
+      _sum: { totalCents: true },
+      _count: { _all: true },
+      where: { paymentStatus: "PAID", sellerId: { not: null } },
+      orderBy: { _sum: { totalCents: "desc" } },
+      take: 5,
+    }),
+  ]);
+
+  const topProductIds = topItems.map((item) => item.productId);
+  const topProducts = topProductIds.length
+    ? await prisma.product.findMany({
+        where: { id: { in: topProductIds } },
+        select: { id: true, title: true, slug: true, seller: { select: { displayName: true } } },
+      })
+    : [];
+  const topProductMap = new Map(topProducts.map((product) => [product.id, product]));
+
+  const topSellerIds = topSellerStats
+    .map((stat) => stat.sellerId)
+    .filter((id): id is string => Boolean(id));
+  const sellerProfiles = topSellerIds.length
+    ? await prisma.sellerProfile.findMany({
+        where: { id: { in: topSellerIds } },
+        select: {
+          id: true,
+          displayName: true,
+          slug: true,
+          user: { select: { name: true, email: true } },
+        },
+      })
+    : [];
+  const sellerMap = new Map(sellerProfiles.map((seller) => [seller.id, seller]));
+  const topSellers = topSellerStats.map((stat) => {
+    const seller = stat.sellerId ? sellerMap.get(stat.sellerId) : undefined;
+    return {
+      id: stat.sellerId ?? "",
+      name: seller?.displayName ?? seller?.user?.name ?? t("topSellers.unknownSeller"),
+      slug: seller?.slug ?? null,
+      revenueCents: stat._sum.totalCents ?? 0,
+      orders: stat._count._all ?? 0,
+    };
+  });
+
+  const dayKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const trendDates = Array.from({ length: trendDays }).map((_, index) => {
+    const d = new Date(trendStart);
+    d.setDate(trendStart.getDate() + index);
+    return {
+      key: dayKey(d),
+      label: d.toLocaleDateString(locale, { month: "short", day: "numeric" }),
+      day: d.getDate(),
+      month: d.toLocaleDateString(locale, { month: "short" }),
+      showMonth: d.getDate() === 1 || index === 0,
+    };
+  });
+
+  const revenueByDay = Object.fromEntries(
+    trendDates.map((d) => [d.key, 0])
+  ) as Record<string, number>;
+  const ordersByDay = Object.fromEntries(
+    trendDates.map((d) => [d.key, 0])
+  ) as Record<string, number>;
+  const usersByDay = Object.fromEntries(
+    trendDates.map((d) => [d.key, 0])
+  ) as Record<string, number>;
+
+  for (const order of recentOrders) {
+    const key = dayKey(order.createdAt);
+    if (key in ordersByDay) {
+      ordersByDay[key] += 1;
+      if (order.paymentStatus === "PAID") {
+        revenueByDay[key] += order.totalCents;
+      }
+    }
+  }
+
+  for (const user of recentUsers) {
+    const key = dayKey(user.createdAt);
+    if (key in usersByDay) {
+      usersByDay[key] += 1;
+    }
+  }
+
+  const revenueSeries = trendDates.map((d) => revenueByDay[d.key] ?? 0);
+  const ordersSeries = trendDates.map((d) => ordersByDay[d.key] ?? 0);
+  const usersSeries = trendDates.map((d) => usersByDay[d.key] ?? 0);
+  const topProductMax = Math.max(
+    ...topItems.map((item) => item._sum.quantity ?? 0),
+    1
+  );
+  const topSellerMax = Math.max(
+    ...topSellers.map((seller) => seller.revenueCents),
+    1
+  );
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -59,6 +223,230 @@ export default async function AdminPage() {
             {t("hero.title")}
           </h1>
           <p className="mt-3 text-sm text-zinc-300">{t("hero.subtitle")}</p>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-4">
+          {[
+            {
+              label: t("quick.users"),
+              value: usersCount,
+              href: "/admin/users",
+            },
+            {
+              label: t("quick.kyc"),
+              value: pendingKycCount,
+              href: "/admin/kyc",
+            },
+            {
+              label: t("quick.orders"),
+              value: pendingOrdersCount,
+              href: "/admin/orders",
+            },
+            {
+              label: t("quick.products"),
+              value: inactiveProductsCount,
+              href: "/admin/products",
+            },
+          ].map((card) => (
+            <Link
+              key={card.label}
+              href={card.href}
+              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 transition hover:border-sky-300/60"
+            >
+              <p className="text-xs text-zinc-400">{card.label}</p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {card.value}
+              </p>
+            </Link>
+          ))}
+        </section>
+
+        <AdminTrendsPanel
+          dates={trendDates}
+          revenueSeries={revenueSeries}
+          ordersSeries={ordersSeries}
+          usersSeries={usersSeries}
+        />
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">{t("topProducts.title")}</h2>
+                <p className="mt-2 text-sm text-zinc-300">{t("topProducts.subtitle")}</p>
+              </div>
+              <Link
+                href="/admin/products"
+                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+              >
+                {t("topProducts.cta")}
+              </Link>
+            </div>
+            {topItems.length === 0 && (
+              <p className="mt-4 text-sm text-zinc-400">{t("topProducts.empty")}</p>
+            )}
+            {topItems.length > 0 && (
+              <div className="mt-5 grid gap-3">
+                {topItems.map((item) => {
+                  const product = topProductMap.get(item.productId);
+                  const units = item._sum.quantity ?? 0;
+                  const width = Math.round((units / topProductMax) * 100);
+                  return (
+                    <div
+                      key={item.productId}
+                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {product?.title ?? t("topProducts.unknownProduct")}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            {product?.seller?.displayName ?? t("topProducts.unknownSeller")}
+                          </p>
+                        </div>
+                        <div className="text-emerald-200">
+                          {t("topProducts.units", { count: units })}
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
+                        <div
+                          className="h-2 rounded-full bg-emerald-400"
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">{t("topSellers.title")}</h2>
+                <p className="mt-2 text-sm text-zinc-300">{t("topSellers.subtitle")}</p>
+              </div>
+              <Link
+                href="/admin/users"
+                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+              >
+                {t("topSellers.cta")}
+              </Link>
+            </div>
+            {topSellers.length === 0 && (
+              <p className="mt-4 text-sm text-zinc-400">{t("topSellers.empty")}</p>
+            )}
+            {topSellers.length > 0 && (
+              <div className="mt-5 grid gap-3">
+                {topSellers.map((seller) => {
+                  const width = Math.round((seller.revenueCents / topSellerMax) * 100);
+                  return (
+                    <div
+                      key={seller.id}
+                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {seller.name}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            {t("topSellers.orders", { count: seller.orders })}
+                          </p>
+                        </div>
+                        <div className="text-sky-200">
+                          {formatMoney(seller.revenueCents, "XOF", locale)}
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
+                        <div
+                          className="h-2 rounded-full bg-sky-400"
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-4">
+          {[
+            {
+              label: t("kpis.revenueTotal"),
+              value: formatMoney(revenueTotal._sum.totalCents ?? 0, "XOF", locale),
+            },
+            {
+              label: t("kpis.revenueMonth"),
+              value: formatMoney(revenueMonth._sum.totalCents ?? 0, "XOF", locale),
+            },
+            {
+              label: t("kpis.avgOrder"),
+              value: formatMoney(Math.round(avgOrder._avg.totalCents ?? 0), "XOF", locale),
+            },
+            {
+              label: t("kpis.ordersToday"),
+              value: ordersTodayCount,
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5"
+            >
+              <p className="text-xs text-zinc-400">{card.label}</p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {card.value}
+              </p>
+            </div>
+          ))}
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+          <h2 className="text-xl font-semibold">{t("alerts.title")}</h2>
+          <p className="mt-2 text-sm text-zinc-300">{t("alerts.subtitle")}</p>
+          <div className="mt-4 grid gap-3 text-xs text-zinc-200">
+            {pendingKycCount === 0 &&
+            pendingOrdersCount === 0 &&
+            failedPaymentsCount === 0 &&
+            inactiveProductsCount === 0 ? (
+              <p className="text-xs text-zinc-400">{t("alerts.empty")}</p>
+            ) : (
+              <>
+                <Link
+                  href="/admin/kyc"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
+                >
+                  <span>{t("alerts.kyc")}</span>
+                  <span className="text-amber-200">{pendingKycCount}</span>
+                </Link>
+                <Link
+                  href="/admin/orders"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
+                >
+                  <span>{t("alerts.orders")}</span>
+                  <span className="text-amber-200">{pendingOrdersCount}</span>
+                </Link>
+                <Link
+                  href="/admin/orders"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
+                >
+                  <span>{t("alerts.payments")}</span>
+                  <span className="text-rose-200">{failedPaymentsCount}</span>
+                </Link>
+                <Link
+                  href="/admin/products"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
+                >
+                  <span>{t("alerts.products")}</span>
+                  <span className="text-amber-200">{inactiveProductsCount}</span>
+                </Link>
+              </>
+            )}
+          </div>
         </section>
 
         <section className="grid gap-6 md:grid-cols-3">
@@ -126,37 +514,49 @@ export default async function AdminPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-          <h2 className="text-xl font-semibold">{t("orders.title")}</h2>
-          <p className="mt-2 text-sm text-zinc-300">{t("orders.subtitle")}</p>
-          <Link
-            href="/admin/orders"
-            className="mt-6 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("orders.cta")}
-          </Link>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-          <h2 className="text-xl font-semibold">{t("users.title")}</h2>
-          <p className="mt-2 text-sm text-zinc-300">{t("users.subtitle")}</p>
-          <Link
-            href="/admin/users"
-            className="mt-6 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("users.cta")}
-          </Link>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-          <h2 className="text-xl font-semibold">{t("kyc.title")}</h2>
-          <p className="mt-2 text-sm text-zinc-300">{t("kyc.subtitle")}</p>
-          <Link
-            href="/admin/kyc"
-            className="mt-6 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("kyc.cta")}
-          </Link>
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                title: t("orders.title"),
+                subtitle: t("orders.subtitle"),
+                cta: t("orders.cta"),
+                href: "/admin/orders",
+              },
+              {
+                title: t("users.title"),
+                subtitle: t("users.subtitle"),
+                cta: t("users.cta"),
+                href: "/admin/users",
+              },
+              {
+                title: t("kyc.title"),
+                subtitle: t("kyc.subtitle"),
+                cta: t("kyc.cta"),
+                href: "/admin/kyc",
+              },
+              {
+                title: t("products.title"),
+                subtitle: t("products.subtitle"),
+                cta: t("products.cta"),
+                href: "/admin/products",
+              },
+            ].map((card) => (
+              <div
+                key={card.title}
+                className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5"
+              >
+                <h3 className="text-sm font-semibold text-white">{card.title}</h3>
+                <p className="mt-2 text-xs text-zinc-400">{card.subtitle}</p>
+                <Link
+                  href={card.href}
+                  className="mt-4 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+                >
+                  {card.cta}
+                </Link>
+              </div>
+            ))}
+          </div>
         </section>
       </main>
       <Footer />

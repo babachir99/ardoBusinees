@@ -2,8 +2,10 @@ import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function ShopPage({
   searchParams,
@@ -16,6 +18,7 @@ export default async function ShopPage({
     searchParams,
     params,
   ]);
+  const session = await getServerSession(authOptions);
   const t = await getTranslations("Shop");
 
   const normalizedType = type?.toUpperCase();
@@ -53,6 +56,17 @@ export default async function ShopPage({
       orderBy: { name: "asc" },
     }),
   ]);
+
+  const now = new Date();
+  const isBoosted = (product: typeof products[number]) =>
+    product.boostStatus === "APPROVED" &&
+    (!product.boostedUntil || new Date(product.boostedUntil) > now);
+
+  const sortedProducts = [...products].sort((a, b) => {
+    const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
+    if (boostDiff !== 0) return boostDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -99,12 +113,41 @@ export default async function ShopPage({
               {t("filters.dropship")}
             </Link>
           </div>
-        <Link
-          href="/cart"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {t("cart")}
-        </Link>
+        <div className="flex items-center gap-3">
+          {session?.user?.role === "ADMIN" && (
+            <Link
+              href="/admin"
+              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
+            >
+              Admin
+            </Link>
+          )}
+          <Link
+            href={session ? "/profile" : "/login"}
+            className="flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
+          >
+            {session?.user?.image ? (
+              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
+                <img
+                  src={session.user.image}
+                  alt={session.user.name ?? "Profil"}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+            ) : session?.user?.name ? (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
+                {session.user.name.slice(0, 1).toUpperCase()}
+              </span>
+            ) : null}
+            {session ? "Profil" : "Se connecter / S'inscrire"}
+          </Link>
+          <Link
+            href="/cart"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {t("cart")}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">
@@ -219,13 +262,19 @@ export default async function ShopPage({
         </section>
 
         <section className="grid gap-6 md:grid-cols-2 fade-up">
-          {products.map((product) => (
+          {sortedProducts.map((product) => {
+            const boosted = isBoosted(product);
+            return (
             <Link
               key={product.id}
               href={`/shop/${product.slug}`}
-              className="group rounded-3xl border border-white/10 bg-zinc-900/70 p-6 transition hover:border-emerald-300/60"
+              className={`group rounded-3xl border bg-zinc-900/70 p-6 transition ${
+                boosted
+                  ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
+                  : "border-white/10 hover:border-emerald-300/60"
+              }`}
             >
-              <div className="mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+              <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
                 {product.images[0] ? (
                   <img
                     src={product.images[0].url}
@@ -236,6 +285,11 @@ export default async function ShopPage({
                   <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
                     Image a venir
                   </div>
+                )}
+                {boosted && (
+                  <span className="absolute right-4 top-4 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
+                    {locale === "fr" ? "Booste" : "Boosted"}
+                  </span>
                 )}
               </div>
               <div className="flex items-center justify-between">
@@ -263,9 +317,30 @@ export default async function ShopPage({
                 </span>
               </div>
               <h3 className="mt-4 text-xl font-semibold">{product.title}</h3>
-              <p className="mt-2 text-sm text-zinc-300">
-                {formatMoney(product.priceCents, product.currency, locale)}
-              </p>
+              {product.discountPercent ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-emerald-200">
+                    {formatMoney(
+                      getDiscountedPrice(
+                        product.priceCents,
+                        product.discountPercent
+                      ),
+                      product.currency,
+                      locale
+                    )}
+                  </span>
+                  <span className="text-xs text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                  <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                    -{product.discountPercent}%
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-300">
+                  {formatMoney(product.priceCents, product.currency, locale)}
+                </p>
+              )}
               <div className="mt-6 flex items-center justify-between text-xs text-zinc-400">
                 <span>
                   {product.seller?.displayName ?? t("labels.seller")}
@@ -275,7 +350,7 @@ export default async function ShopPage({
                 </span>
               </div>
             </Link>
-          ))}
+          )})}
         </section>
 
         {products.length === 0 && (

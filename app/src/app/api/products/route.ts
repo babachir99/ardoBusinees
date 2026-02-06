@@ -64,6 +64,20 @@ export async function POST(request: NextRequest) {
   const title = String(body.title ?? "");
   const slug = String(body.slug ?? "");
   const priceCents = Number(body.priceCents);
+  const discountRaw = body.discountPercent;
+  const requestBoost = Boolean(body.requestBoost);
+
+  let discountPercent: number | null | undefined = undefined;
+  if (discountRaw !== undefined) {
+    const parsed = Number(discountRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 90) {
+      return NextResponse.json(
+        { error: "discountPercent must be between 0 and 90" },
+        { status: 400 }
+      );
+    }
+    discountPercent = parsed > 0 ? Math.round(parsed) : null;
+  }
 
   if (!sellerId || !title || !slug || !Number.isFinite(priceCents)) {
     return NextResponse.json(
@@ -72,23 +86,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const product = await prisma.product.create({
-    data: {
-      sellerId,
-      storeId: body.storeId ?? undefined,
-      title,
-      slug,
-      description: body.description ?? undefined,
-      priceCents,
-      currency: body.currency ?? "XOF",
-      type,
-      preorderLeadDays: body.preorderLeadDays ?? undefined,
-      dropshipSupplier: body.dropshipSupplier ?? undefined,
-      stockQuantity: body.stockQuantity ?? undefined,
-      pickupLocation: body.pickupLocation ?? undefined,
-      deliveryOptions: body.deliveryOptions ?? undefined,
-      isActive: body.isActive ?? true,
-      images: Array.isArray(body.imageUrls) && body.imageUrls.length > 0
+  const data: Record<string, unknown> = {
+    sellerId,
+    storeId: body.storeId ?? undefined,
+    title,
+    slug,
+    description: body.description ?? undefined,
+    priceCents,
+    currency: body.currency ?? "XOF",
+    type,
+    preorderLeadDays: body.preorderLeadDays ?? undefined,
+    dropshipSupplier: body.dropshipSupplier ?? undefined,
+    stockQuantity: body.stockQuantity ?? undefined,
+    pickupLocation: body.pickupLocation ?? undefined,
+    deliveryOptions: body.deliveryOptions ?? undefined,
+    isActive: body.isActive ?? true,
+    images:
+      Array.isArray(body.imageUrls) && body.imageUrls.length > 0
         ? {
             create: body.imageUrls.map((url: string, index: number) => ({
               url,
@@ -97,7 +111,19 @@ export async function POST(request: NextRequest) {
             })),
           }
         : undefined,
-    },
+  };
+
+  if (discountPercent !== undefined) {
+    data.discountPercent = discountPercent;
+  }
+
+  if (requestBoost) {
+    data.boostStatus = "PENDING";
+    data.boostRequestedAt = new Date();
+  }
+
+  const product = await prisma.product.create({
+    data,
   });
 
   return NextResponse.json(product, { status: 201 });

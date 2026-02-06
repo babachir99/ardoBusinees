@@ -186,6 +186,15 @@
       "submit": "Rechercher",
       "loading": "Recherche..."
     },
+    "filters": {
+      "allStatus": "Tous les statuts",
+      "rangeAll": "Toutes les périodes",
+      "range7": "7 jours",
+      "range30": "30 jours",
+      "range90": "90 jours",
+      "range365": "1 an",
+      "apply": "Appliquer"
+    },
     "labels": {
       "order": "Commande",
       "status": "Statut",
@@ -199,7 +208,10 @@
       "shippingEmpty": "Aucune adresse fournie",
       "products": "Produits",
       "unknown": "Produit inconnu",
-      "proof": "Preuve disponible"
+      "proof": "Preuve disponible",
+      "view": "Voir détail",
+      "messages": "Messagerie",
+      "noEmail": "Aucun email"
     },
     "payment": {
       "pending": "En attente",
@@ -222,6 +234,24 @@
       "delivered": "Livree",
       "canceled": "Annulee",
       "refunded": "Remboursee"
+    },
+    "sender": {
+      "customer": "Vous",
+      "seller": "Vendeur",
+      "admin": "Admin",
+      "system": "Systeme"
+    },
+    "detail": {
+      "title": "Detail commande",
+      "subtitle": "Suivi complet de ta commande.",
+      "back": "Retour",
+      "refresh": "Rafraichir",
+      "contact": "Contact",
+      "noPhone": "Aucun telephone",
+      "noMessages": "Aucun message pour le moment.",
+      "messagePlaceholder": "Ecrire un message...",
+      "send": "Envoyer",
+      "sending": "Envoi..."
     },
     "empty": "Aucune commande trouvee pour cet email.",
     "errors": {
@@ -282,6 +312,83 @@
       "products": "Produits",
       "orders": "Commandes"
     },
+    "dashboard": {
+      "title": "Dashboard vendeur",
+      "subtitle": "Tout pour piloter ta boutique.",
+      "rating": "Note",
+      "products": "Produits",
+      "status": {
+        "pending": "En attente",
+        "approved": "Approuve",
+        "suspended": "Suspendu"
+      }
+    },
+    "actions": {
+      "newProduct": "Ajouter un produit",
+      "manageOrders": "Gerer les commandes",
+      "manageProducts": "Gerer les produits",
+      "viewShop": "Voir la boutique"
+    },
+    "filters": {
+      "range": "Periode",
+      "scope": "Donnees",
+      "paid": "Payees",
+      "all": "Toutes",
+      "month": "Mois",
+      "ninetyDays": "90 jours",
+      "year": "1 an",
+      "days": "{days} jours"
+    },
+    "kpis": {
+      "revenueTotal": "Chiffre total",
+      "revenueMonth": "Chiffre 30 jours",
+      "revenueRange": "Chiffre sur {days} jours",
+      "avgOrder": "Panier moyen",
+      "ordersPending": "Commandes en attente",
+      "activeProducts": "Produits actifs"
+    },
+    "trends": {
+      "title": "Tendances vendeur",
+      "subtitle": "Suivi des ventes et commandes.",
+      "range": "{days}j",
+      "revenue": "Chiffre d'affaires",
+      "orders": "Commandes",
+      "items": "Articles vendus",
+      "days": "Sur {days} jours"
+    },
+    "sections": {
+      "topProducts": "Top produits",
+      "topProductsDesc": "Classement sur les commandes payees.",
+      "topClients": "Top clients",
+      "topClientsDesc": "Meilleurs clients sur la periode.",
+      "recentOrders": "Dernieres commandes",
+      "recentOrdersDesc": "Les transactions recentes.",
+      "stock": "Stock faible",
+      "stockDesc": "Produits a recharger rapidement.",
+      "empty": "Pas encore de donnees."
+    },
+    "topProducts": {
+      "units": "{count} ventes",
+      "unknown": "Produit inconnu"
+    },
+    "topClients": {
+      "byRevenue": "Par chiffre",
+      "byOrders": "Par frequence",
+      "orders": "{count} commandes",
+      "empty": "Aucun client pour l'instant.",
+      "noEmail": "Aucun email",
+      "unknown": "Client inconnu"
+    },
+    "recentOrders": {
+      "order": "Commande",
+      "items": "{count} articles",
+      "unknown": "Client inconnu",
+      "empty": "Aucune commande pour l'instant."
+    },
+    "stock": {
+      "empty": "Aucune alerte stock.",
+      "units": "{count} restants"
+    },
     "hero": {
       "kicker": "Espace vendeur",
       "title": "Gere ta boutique, tes produits et tes commandes.",
@@ -322,6 +429,14 @@
     "payouts": {
       "title": "Paiements et commissions",
       "desc": "Le split payment PayDunya calcule automatiquement les parts.",
+      "pending": "Payouts en attente",
+      "pendingCount": "{count} en attente de versement",
+      "rangeLabel": "Chiffre sur {days} jours",
+      "rangeHint": "Commandes payees sur la periode.",
+      "nextRelease": "Prochain versement",
+      "delayNote": "Estimation apres {days} jours",
+      "none": "Aucun payout en attente.",
+      "eta": "Estime {date}",
       "badge1": "Payout automatique",
       "badge2": "Historique detaille"
     },
@@ -349,6 +464,53 @@
       "active": "Actif",
       "inactive": "Inactif",
       "view": "Voir",
+      "edit": "Editer",
+      "activate": "Activer",
+      "deactivate": "Desactiver",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "search": "Rechercher un produit",
+      "uploading": "Upload {percent}%",
+      "removeImage": "Retirer",
+      "keepImage": "Garder",
+      "discountLabel": "Reduction (%)",
+      "discountApply": "Appliquer",
+      "discountRemove": "Retirer",
+      "boostLabel": "Boost",
+      "boostRequest": "Demander boost",
+      "boosted": "Booste",
+      "boostUntil": "Jusqu'au {date}",
+      "boostStatus": {
+        "none": "Aucun",
+        "pending": "En attente",
+        "approved": "Approuve",
+        "rejected": "Refuse"
+      },
+      "filters": {
+        "allStatus": "Tous les statuts",
+        "active": "Actifs",
+        "inactive": "Inactifs",
+        "allTypes": "Tous les types",
+        "allStock": "Tous les stocks",
+        "lowStock": "Stock faible"
+      },
+      "fields": {
+        "title": "Titre",
+        "description": "Description",
+        "price": "Prix (CFA)",
+        "stock": "Stock local",
+        "pickup": "Lieu de retrait",
+        "delivery": "Livraison",
+        "type": "Type",
+        "active": "Actif",
+        "images": "Images"
+      },
+      "errors": {
+        "fileType": "Format non supporte.",
+        "fileSize": "Image trop lourde (max 2MB).",
+        "dimensions": "Image trop petite (min 800x800).",
+        "maxFiles": "Maximum 5 images."
+      },
       "types": {
         "preorder": "Precommande",
         "dropship": "Dropshipping",
@@ -359,9 +521,67 @@
       "title": "Mes commandes",
       "subtitle": "Suivi des commandes liees a ta boutique.",
       "empty": "Aucune commande pour le moment.",
+      "refresh": "Rafraichir",
+      "saving": "Enregistrement...",
+      "sending": "Envoi...",
+      "submit": "Ajouter",
+      "uploading": "Upload...",
       "order": "Commande",
       "unknown": "Client inconnu",
       "items": "{count} articles",
+      "filters": {
+        "email": "Rechercher par email",
+        "all": "Tous les statuts",
+        "rangeAll": "Toutes les periodes",
+        "range7": "7 jours",
+        "range30": "30 jours",
+        "range90": "90 jours",
+        "range365": "1 an",
+        "apply": "Appliquer"
+      },
+      "labels": {
+        "order": "Commande",
+        "customer": "Client",
+        "noEmail": "Aucun email",
+        "noMethod": "Aucun moyen",
+        "items": "Articles",
+        "fees": "Frais",
+        "total": "Total",
+        "shipping": "Livraison",
+        "note": "Note",
+        "proof": "URL preuve",
+        "upload": "Uploader preuve",
+        "timeline": "Timeline",
+        "messages": "Messagerie client",
+        "messagePlaceholder": "Ecrire un message...",
+        "send": "Envoyer",
+        "newEvent": "Nouvel evenement",
+        "quickActions": "Actions rapides",
+        "method": "Moyen",
+        "shippingEmpty": "Aucune adresse fournie",
+        "noMessages": "Aucun message pour le moment.",
+        "view": "Voir detail",
+        "unknownProduct": "Produit inconnu"
+      },
+      "payment": {
+        "pending": "En attente",
+        "paid": "Payee",
+        "failed": "Echouee",
+        "refunded": "Remboursee"
+      },
+      "sender": {
+        "seller": "Vendeur",
+        "customer": "Client",
+        "admin": "Admin",
+        "system": "Systeme"
+      },
+      "detail": {
+        "title": "Detail commande",
+        "subtitle": "Voir les articles, le client et le suivi.",
+        "back": "Retour",
+        "customer": "Client",
+        "noPhone": "Aucun telephone"
+      },
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmee",
@@ -370,6 +590,11 @@
         "delivered": "Livree",
         "canceled": "Annulee",
         "refunded": "Remboursee"
+      },
+      "errors": {
+        "save": "Impossible d'enregistrer cet evenement.",
+        "upload": "Impossible d'uploader la preuve.",
+        "message": "Impossible d'envoyer le message."
       }
     }
   },
@@ -383,6 +608,8 @@
     "slug": "Slug",
     "description": "Description",
     "price": "Prix (en CFA)",
+    "discountPercent": "Reduction (%)",
+    "discountHint": "0 = pas de reduction. Max 90.",
     "type": "Type",
     "types": {
       "local": "Local",
@@ -399,6 +626,8 @@
     "dropzone": "Glisse une image ici ou clique pour choisir",
     "uploading": "Upload {percent}%",
     "imageUrlDisabled": "L'URL image est desactivee tant qu'un fichier est selectionne.",
+    "boostRequest": "Demander un boost",
+    "boostHint": "Le boost augmente la visibilite apres validation admin.",
     "removeImage": "Retirer",
     "clearImages": "Tout supprimer",
     "addMoreImages": "Ajouter des images",
@@ -421,6 +650,53 @@
   "Admin": {
     "nav": {
       "seller": "Vendeur"
+    },
+    "quick": {
+      "users": "Utilisateurs",
+      "kyc": "KYC en attente",
+      "orders": "Commandes en attente",
+      "products": "Produits a verifier"
+    },
+    "kpis": {
+      "revenueTotal": "Chiffre total",
+      "revenueMonth": "Chiffre 30 jours",
+      "avgOrder": "Panier moyen",
+      "ordersToday": "Commandes aujourd'hui"
+    },
+    "alerts": {
+      "title": "Alertes",
+      "subtitle": "Ce qui demande ton attention.",
+      "empty": "Aucune alerte critique.",
+      "kyc": "KYC en attente",
+      "orders": "Commandes en attente",
+      "payments": "Paiements echoues",
+      "products": "Produits inactifs"
+    },
+    "trends": {
+      "title": "Tendances d'activite",
+      "subtitle": "Basculer entre 7, 14 ou 30 jours.",
+      "range": "{days}j",
+      "revenue": "Chiffre d'affaires",
+      "orders": "Commandes",
+      "users": "Nouveaux profils",
+      "days": "Sur {days} jours"
+    },
+    "topProducts": {
+      "title": "Produits les plus vendus",
+      "subtitle": "Classement base sur les commandes payees.",
+      "cta": "Voir les produits",
+      "empty": "Aucune vente pour l'instant.",
+      "units": "{count} ventes",
+      "unknownProduct": "Produit inconnu",
+      "unknownSeller": "Vendeur inconnu"
+    },
+    "topSellers": {
+      "title": "Top vendeurs",
+      "subtitle": "Classement base sur le chiffre paye.",
+      "cta": "Voir les utilisateurs",
+      "empty": "Aucun vendeur avec chiffre.",
+      "orders": "{count} commandes",
+      "unknownSeller": "Vendeur inconnu"
     },
     "hero": {
       "kicker": "Back-office",
@@ -475,6 +751,11 @@
       "subtitle": "Verifier les dossiers et approuver les roles.",
       "cta": "Verifier KYC"
     },
+    "products": {
+      "title": "Produits",
+      "subtitle": "Moderer les produits et activer/desactiver.",
+      "cta": "Gerer les produits"
+    },
     "guard": {
       "title": "Acces refuse",
       "subtitle": "Tu dois avoir un compte admin pour acceder a cette page.",
@@ -497,12 +778,15 @@
     },
     "labels": {
       "order": "Commande",
+      "customer": "Client",
       "date": "Date",
       "noEmail": "Aucun email",
       "noMethod": "Aucun moyen",
+      "items": "Articles",
       "newEvent": "Nouvel evenement",
       "note": "Note",
       "proof": "URL preuve",
+      "quickActions": "Actions rapides",
       "shipping": "Livraison",
       "shippingEmpty": "Aucune adresse fournie",
       "products": "Produits",
@@ -553,6 +837,10 @@
       "user": "Utilisateur",
       "noName": "Sans nom"
     },
+    "actions": {
+      "block": "Bloquer",
+      "unblock": "Debloquer"
+    },
     "roles": {
       "admin": "Admin",
       "seller": "Vendeur",
@@ -563,6 +851,42 @@
     "errors": {
       "load": "Impossible de charger les utilisateurs.",
       "save": "Impossible de mettre a jour le role."
+    }
+  },
+  "AdminProducts": {
+    "title": "Produits",
+    "subtitle": "Active, desactive et controle les fiches.",
+    "refresh": "Rafraichir",
+    "loading": "Chargement des produits...",
+    "empty": "Aucun produit.",
+    "filters": {
+      "query": "Recherche",
+      "all": "Tous",
+      "active": "Actifs",
+      "inactive": "Inactifs",
+      "apply": "Appliquer"
+    },
+    "labels": {
+      "active": "Actif",
+      "inactive": "Inactif",
+      "unknownSeller": "Vendeur inconnu",
+      "boost": {
+        "none": "Boost: aucun",
+        "pending": "Boost: attente",
+        "approved": "Boost: actif",
+        "rejected": "Boost: refuse"
+      }
+    },
+    "actions": {
+      "enable": "Activer",
+      "disable": "Desactiver",
+      "boostApprove": "Approuver boost",
+      "boostReject": "Refuser boost",
+      "boostClear": "Retirer boost"
+    },
+    "errors": {
+      "load": "Impossible de charger les produits.",
+      "save": "Impossible de mettre a jour le produit."
     }
   },
   "AdminKyc": {
@@ -586,11 +910,15 @@
       "driver": "Permis",
       "proof": "Justificatif de domicile",
       "selfie": "Selfie",
-      "notes": "Notes"
+      "notes": "Notes",
+      "missing": "Non fourni"
     },
     "actions": {
       "approve": "Approuver",
-      "reject": "Refuser"
+      "reject": "Refuser",
+      "removeRole": "Retirer le role",
+      "block": "Bloquer",
+      "unblock": "Debloquer"
     },
     "errors": {
       "load": "Impossible de charger les dossiers.",
@@ -613,7 +941,13 @@
       "loading": "Creation...",
       "google": "Inscription avec Google",
       "verifyNote": "Mode dev : verifie ton email pour terminer.",
-      "verifyCta": "Verifier l'email"
+      "verifyCta": "Verifier l'email",
+      "upload": "Uploader une photo",
+      "uploading": "Upload...",
+      "errors": {
+        "fileType": "Merci d'uploader une image.",
+        "fileSize": "Image trop lourde (max 2MB)."
+      }
     },
     "forgot": {
       "title": "Mot de passe oublie",
@@ -636,7 +970,8 @@
       "name": "Nom complet",
       "email": "Email",
       "password": "Mot de passe",
-      "phone": "Telephone"
+      "phone": "Telephone",
+      "avatar": "Photo de profil"
     },
     "errors": {
       "invalid": "Email ou mot de passe incorrect.",
@@ -754,15 +1089,20 @@
       "email": "Email",
       "name": "Nom complet",
       "phone": "Telephone",
-      "role": "Role"
+      "role": "Role",
+      "avatar": "Photo de profil"
     },
+    "upload": "Uploader une photo",
+    "uploading": "Upload...",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "loading": "Chargement du profil...",
     "success": "Profil mis a jour.",
     "errors": {
       "load": "Impossible de charger le profil.",
-      "save": "Impossible d'enregistrer le profil."
+      "save": "Impossible d'enregistrer le profil.",
+      "fileType": "Merci d'uploader une image.",
+      "fileSize": "Image trop lourde (max 2MB)."
     }
   },
   "Activity": {

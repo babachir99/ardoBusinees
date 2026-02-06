@@ -187,6 +187,15 @@
       "submit": "Find orders",
       "loading": "Searching..."
     },
+    "filters": {
+      "allStatus": "All statuses",
+      "rangeAll": "All periods",
+      "range7": "7 days",
+      "range30": "30 days",
+      "range90": "90 days",
+      "range365": "1 year",
+      "apply": "Apply"
+    },
     "labels": {
       "order": "Order",
       "status": "Status",
@@ -200,7 +209,10 @@
       "shippingEmpty": "No shipping address provided",
       "products": "Products",
       "unknown": "Unknown product",
-      "proof": "Proof available"
+      "proof": "Proof available",
+      "view": "View details",
+      "messages": "Messages",
+      "noEmail": "No email"
     },
     "payment": {
       "pending": "Pending",
@@ -223,6 +235,24 @@
       "delivered": "Delivered",
       "canceled": "Canceled",
       "refunded": "Refunded"
+    },
+    "sender": {
+      "customer": "You",
+      "seller": "Seller",
+      "admin": "Admin",
+      "system": "System"
+    },
+    "detail": {
+      "title": "Order details",
+      "subtitle": "Track your order in one place.",
+      "back": "Back",
+      "refresh": "Refresh",
+      "contact": "Contact",
+      "noPhone": "No phone",
+      "noMessages": "No messages yet.",
+      "messagePlaceholder": "Write a message...",
+      "send": "Send",
+      "sending": "Sending..."
     },
     "empty": "No orders found for this email.",
     "errors": {
@@ -283,6 +313,83 @@
       "products": "Products",
       "orders": "Orders"
     },
+    "dashboard": {
+      "title": "Seller dashboard",
+      "subtitle": "Everything you need to run your store.",
+      "rating": "Rating",
+      "products": "Products",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "suspended": "Suspended"
+      }
+    },
+    "actions": {
+      "newProduct": "Add product",
+      "manageOrders": "Manage orders",
+      "manageProducts": "Manage products",
+      "viewShop": "View shop"
+    },
+    "filters": {
+      "range": "Range",
+      "scope": "Scope",
+      "paid": "Paid only",
+      "all": "All orders",
+      "month": "Month",
+      "ninetyDays": "90 days",
+      "year": "1 year",
+      "days": "{days} days"
+    },
+    "kpis": {
+      "revenueTotal": "Total revenue",
+      "revenueMonth": "30-day revenue",
+      "revenueRange": "Revenue ({days}d)",
+      "avgOrder": "Average order",
+      "ordersPending": "Pending orders",
+      "activeProducts": "Active products"
+    },
+    "trends": {
+      "title": "Performance trends",
+      "subtitle": "Track sales and orders over time.",
+      "range": "{days}d",
+      "revenue": "Revenue",
+      "orders": "Orders",
+      "items": "Items sold",
+      "days": "Last {days} days"
+    },
+    "sections": {
+      "topProducts": "Top products",
+      "topProductsDesc": "Best sellers based on paid orders.",
+      "topClients": "Top clients",
+      "topClientsDesc": "Best customers over this period.",
+      "recentOrders": "Recent orders",
+      "recentOrdersDesc": "Latest transactions from your customers.",
+      "stock": "Low stock",
+      "stockDesc": "Items that need restocking soon.",
+      "empty": "No data yet."
+    },
+    "topProducts": {
+      "units": "{count} sold",
+      "unknown": "Unknown product"
+    },
+    "topClients": {
+      "byRevenue": "By revenue",
+      "byOrders": "By frequency",
+      "orders": "{count} orders",
+      "empty": "No clients yet.",
+      "noEmail": "No email",
+      "unknown": "Unknown customer"
+    },
+    "recentOrders": {
+      "order": "Order",
+      "items": "{count} items",
+      "unknown": "Unknown customer",
+      "empty": "No orders yet."
+    },
+    "stock": {
+      "empty": "No stock alerts.",
+      "units": "{count} left"
+    },
     "hero": {
       "kicker": "Seller space",
       "title": "Manage your shop, products, and orders.",
@@ -323,6 +430,14 @@
     "payouts": {
       "title": "Payouts and commissions",
       "desc": "PayDunya split payments calculate shares automatically.",
+      "pending": "Pending payouts",
+      "pendingCount": "{count} awaiting release",
+      "rangeLabel": "Revenue last {days} days",
+      "rangeHint": "Paid orders in this window.",
+      "nextRelease": "Next payout release",
+      "delayNote": "Estimated after {days} days",
+      "none": "No pending payouts.",
+      "eta": "Estimated {date}",
       "badge1": "Auto payout",
       "badge2": "Detailed history"
     },
@@ -350,6 +465,53 @@
       "active": "Active",
       "inactive": "Inactive",
       "view": "View",
+      "edit": "Edit",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "save": "Save",
+      "cancel": "Cancel",
+      "search": "Search products",
+      "uploading": "Upload {percent}%",
+      "removeImage": "Remove",
+      "keepImage": "Keep",
+      "discountLabel": "Discount (%)",
+      "discountApply": "Apply",
+      "discountRemove": "Remove",
+      "boostLabel": "Boost",
+      "boostRequest": "Request boost",
+      "boosted": "Boosted",
+      "boostUntil": "Until {date}",
+      "boostStatus": {
+        "none": "None",
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "filters": {
+        "allStatus": "All statuses",
+        "active": "Active",
+        "inactive": "Inactive",
+        "allTypes": "All types",
+        "allStock": "All stock",
+        "lowStock": "Low stock"
+      },
+      "fields": {
+        "title": "Title",
+        "description": "Description",
+        "price": "Price (CFA)",
+        "stock": "Local stock",
+        "pickup": "Pickup location",
+        "delivery": "Delivery options",
+        "type": "Type",
+        "active": "Active",
+        "images": "Images"
+      },
+      "errors": {
+        "fileType": "Unsupported format.",
+        "fileSize": "Image too large (max 2MB).",
+        "dimensions": "Image too small (min 800x800).",
+        "maxFiles": "Maximum 5 images."
+      },
       "types": {
         "preorder": "Pre-order",
         "dropship": "Dropshipping",
@@ -360,9 +522,67 @@
       "title": "My orders",
       "subtitle": "Track orders linked to your store.",
       "empty": "No orders yet.",
+      "refresh": "Refresh",
+      "saving": "Saving...",
+      "sending": "Sending...",
+      "submit": "Add",
+      "uploading": "Uploading...",
       "order": "Order",
       "unknown": "Unknown customer",
       "items": "{count} items",
+      "filters": {
+        "email": "Search by email",
+        "all": "All statuses",
+        "rangeAll": "All periods",
+        "range7": "7 days",
+        "range30": "30 days",
+        "range90": "90 days",
+        "range365": "1 year",
+        "apply": "Apply"
+      },
+      "labels": {
+        "order": "Order",
+        "customer": "Customer",
+        "noEmail": "No email",
+        "noMethod": "No method",
+        "items": "Items",
+        "fees": "Fees",
+        "total": "Total",
+        "shipping": "Shipping",
+        "note": "Note",
+        "proof": "Proof URL",
+        "upload": "Upload proof",
+        "timeline": "Timeline",
+        "messages": "Customer messages",
+        "messagePlaceholder": "Write a message...",
+        "send": "Send",
+        "newEvent": "New event",
+        "quickActions": "Quick actions",
+        "method": "Method",
+        "shippingEmpty": "No shipping address provided",
+        "noMessages": "No messages yet.",
+        "view": "View details",
+        "unknownProduct": "Unknown product"
+      },
+      "payment": {
+        "pending": "Pending",
+        "paid": "Paid",
+        "failed": "Failed",
+        "refunded": "Refunded"
+      },
+      "sender": {
+        "seller": "Seller",
+        "customer": "Customer",
+        "admin": "Admin",
+        "system": "System"
+      },
+      "detail": {
+        "title": "Order details",
+        "subtitle": "See items, customer info, and tracking.",
+        "back": "Back",
+        "customer": "Customer",
+        "noPhone": "No phone"
+      },
       "status": {
         "pending": "Pending",
         "confirmed": "Confirmed",
@@ -371,6 +591,11 @@
         "delivered": "Delivered",
         "canceled": "Canceled",
         "refunded": "Refunded"
+      },
+      "errors": {
+        "save": "Unable to save this event.",
+        "upload": "Unable to upload proof.",
+        "message": "Unable to send message."
       }
     }
   },
@@ -384,6 +609,8 @@
     "slug": "Slug",
     "description": "Description",
     "price": "Price (CFA)",
+    "discountPercent": "Discount (%)",
+    "discountHint": "0 = no discount. Max 90.",
     "type": "Type",
     "types": {
       "local": "Local",
@@ -400,6 +627,8 @@
     "dropzone": "Drop an image here or click to choose",
     "uploading": "Uploading {percent}%",
     "imageUrlDisabled": "Image URL is disabled while a file is selected.",
+    "boostRequest": "Request a boost",
+    "boostHint": "Boost increases visibility after admin approval.",
     "removeImage": "Remove",
     "clearImages": "Clear all images",
     "addMoreImages": "Add more images",
@@ -422,6 +651,53 @@
   "Admin": {
     "nav": {
       "seller": "Seller"
+    },
+    "quick": {
+      "users": "Users",
+      "kyc": "Pending KYC",
+      "orders": "Pending orders",
+      "products": "Products to review"
+    },
+    "kpis": {
+      "revenueTotal": "Total revenue",
+      "revenueMonth": "30-day revenue",
+      "avgOrder": "Average order",
+      "ordersToday": "Orders today"
+    },
+    "alerts": {
+      "title": "Alerts",
+      "subtitle": "Needs your attention.",
+      "empty": "No critical alerts.",
+      "kyc": "Pending KYC",
+      "orders": "Pending orders",
+      "payments": "Failed payments",
+      "products": "Inactive products"
+    },
+    "trends": {
+      "title": "Activity trends",
+      "subtitle": "Switch between 7, 14, or 30 days.",
+      "range": "{days}d",
+      "revenue": "Revenue",
+      "orders": "Orders",
+      "users": "New profiles",
+      "days": "Last {days} days"
+    },
+    "topProducts": {
+      "title": "Top-selling products",
+      "subtitle": "Based on paid orders.",
+      "cta": "View products",
+      "empty": "No sales yet.",
+      "units": "{count} sales",
+      "unknownProduct": "Unknown product",
+      "unknownSeller": "Unknown seller"
+    },
+    "topSellers": {
+      "title": "Top sellers",
+      "subtitle": "Ranked by paid revenue.",
+      "cta": "View users",
+      "empty": "No seller revenue yet.",
+      "orders": "{count} orders",
+      "unknownSeller": "Unknown seller"
     },
     "hero": {
       "kicker": "Back-office",
@@ -462,8 +738,8 @@
       "badge2": "Full audit trail"
     },
     "orders": {
-      "title": "Orders tracking",
-      "subtitle": "Update order statuses and proofs.",
+      "title": "Order tracking",
+      "subtitle": "Update statuses and proofs.",
       "cta": "Manage orders"
     },
     "users": {
@@ -472,9 +748,14 @@
       "cta": "Manage users"
     },
     "kyc": {
-      "title": "KYC reviews",
-      "subtitle": "Review verification files and approve roles.",
+      "title": "KYC files",
+      "subtitle": "Review files and approve roles.",
       "cta": "Review KYC"
+    },
+    "products": {
+      "title": "Products",
+      "subtitle": "Moderate products and enable/disable.",
+      "cta": "Manage products"
     },
     "guard": {
       "title": "Access denied",
@@ -498,11 +779,14 @@
     },
     "labels": {
       "order": "Order",
+      "customer": "Customer",
       "noEmail": "No email",
       "noMethod": "No method",
+      "items": "Items",
       "newEvent": "New event",
       "note": "Note",
       "proof": "Proof URL",
+      "quickActions": "Quick actions",
       "upload": "Upload proof",
       "view": "View details"
     },
@@ -547,6 +831,10 @@
       "user": "User",
       "noName": "No name"
     },
+    "actions": {
+      "block": "Block",
+      "unblock": "Unblock"
+    },
     "roles": {
       "admin": "Admin",
       "seller": "Seller",
@@ -557,6 +845,42 @@
     "errors": {
       "load": "Unable to load users.",
       "save": "Unable to update role."
+    }
+  },
+  "AdminProducts": {
+    "title": "Products",
+    "subtitle": "Enable, disable, and review listings.",
+    "refresh": "Refresh",
+    "loading": "Loading products...",
+    "empty": "No products.",
+    "filters": {
+      "query": "Search",
+      "all": "All",
+      "active": "Active",
+      "inactive": "Inactive",
+      "apply": "Apply"
+    },
+    "labels": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "unknownSeller": "Unknown seller",
+      "boost": {
+        "none": "Boost: none",
+        "pending": "Boost: pending",
+        "approved": "Boost: active",
+        "rejected": "Boost: rejected"
+      }
+    },
+    "actions": {
+      "enable": "Enable",
+      "disable": "Disable",
+      "boostApprove": "Approve boost",
+      "boostReject": "Reject boost",
+      "boostClear": "Remove boost"
+    },
+    "errors": {
+      "load": "Unable to load products.",
+      "save": "Unable to update product."
     }
   },
   "AdminKyc": {
@@ -580,11 +904,15 @@
       "driver": "Driver license",
       "proof": "Proof of address",
       "selfie": "Selfie",
-      "notes": "Notes"
+      "notes": "Notes",
+      "missing": "Missing"
     },
     "actions": {
       "approve": "Approve",
-      "reject": "Reject"
+      "reject": "Reject",
+      "removeRole": "Remove role",
+      "block": "Block",
+      "unblock": "Unblock"
     },
     "errors": {
       "load": "Unable to load submissions.",
@@ -607,7 +935,13 @@
       "loading": "Creating...",
       "google": "Sign up with Google",
       "verifyNote": "Dev mode: verify your email to finish signup.",
-      "verifyCta": "Verify email"
+      "verifyCta": "Verify email",
+      "upload": "Upload a photo",
+      "uploading": "Uploading...",
+      "errors": {
+        "fileType": "Please upload an image.",
+        "fileSize": "Image too large (max 2MB)."
+      }
     },
     "forgot": {
       "title": "Forgot password",
@@ -626,12 +960,13 @@
       "success": "Password updated successfully.",
       "cta": "Go to login"
     },
-      "fields": {
-        "name": "Full name",
-        "email": "Email",
-        "password": "Password",
-        "phone": "Phone"
-      },
+    "fields": {
+      "name": "Full name",
+      "email": "Email",
+      "password": "Password",
+      "phone": "Phone",
+      "avatar": "Profile photo"
+    },
       "errors": {
         "invalid": "Invalid email or password.",
         "generic": "Something went wrong."
@@ -748,15 +1083,20 @@
       "email": "Email",
       "name": "Full name",
       "phone": "Phone",
-      "role": "Role"
+      "role": "Role",
+      "avatar": "Profile photo"
     },
+    "upload": "Upload a photo",
+    "uploading": "Uploading...",
     "save": "Save changes",
     "saving": "Saving...",
     "loading": "Loading profile...",
     "success": "Profile updated.",
     "errors": {
       "load": "Unable to load profile.",
-      "save": "Unable to save profile."
+      "save": "Unable to save profile.",
+      "fileType": "Please upload an image.",
+      "fileSize": "Image too large (max 2MB)."
     }
   },
   "Activity": {

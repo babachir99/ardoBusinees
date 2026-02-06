@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const allowedStatuses = new Set([
@@ -13,26 +15,43 @@ const allowedStatuses = new Set([
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await params;
-  const body = await request.json().catch(() => null);
-
-  if (!body?.status) {
-    return NextResponse.json({ error: "status is required" }, { status: 400 });
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const status = String(body.status).toUpperCase();
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const status = String(body.status ?? "").toUpperCase();
   if (!allowedStatuses.has(status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid status" },
+      { status: 400 }
+    );
   }
 
   const order = await prisma.order.findUnique({
-    where: { id },
+    where: { id: params.id },
+    select: { id: true, sellerId: true, userId: true },
   });
 
   if (!order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  if (session.user.role !== "ADMIN") {
+    const seller = await prisma.sellerProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+    if (!seller || seller.id !== order.sellerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const event = await prisma.orderEvent.create({
@@ -46,8 +65,16 @@ export async function POST(
 
   await prisma.order.update({
     where: { id: order.id },
+    data: { status },
+  });
+
+  await prisma.activityLog.create({
     data: {
-      status,
+      userId: session.user.id,
+      action: "ORDER_STATUS_UPDATED",
+      entityType: "Order",
+      entityId: order.id,
+      metadata: { status },
     },
   });
 

@@ -22,19 +22,27 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
-  if (!body?.role || !allowedRoles.has(String(body.role))) {
+  const role = body?.role ? String(body.role) : null;
+  const isActive = typeof body?.isActive === "boolean" ? body.isActive : null;
+
+  if (role && !allowedRoles.has(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
+  if (!role && isActive === null) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const user = await prisma.user.update({
     where: { id },
     data: {
-      role: String(body.role),
+      ...(role ? { role } : {}),
+      ...(isActive === null ? {} : { isActive }),
       activityLogs: {
         create: [
           {
-            action: "ROLE_UPDATED",
-            metadata: { role: body.role },
+            action: role ? "ROLE_UPDATED" : "ACCOUNT_UPDATED",
+            metadata: role ? { role } : { isActive },
           },
         ],
       },

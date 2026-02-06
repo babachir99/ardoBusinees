@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, getDiscountedPrice } from "@/lib/format";
 
 type Favorite = {
   id: string;
@@ -11,6 +11,7 @@ type Favorite = {
     id: string;
     title: string;
     priceCents: number;
+    discountPercent?: number | null;
     currency: string;
     slug: string;
     images: { url: string; alt?: string | null }[];
@@ -99,10 +100,23 @@ export default function FavoritesList() {
                 {fav.product.seller?.displayName ?? t("unknownSeller")}
               </p>
               <p className="mt-2 text-sm text-emerald-200">
-                {formatMoney(
-                  fav.product.priceCents,
-                  fav.product.currency,
-                  locale
+                {fav.product.discountPercent ? (
+                  <>
+                    {formatMoney(
+                      getDiscountedPrice(
+                        fav.product.priceCents,
+                        fav.product.discountPercent
+                      ),
+                      fav.product.currency,
+                      locale
+                    )}
+                  </>
+                ) : (
+                  formatMoney(
+                    fav.product.priceCents,
+                    fav.product.currency,
+                    locale
+                  )
                 )}
               </p>
               <button

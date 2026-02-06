@@ -42,6 +42,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           email: user.email,
           name: user.name,
           role: user.role,
+          image: user.image,
           emailVerified: user.emailVerified,
         };
       },
@@ -60,6 +61,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role ?? "CUSTOMER";
+        token.image = (user as { image?: string | null }).image ?? null;
+        token.name = user.name ?? token.name;
       }
       return token;
     },
@@ -67,6 +70,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "CUSTOMER";
+        if (token.image) session.user.image = token.image as string;
+        if (token.name) session.user.name = token.name as string;
       }
       return session;
     },

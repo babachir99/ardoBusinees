@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
+import SignOutButton from "@/components/auth/SignOutButton";
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
@@ -62,6 +63,7 @@ export default async function ProfilePage() {
           >
             Marketplace
           </Link>
+          <SignOutButton />
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-12">

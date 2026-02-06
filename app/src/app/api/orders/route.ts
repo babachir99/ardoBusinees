@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -20,15 +21,29 @@ export async function GET(request: NextRequest) {
     : 20;
   const status = searchParams.get("status") ?? undefined;
   const email = searchParams.get("email") ?? undefined;
-  const userId = searchParams.get("userId") ?? undefined;
+  const rangeParam = searchParams.get("range");
+
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isSeller = session?.user?.role === "SELLER";
+  const userId = isAdmin ? searchParams.get("userId") ?? undefined : undefined;
+
+  if (!session && !email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
   if (email) where.buyerEmail = email;
   if (userId) where.userId = userId;
+  if (rangeParam) {
+    const rangeDays = Number(rangeParam);
+    if (Number.isFinite(rangeDays) && rangeDays > 0) {
+      const from = new Date();
+      from.setDate(from.getDate() - rangeDays);
+      where.createdAt = { gte: from };
+    }
+  }
 
-  const isAdmin = session?.user?.role === "ADMIN";
-  const isSeller = session?.user?.role === "SELLER";
   let sellerScopeId: string | undefined;
 
   if (isSeller && session?.user?.id) {
@@ -55,6 +70,8 @@ export async function GET(request: NextRequest) {
           userId: session.user.id,
           ...(Object.keys(where).length > 0 ? where : {}),
         }
+      : email
+      ? where
       : undefined,
     include: {
       items: {
@@ -65,6 +82,18 @@ export async function GET(request: NextRequest) {
         },
       },
       events: { orderBy: { createdAt: "asc" } },
+      messages: session
+        ? {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              body: true,
+              senderRole: true,
+              sender: { select: { name: true, email: true } },
+              createdAt: true,
+            },
+          }
+        : undefined,
       user: { select: { id: true, email: true, name: true } },
       seller: { select: { id: true, displayName: true, slug: true } },
     },
@@ -102,6 +131,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const productIds = items
+    .map((item: { productId?: string }) => String(item.productId ?? ""))
+    .filter(Boolean);
+  if (productIds.length === 0) {
+    return NextResponse.json(
+      { error: "Each item needs productId" },
+      { status: 400 }
+    );
+  }
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, priceCents: true, discountPercent: true, type: true },
+  });
+  const productMap = new Map(products.map((product) => [product.id, product]));
+
   if (!userId) {
     const email = String(body.email);
     const name = body.name ? String(body.name) : undefined;
@@ -121,8 +166,15 @@ export async function POST(request: NextRequest) {
 
   for (const item of items) {
     const quantity = Number(item.quantity ?? 1);
-    const unitPriceCents = Number(item.unitPriceCents);
-    const type = String(item.type ?? "").toUpperCase();
+    const productId = String(item.productId ?? "");
+    const product = productMap.get(productId);
+    if (!product) {
+      return NextResponse.json(
+        { error: `Product ${productId} not found` },
+        { status: 400 }
+      );
+    }
+    const type = product.type;
 
     if (!allowedTypes.has(type)) {
       return NextResponse.json(
@@ -131,17 +183,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!item.productId || !Number.isFinite(unitPriceCents)) {
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
       return NextResponse.json(
-        { error: "Each item needs productId and unitPriceCents" },
+        { error: "Each item needs productId and a valid quantity" },
         { status: 400 }
       );
     }
 
+    const unitPriceCents = getDiscountedPrice(
+      product.priceCents,
+      product.discountPercent
+    );
     subtotalCents += quantity * unitPriceCents;
 
     mappedItems.push({
-      productId: String(item.productId),
+      productId,
       quantity,
       unitPriceCents,
       type,

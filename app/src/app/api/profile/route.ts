@@ -15,6 +15,7 @@ export async function GET() {
       id: true,
       email: true,
       name: true,
+      image: true,
       phone: true,
       role: true,
       createdAt: true,
@@ -36,12 +37,14 @@ export async function PUT(request: NextRequest) {
 
   const name = body.name ? String(body.name) : undefined;
   const phone = body.phone ? String(body.phone) : undefined;
+  const image = body.image ? String(body.image) : undefined;
 
   const user = await prisma.user.update({
     where: { id: session.user.id },
     data: {
       name,
       phone,
+      image,
       activityLogs: {
         create: [{ action: "PROFILE_UPDATED" }],
       },
@@ -50,6 +53,7 @@ export async function PUT(request: NextRequest) {
       id: true,
       email: true,
       name: true,
+      image: true,
       phone: true,
       role: true,
       createdAt: true,

@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const password = String(body.password ?? "");
   const name = body.name ? String(body.name) : undefined;
   const phone = body.phone ? String(body.phone) : undefined;
+  const image = body.image ? String(body.image) : undefined;
 
   if (!email || !password) {
     return NextResponse.json(
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       email,
       name,
       phone,
+      image,
       passwordHash,
       role: "CUSTOMER",
       activityLogs: {
