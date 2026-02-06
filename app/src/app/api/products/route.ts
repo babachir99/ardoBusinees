@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma, ProductType } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
   const categorySlug = searchParams.get("category") ?? undefined;
   const storeSlug = searchParams.get("store") ?? undefined;
 
-  const where: Record<string, unknown> = { isActive: true };
+  const where: Prisma.ProductWhereInput = { isActive: true };
   if (type && allowedTypes.has(type)) {
-    where.type = type;
+    where.type = type as ProductType;
   }
   if (sellerId) {
     where.sellerId = sellerId;
@@ -86,25 +87,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const data: Record<string, unknown> = {
-    sellerId,
-    storeId: body.storeId ?? undefined,
+  const imageUrls = Array.isArray(body.imageUrls)
+    ? body.imageUrls.filter(Boolean)
+    : [];
+
+  const data: Prisma.ProductCreateInput = {
+    seller: { connect: { id: sellerId } },
+    ...(body.storeId ? { store: { connect: { id: String(body.storeId) } } } : {}),
     title,
     slug,
     description: body.description ?? undefined,
     priceCents,
     currency: body.currency ?? "XOF",
-    type,
+    type: type as ProductType,
     preorderLeadDays: body.preorderLeadDays ?? undefined,
     dropshipSupplier: body.dropshipSupplier ?? undefined,
     stockQuantity: body.stockQuantity ?? undefined,
     pickupLocation: body.pickupLocation ?? undefined,
     deliveryOptions: body.deliveryOptions ?? undefined,
-    isActive: body.isActive ?? true,
+    isActive: typeof body.isActive === "boolean" ? body.isActive : true,
     images:
-      Array.isArray(body.imageUrls) && body.imageUrls.length > 0
+      imageUrls.length > 0
         ? {
-            create: body.imageUrls.map((url: string, index: number) => ({
+            create: imageUrls.map((url: string, index: number) => ({
               url,
               alt: body.imageAlt ?? body.title,
               position: index,

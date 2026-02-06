@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { KycStatus } from "@prisma/client";
 
 const allowedStatus = new Set(["APPROVED", "REJECTED"]);
 
@@ -20,14 +21,15 @@ export async function PATCH(
   if (!allowedStatus.has(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
+  const typedStatus = status as KycStatus;
 
   const submission = await prisma.kycSubmission.update({
     where: { id },
-    data: { status },
+    data: { status: typedStatus },
     include: { user: true },
   });
 
-  if (status === "APPROVED") {
+  if (typedStatus === "APPROVED") {
     await prisma.user.update({
       where: { id: submission.userId },
       data: {

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { KycStatus } from "@prisma/client";
+
+const allowedStatuses = new Set(["PENDING", "APPROVED", "REJECTED"]);
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -10,7 +13,11 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status") ?? undefined;
+  const rawStatus = searchParams.get("status");
+  if (rawStatus && !allowedStatuses.has(rawStatus.toUpperCase())) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+  const status = rawStatus ? (rawStatus.toUpperCase() as KycStatus) : undefined;
 
   const submissions = await prisma.kycSubmission.findMany({
     where: status ? { status } : undefined,

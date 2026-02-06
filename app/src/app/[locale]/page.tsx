@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import SearchBar from "@/components/search/SearchBar";
@@ -46,7 +47,7 @@ export default async function HomePage({
   const t = await getTranslations("Home");
   const query = q?.trim();
 
-  const orderBy =
+  const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
       ? { priceCents: "asc" }
       : sort === "price_desc"
@@ -319,3 +320,6 @@ export default async function HomePage({
     </div>
   );
 }
+
+
+

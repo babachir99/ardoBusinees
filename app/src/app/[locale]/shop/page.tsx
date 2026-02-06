@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
@@ -24,12 +25,14 @@ export default async function ShopPage({
   const normalizedType = type?.toUpperCase();
   const activeCategory = category ?? undefined;
   const activeStore = store ?? undefined;
-  const where =
+  const where: Prisma.ProductWhereInput = { isActive: true };
+  if (
     normalizedType === "PREORDER" ||
     normalizedType === "DROPSHIP" ||
     normalizedType === "LOCAL"
-      ? { type: normalizedType, isActive: true }
-      : { isActive: true };
+  ) {
+    where.type = normalizedType as "PREORDER" | "DROPSHIP" | "LOCAL";
+  }
 
   if (activeCategory) {
     where.categories = { some: { category: { slug: activeCategory } } };
@@ -363,3 +366,5 @@ export default async function ShopPage({
     </div>
   );
 }
+
+

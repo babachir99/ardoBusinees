@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { OrderStatus } from "@prisma/client";
 
 const allowedStatuses = new Set([
   "PENDING",
@@ -15,8 +16,9 @@ const allowedStatuses = new Set([
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,14 +31,12 @@ export async function POST(
 
   const status = String(body.status ?? "").toUpperCase();
   if (!allowedStatuses.has(status)) {
-    return NextResponse.json(
-      { error: "Invalid status" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
+  const typedStatus = status as OrderStatus;
 
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { id: true, sellerId: true, userId: true },
   });
 
@@ -57,7 +57,7 @@ export async function POST(
   const event = await prisma.orderEvent.create({
     data: {
       orderId: order.id,
-      status,
+      status: typedStatus,
       note: body.note ?? undefined,
       proofUrl: body.proofUrl ?? undefined,
     },
@@ -65,7 +65,7 @@ export async function POST(
 
   await prisma.order.update({
     where: { id: order.id },
-    data: { status },
+    data: { status: typedStatus },
   });
 
   await prisma.activityLog.create({
@@ -74,7 +74,7 @@ export async function POST(
       action: "ORDER_STATUS_UPDATED",
       entityType: "Order",
       entityId: order.id,
-      metadata: { status },
+      metadata: { status: typedStatus },
     },
   });
 

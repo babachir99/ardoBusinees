@@ -17,6 +17,13 @@ type OrderItem = {
   type: string;
 };
 
+type OrderEvent = {
+  status: string;
+  note?: string | null;
+  proofUrl?: string | null;
+  createdAt?: string;
+};
+
 type Order = {
   id: string;
   status: string;
@@ -31,7 +38,7 @@ type Order = {
   shippingCity?: string | null;
   items: OrderItem[];
   buyerEmail?: string | null;
-  events?: { status: string; note?: string | null; proofUrl?: string | null; createdAt: string }[];
+  events?: OrderEvent[];
 };
 
 const statusMap: Record<string, string> = {
@@ -155,7 +162,7 @@ export default function OrdersLookup() {
               <div className="mt-5">
                 <p className="text-xs text-zinc-400">{t("labels.tracking")}</p>
                 <div className="mt-3 grid gap-2">
-                  {(order.events?.length ? order.events : steps.map((status) => ({ status }))).map((event, index) => {
+                  {((order.events?.length ? order.events : steps.map((status) => ({ status }))) as OrderEvent[]).map((event, index) => {
                     const stepKey = statusMap[event.status as keyof typeof statusMap] ?? "pending";
                     const stepIndex = steps.indexOf(event.status);
                     const done = order.status === "CANCELED" || order.status === "REFUNDED"
@@ -230,3 +237,4 @@ export default function OrdersLookup() {
     </div>
   );
 }
+

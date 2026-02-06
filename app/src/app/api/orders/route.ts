@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import type { PaymentMethod } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 const allowedPaymentMethods = new Set([
@@ -225,6 +226,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const typedPaymentMethod = paymentMethod as PaymentMethod | undefined;
+
   const order = await prisma.order.create({
     data: {
       userId,
@@ -234,7 +237,7 @@ export async function POST(request: NextRequest) {
       buyerPhone: body.phone ?? undefined,
       shippingAddress: body.shippingAddress ?? undefined,
       shippingCity: body.shippingCity ?? undefined,
-      paymentMethod: paymentMethod ?? undefined,
+      paymentMethod: typedPaymentMethod ?? undefined,
       subtotalCents,
       shippingCents,
       feesCents,
@@ -264,3 +267,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(order, { status: 201 });
 }
+

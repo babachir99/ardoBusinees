@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { KycRole } from "@prisma/client";
 
 const allowedRoles = new Set(["SELLER", "TRANSPORTER", "COURIER"]);
 
@@ -16,11 +17,12 @@ export async function POST(request: NextRequest) {
   if (!allowedRoles.has(targetRole)) {
     return NextResponse.json({ error: "Invalid targetRole" }, { status: 400 });
   }
+  const typedTargetRole = targetRole as KycRole;
 
   const submission = await prisma.kycSubmission.create({
     data: {
       userId: session.user.id,
-      targetRole,
+      targetRole: typedTargetRole,
       docIdUrl: body?.docIdUrl ?? undefined,
       driverLicenseUrl: body?.driverLicenseUrl ?? undefined,
       proofAddressUrl: body?.proofAddressUrl ?? undefined,
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest) {
       action: "KYC_SUBMITTED",
       entityType: "KycSubmission",
       entityId: submission.id,
-      metadata: { targetRole },
+      metadata: { targetRole: typedTargetRole },
     },
   });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { UserRole } from "@prisma/client";
 
 const allowedRoles = new Set([
   "ADMIN",
@@ -33,16 +34,18 @@ export async function PATCH(
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
+  const typedRole = role as UserRole | null;
+
   const user = await prisma.user.update({
     where: { id },
     data: {
-      ...(role ? { role } : {}),
+      ...(typedRole ? { role: typedRole } : {}),
       ...(isActive === null ? {} : { isActive }),
       activityLogs: {
         create: [
           {
-            action: role ? "ROLE_UPDATED" : "ACCOUNT_UPDATED",
-            metadata: role ? { role } : { isActive },
+            action: typedRole ? "ROLE_UPDATED" : "ACCOUNT_UPDATED",
+            metadata: typedRole ? { role: typedRole } : { isActive },
           },
         ],
       },

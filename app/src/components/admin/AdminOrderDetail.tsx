@@ -262,7 +262,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
               const proofUrl = (
                 document.getElementById("proof-detail") as HTMLInputElement
               )?.value;
-              addEvent(order.id, status, note, proofUrl);
+              addEvent(status, note, proofUrl);
             }}
             disabled={saving}
             className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60 md:col-span-4"
@@ -288,3 +288,4 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
+

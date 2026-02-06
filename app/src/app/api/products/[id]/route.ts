@@ -7,10 +7,11 @@ const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const product = await prisma.product.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       images: true,
       seller: {
@@ -28,15 +29,16 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const existing = await prisma.product.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { id: true, sellerId: true },
   });
   if (!existing) {
@@ -151,7 +153,7 @@ export async function PATCH(
   }
 
   const product = await prisma.product.update({
-    where: { id: params.id },
+    where: { id: id },
     data,
   });
 
@@ -160,8 +162,10 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.product.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.product.delete({ where: { id: id } });
   return NextResponse.json({ ok: true });
 }
+

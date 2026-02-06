@@ -2,18 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { UserRole } from "@prisma/client";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { id: true, sellerId: true, userId: true },
   });
 
@@ -52,8 +54,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -73,7 +76,7 @@ export async function POST(
   }
 
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     select: { id: true, sellerId: true, userId: true },
   });
 
@@ -99,10 +102,12 @@ export async function POST(
     data: {
       orderId: order.id,
       senderId: session.user.id,
-      senderRole: session.user.role,
+      senderRole: session.user.role as UserRole,
       body: message,
     },
   });
 
   return NextResponse.json(created, { status: 201 });
 }
+
+

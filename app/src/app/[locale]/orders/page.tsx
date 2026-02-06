@@ -1,4 +1,4 @@
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import OrdersLookup from "@/components/orders/OrdersLookup";
 import OrdersList from "@/components/orders/OrdersList";
 import Footer from "@/components/layout/Footer";
@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 
 export default async function OrdersPage() {
-  const t = useTranslations("Orders");
+  const t = await getTranslations("Orders");
   const session = await getServerSession(authOptions);
 
   return (

@@ -26,6 +26,12 @@ export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
+function isValidLocale(
+  value: string
+): value is (typeof routing.locales)[number] {
+  return routing.locales.includes(value as (typeof routing.locales)[number]);
+}
+
 export default async function LocaleLayout({
   children,
   params,
@@ -35,7 +41,7 @@ export default async function LocaleLayout({
 }>) {
   const { locale } = await params;
 
-  if (!routing.locales.includes(locale)) {
+  if (!isValidLocale(locale)) {
     notFound();
   }
 

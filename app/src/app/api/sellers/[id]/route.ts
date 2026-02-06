@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const seller = await prisma.sellerProfile.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       user: { select: { id: true, email: true, name: true } },
       products: { take: 10, orderBy: { createdAt: "desc" } },
@@ -23,8 +24,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -44,7 +46,7 @@ export async function PATCH(
   }
 
   const seller = await prisma.sellerProfile.update({
-    where: { id: params.id },
+    where: { id: id },
     data,
   });
 
@@ -53,8 +55,10 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  await prisma.sellerProfile.delete({ where: { id: params.id } });
+  const { id } = await params;
+  await prisma.sellerProfile.delete({ where: { id: id } });
   return NextResponse.json({ ok: true });
 }
+

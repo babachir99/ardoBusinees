@@ -416,23 +416,29 @@ export default function SellerProductsPanel() {
               key={product.id}
               className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4"
             >
-              <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-900">
-                {product.images?.[0]?.url ? (
-                  <img
-                    src={product.images[0].url}
-                    alt={product.images[0].alt ?? product.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : null}
-                <span className="absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1 text-[10px] text-zinc-100">
-                  {t(`products.types.${product.type.toLowerCase()}`)}
-                </span>
-                {product.boostStatus === "APPROVED" && (
-                  <span className="absolute right-3 top-3 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
-                    {t("products.boosted")}
+              <Link
+                href={`/shop/${product.slug}`}
+                className="block"
+                aria-label={`${t("products.view")}: ${product.title}`}
+              >
+                <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-900">
+                  {product.images?.[0]?.url ? (
+                    <img
+                      src={product.images[0].url}
+                      alt={product.images[0].alt ?? product.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                  <span className="absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1 text-[10px] text-zinc-100">
+                    {t(`products.types.${product.type.toLowerCase()}`)}
                   </span>
-                )}
-              </div>
+                  {product.boostStatus === "APPROVED" && (
+                    <span className="absolute right-3 top-3 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
+                      {t("products.boosted")}
+                    </span>
+                  )}
+                </div>
+              </Link>
               <h3 className="mt-3 text-sm font-semibold text-white">
                 {product.title}
               </h3>
