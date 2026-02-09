@@ -1,6 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import CartBadge from "@/components/cart/CartBadge";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
@@ -10,6 +10,7 @@ import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { slugify } from "@/lib/slug";
 
 export default async function ProductPage({
   params,
@@ -19,13 +20,24 @@ export default async function ProductPage({
   const { locale, slug } = await params;
   const session = await getServerSession(authOptions);
   const t = await getTranslations("Product");
+  const normalizedSlug = slugify(slug);
+  const slugCandidates =
+    normalizedSlug && normalizedSlug !== slug ? [slug, normalizedSlug] : [slug];
+
   const product = await prisma.product.findFirst({
-    where: { slug, isActive: true },
+    where: {
+      isActive: true,
+      OR: slugCandidates.map((candidate) => ({ slug: candidate })),
+    },
     include: { seller: true },
   });
 
   if (!product) {
     notFound();
+  }
+
+  if (product.slug !== slug) {
+    redirect(`/${locale}/shop/${product.slug}`);
   }
 
   const typeLabel =
@@ -203,3 +215,4 @@ export default async function ProductPage({
     </div>
   );
 }
+

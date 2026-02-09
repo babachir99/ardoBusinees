@@ -1,9 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { slugify } from "@/lib/slug";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
+
+async function ensureUniqueProductSlug(
+  sellerId: string,
+  baseSlug: string,
+  excludeProductId?: string
+) {
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  while (true) {
+    const existing = await prisma.product.findUnique({
+      where: { sellerId_slug: { sellerId, slug: candidate } },
+      select: { id: true },
+    });
+
+    if (!existing || existing.id === excludeProductId) {
+      return candidate;
+    }
+
+    candidate = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -73,8 +97,16 @@ export async function PATCH(
     ? body.imageUrls.filter(Boolean)
     : [];
 
-  if (body.title) data.title = String(body.title);
-  if (body.slug) data.slug = String(body.slug);
+  if (body.title !== undefined) data.title = String(body.title).trim();
+
+  if (body.slug !== undefined) {
+    const baseSlug = slugify(String(body.slug));
+    if (!baseSlug) {
+      return NextResponse.json({ error: "slug is invalid" }, { status: 400 });
+    }
+    data.slug = await ensureUniqueProductSlug(existing.sellerId, baseSlug, existing.id);
+  }
+
   if (body.description !== undefined) data.description = body.description;
   if (body.priceCents !== undefined) data.priceCents = Number(body.priceCents);
   if (body.currency) data.currency = String(body.currency);
@@ -168,4 +200,3 @@ export async function DELETE(
   await prisma.product.delete({ where: { id: id } });
   return NextResponse.json({ ok: true });
 }
-

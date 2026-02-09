@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { slugify } from "@/lib/slug";
 import type { Prisma, ProductType } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
+
+async function ensureUniqueProductSlug(sellerId: string, baseSlug: string) {
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  while (true) {
+    const existing = await prisma.product.findUnique({
+      where: { sellerId_slug: { sellerId, slug: candidate } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return candidate;
+    }
+
+    candidate = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -62,8 +82,9 @@ export async function POST(request: NextRequest) {
   }
 
   const sellerId = String(body.sellerId ?? "");
-  const title = String(body.title ?? "");
-  const slug = String(body.slug ?? "");
+  const title = String(body.title ?? "").trim();
+  const rawSlugInput = String(body.slug ?? body.title ?? "");
+  const baseSlug = slugify(rawSlugInput);
   const priceCents = Number(body.priceCents);
   const discountRaw = body.discountPercent;
   const requestBoost = Boolean(body.requestBoost);
@@ -80,12 +101,21 @@ export async function POST(request: NextRequest) {
     discountPercent = parsed > 0 ? Math.round(parsed) : null;
   }
 
-  if (!sellerId || !title || !slug || !Number.isFinite(priceCents)) {
+  if (!sellerId || !title || !Number.isFinite(priceCents)) {
     return NextResponse.json(
-      { error: "sellerId, title, slug, priceCents are required" },
+      { error: "sellerId, title and priceCents are required" },
       { status: 400 }
     );
   }
+
+  if (!baseSlug) {
+    return NextResponse.json(
+      { error: "slug is invalid" },
+      { status: 400 }
+    );
+  }
+
+  const slug = await ensureUniqueProductSlug(sellerId, baseSlug);
 
   const imageUrls = Array.isArray(body.imageUrls)
     ? body.imageUrls.filter(Boolean)
