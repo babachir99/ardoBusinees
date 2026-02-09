@@ -1,9 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import AddToCartButton from "@/components/cart/AddToCartButton";
 import CartBadge from "@/components/cart/CartBadge";
-import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
@@ -11,6 +9,7 @@ import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { slugify } from "@/lib/slug";
+import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 
 export default async function ProductPage({
   params,
@@ -29,7 +28,15 @@ export default async function ProductPage({
       isActive: true,
       OR: slugCandidates.map((candidate) => ({ slug: candidate })),
     },
-    include: { seller: true },
+    include: {
+      seller: true,
+      images: { orderBy: { position: "asc" } },
+      categories: {
+        include: {
+          category: { select: { id: true, name: true, slug: true } },
+        },
+      },
+    },
   });
 
   if (!product) {
@@ -39,6 +46,65 @@ export default async function ProductPage({
   if (product.slug !== slug) {
     redirect(`/${locale}/shop/${product.slug}`);
   }
+
+  const categoryIds = product.categories.map((entry) => entry.categoryId);
+  const relatedByCategory = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      id: { not: product.id },
+      categories: {
+        some: { categoryId: { in: categoryIds.length > 0 ? categoryIds : ["__none__"] } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      images: { orderBy: { position: "asc" }, take: 1 },
+      seller: { select: { displayName: true } },
+    },
+    take: 6,
+  });
+
+  const relatedBySeller = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      id: { not: product.id },
+      sellerId: product.sellerId,
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      images: { orderBy: { position: "asc" }, take: 1 },
+      seller: { select: { displayName: true } },
+    },
+    take: 6,
+  });
+
+  const seen = new Set<string>();
+  const relatedProducts = [...relatedByCategory, ...relatedBySeller]
+    .filter((item) => {
+      if (seen.has(item.id)) {
+        return false;
+      }
+      seen.add(item.id);
+      return true;
+    })
+    .slice(0, 8);
+
+  const sizeCategorySlugs = new Set(["vetements", "chaussures", "enfants", "mode"]);
+  const colorCategorySlugs = new Set([
+    "vetements",
+    "chaussures",
+    "cosmetiques",
+    "maison",
+    "electronique",
+    "local",
+  ]);
+
+  const showSizeOptions = product.categories.some((entry) =>
+    sizeCategorySlugs.has(entry.category.slug)
+  );
+  const showColorOptions =
+    product.categories.some((entry) => colorCategorySlugs.has(entry.category.slug)) ||
+    product.type === "LOCAL";
 
   const typeLabel =
     product.type === "PREORDER"
@@ -52,11 +118,7 @@ export default async function ProductPage({
       : product.type === "LOCAL"
       ? t("badge.localEta")
       : t("badge.dropshipEta");
-  const priceLabel = formatMoney(
-    product.priceCents,
-    product.currency,
-    locale
-  );
+  const priceLabel = formatMoney(product.priceCents, product.currency, locale);
   const discountedCents = getDiscountedPrice(
     product.priceCents,
     product.discountPercent
@@ -65,11 +127,7 @@ export default async function ProductPage({
     product.discountPercent !== null &&
     product.discountPercent !== undefined &&
     product.discountPercent > 0;
-  const discountedLabel = formatMoney(
-    discountedCents,
-    product.currency,
-    locale
-  );
+  const discountedLabel = formatMoney(discountedCents, product.currency, locale);
   const boosted =
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > new Date());
@@ -125,7 +183,7 @@ export default async function ProductPage({
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-24 md:flex-row">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-12 md:flex-row">
         <section className="flex-1 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/10 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
           <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
             <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-emerald-200">
@@ -142,6 +200,23 @@ export default async function ProductPage({
           <p className="mt-3 text-sm text-zinc-300">
             {product.description ?? t("subtitle")}
           </p>
+
+          <ProductPurchasePanel
+            locale={locale}
+            productId={product.id}
+            slug={product.slug}
+            title={product.title}
+            priceCents={hasDiscount ? discountedCents : product.priceCents}
+            currency={product.currency}
+            type={product.type}
+            sellerName={product.seller?.displayName ?? undefined}
+            images={product.images}
+            addLabel={t("cta.add")}
+            addedLabel={t("cta.added")}
+            showColorOptions={showColorOptions}
+            showSizeOptions={showSizeOptions}
+          />
+
           <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/70 p-5 text-sm text-zinc-300">
             <div className="flex items-center justify-between">
               <span>{t("details.price")}</span>
@@ -176,20 +251,6 @@ export default async function ProductPage({
               </span>
             </div>
           </div>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <AddToCartButton
-              id={product.id}
-              slug={product.slug}
-              title={product.title}
-              priceCents={hasDiscount ? discountedCents : product.priceCents}
-              currency={product.currency}
-              type={product.type}
-              sellerName={product.seller?.displayName}
-              label={t("cta.add")}
-              addedLabel={t("cta.added")}
-            />
-            <FavoriteButton productId={product.id} />
-          </div>
         </section>
 
         <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-8 fade-up">
@@ -211,8 +272,53 @@ export default async function ProductPage({
           </div>
         </aside>
       </main>
+
+      {relatedProducts.length > 0 && (
+        <section className="mx-auto mb-16 w-full max-w-6xl px-6 fade-up">
+          <div className="mb-4 flex items-end justify-between">
+            <h2 className="text-2xl font-semibold text-white">
+              {locale === "fr" ? "Produits similaires" : "Similar products"}
+            </h2>
+            <span className="text-xs uppercase tracking-[0.2em] text-zinc-400">
+              {locale === "fr" ? "Vous aimerez aussi" : "You may also like"}
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {relatedProducts.map((item) => (
+              <Link
+                key={item.id}
+                href={`/shop/${item.slug}`}
+                className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition hover:border-emerald-300/60"
+              >
+                <div className="h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                  {item.images[0]?.url ? (
+                    <img
+                      src={item.images[0].url}
+                      alt={item.images[0].alt ?? item.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+                      {locale === "fr" ? "Image a venir" : "Image coming soon"}
+                    </div>
+                  )}
+                </div>
+                <h3 className="mt-3 line-clamp-2 text-sm font-semibold text-white">{item.title}</h3>
+                <p className="mt-1 text-xs text-zinc-400">{item.seller?.displayName ?? "-"}</p>
+                <p className="mt-2 text-sm font-semibold text-emerald-200">
+                  {formatMoney(
+                    getDiscountedPrice(item.priceCents, item.discountPercent),
+                    item.currency,
+                    locale
+                  )}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <Footer />
     </div>
   );
 }
-

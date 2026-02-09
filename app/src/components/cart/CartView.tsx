@@ -48,7 +48,7 @@ export default function CartView() {
         <div className="mt-6 grid gap-4">
           {items.map((item) => (
             <div
-              key={item.id}
+              key={item.lineId}
               className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-zinc-950/60 p-5 sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
@@ -56,13 +56,28 @@ export default function CartView() {
                 <p className="mt-1 text-xs text-zinc-400">
                   {item.type === "PREORDER"
                     ? t("labels.preorder")
+                    : item.type === "LOCAL"
+                    ? locale === "fr"
+                      ? "Local"
+                      : "Local"
                     : t("labels.dropship")}
                 </p>
+                {(item.optionColor || item.optionSize) && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {item.optionColor
+                      ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
+                      : ""}
+                    {item.optionColor && item.optionSize ? " � " : ""}
+                    {item.optionSize
+                      ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
+                      : ""}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3 text-xs text-zinc-300">
                 <button
                   type="button"
-                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                  onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
                   className="rounded-full border border-white/15 px-3 py-1"
                 >
                   -
@@ -70,7 +85,7 @@ export default function CartView() {
                 <span className="min-w-[24px] text-center">{item.quantity}</span>
                 <button
                   type="button"
-                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                  onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
                   className="rounded-full border border-white/15 px-3 py-1"
                 >
                   +
@@ -82,7 +97,7 @@ export default function CartView() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => removeItem(item.id)}
+                  onClick={() => removeItem(item.lineId)}
                   className="text-xs text-zinc-400 underline decoration-white/20"
                 >
                   {t("remove")}

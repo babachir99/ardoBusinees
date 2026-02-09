@@ -11,8 +11,12 @@ type AddToCartButtonProps = {
   currency: string;
   type: "PREORDER" | "DROPSHIP" | "LOCAL";
   sellerName?: string;
+  quantity?: number;
+  optionColor?: string;
+  optionSize?: string;
   label: string;
   addedLabel?: string;
+  className?: string;
 };
 
 export default function AddToCartButton({
@@ -23,32 +27,37 @@ export default function AddToCartButton({
   currency,
   type,
   sellerName,
+  quantity = 1,
+  optionColor,
+  optionSize,
   label,
   addedLabel = "Added",
+  className = "rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950",
 }: AddToCartButtonProps) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
 
   const handleClick = () => {
-    addItem({
-      id,
-      slug,
-      title,
-      priceCents,
-      currency,
-      type,
-      sellerName,
-    });
+    addItem(
+      {
+        id,
+        slug,
+        title,
+        priceCents,
+        currency,
+        type,
+        sellerName,
+        optionColor,
+        optionSize,
+      },
+      quantity
+    );
     setAdded(true);
     setTimeout(() => setAdded(false), 1400);
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
-    >
+    <button type="button" onClick={handleClick} className={className}>
       {added ? addedLabel : label}
     </button>
   );

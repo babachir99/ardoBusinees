@@ -283,6 +283,8 @@ model OrderItem {
   quantity       Int         @default(1)
   unitPriceCents Int
   type           ProductType
+  optionColor    String?
+  optionSize     String?
   createdAt      DateTime    @default(now())
 
   order   Order   @relation(fields: [orderId], references: [id])
@@ -460,3 +462,5 @@ model KycSubmission {
   @@index([status])
   @@index([targetRole])
 }
+
+

@@ -197,11 +197,20 @@ export async function POST(request: NextRequest) {
     );
     subtotalCents += quantity * unitPriceCents;
 
+    const optionColor = item.optionColor
+      ? String(item.optionColor).trim().slice(0, 64)
+      : undefined;
+    const optionSize = item.optionSize
+      ? String(item.optionSize).trim().slice(0, 32)
+      : undefined;
+
     mappedItems.push({
       productId,
       quantity,
       unitPriceCents,
       type,
+      optionColor,
+      optionSize,
     });
   }
 
@@ -267,4 +276,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(order, { status: 201 });
 }
+
+
 

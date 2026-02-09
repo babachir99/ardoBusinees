@@ -18,13 +18,26 @@ export type CartItem = {
   type: "PREORDER" | "DROPSHIP" | "LOCAL";
   quantity: number;
   sellerName?: string;
+  optionColor?: string;
+  optionSize?: string;
+  lineId: string;
 };
+
+function makeLineId(input: {
+  id: string;
+  optionColor?: string;
+  optionSize?: string;
+}) {
+  return [input.id, input.optionColor ?? "", input.optionSize ?? ""].join("::");
+}
+
+type AddItemInput = Omit<CartItem, "quantity" | "lineId">;
 
 type CartContextValue = {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
-  removeItem: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  addItem: (item: AddItemInput, quantity?: number) => void;
+  removeItem: (lineId: string) => void;
+  updateQuantity: (lineId: string, quantity: number) => void;
   clear: () => void;
   count: number;
   subtotalCents: number;
@@ -38,7 +51,38 @@ function parseStored(value: string | null): CartItem[] {
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(Boolean);
+
+    return parsed
+      .filter(Boolean)
+      .map((item) => {
+        const id = String(item.id ?? "");
+        if (!id) return null;
+
+        const quantityRaw = Number(item.quantity);
+        const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+        const optionColor = item.optionColor ? String(item.optionColor) : undefined;
+        const optionSize = item.optionSize ? String(item.optionSize) : undefined;
+
+        return {
+          id,
+          slug: String(item.slug ?? ""),
+          title: String(item.title ?? ""),
+          priceCents: Number(item.priceCents ?? 0),
+          currency: String(item.currency ?? "XOF"),
+          type:
+            item.type === "PREORDER" || item.type === "DROPSHIP" || item.type === "LOCAL"
+              ? item.type
+              : "LOCAL",
+          sellerName: item.sellerName ? String(item.sellerName) : undefined,
+          optionColor,
+          optionSize,
+          quantity,
+          lineId: item.lineId
+            ? String(item.lineId)
+            : makeLineId({ id, optionColor, optionSize }),
+        } satisfies CartItem;
+      })
+      .filter(Boolean) as CartItem[];
   } catch {
     return [];
   }
@@ -64,34 +108,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [items]);
 
-  const addItem = useCallback(
-    (item: Omit<CartItem, "quantity">, quantity = 1) => {
-      setItems((current) => {
-        const existing = current.find((entry) => entry.id === item.id);
-        if (!existing) {
-          return [...current, { ...item, quantity }];
-        }
-        return current.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, quantity: entry.quantity + quantity }
-            : entry
-        );
-      });
-    },
-    []
-  );
+  const addItem = useCallback((item: AddItemInput, quantity = 1) => {
+    const safeQty = Math.max(1, Math.floor(quantity));
+    const lineId = makeLineId({
+      id: item.id,
+      optionColor: item.optionColor,
+      optionSize: item.optionSize,
+    });
 
-  const removeItem = useCallback((id: string) => {
-    setItems((current) => current.filter((entry) => entry.id !== id));
-  }, []);
-
-  const updateQuantity = useCallback((id: string, quantity: number) => {
     setItems((current) => {
-      if (quantity <= 0) {
-        return current.filter((entry) => entry.id !== id);
+      const existing = current.find((entry) => entry.lineId === lineId);
+      if (!existing) {
+        return [...current, { ...item, quantity: safeQty, lineId }];
       }
       return current.map((entry) =>
-        entry.id === id ? { ...entry, quantity } : entry
+        entry.lineId === lineId
+          ? { ...entry, quantity: entry.quantity + safeQty }
+          : entry
+      );
+    });
+  }, []);
+
+  const removeItem = useCallback((lineId: string) => {
+    setItems((current) => current.filter((entry) => entry.lineId !== lineId));
+  }, []);
+
+  const updateQuantity = useCallback((lineId: string, quantity: number) => {
+    setItems((current) => {
+      if (quantity <= 0) {
+        return current.filter((entry) => entry.lineId !== lineId);
+      }
+      return current.map((entry) =>
+        entry.lineId === lineId ? { ...entry, quantity } : entry
       );
     });
   }, []);

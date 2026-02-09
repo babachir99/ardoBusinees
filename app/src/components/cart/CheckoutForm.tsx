@@ -63,6 +63,8 @@ export default function CheckoutForm() {
           quantity: item.quantity,
           unitPriceCents: item.priceCents,
           type: item.type,
+          optionColor: item.optionColor,
+          optionSize: item.optionSize,
         })),
       };
 
@@ -229,3 +231,5 @@ export default function CheckoutForm() {
     </div>
   );
 }
+
+
