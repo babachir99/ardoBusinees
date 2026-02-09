@@ -12,8 +12,30 @@ const adapter = new PrismaPg({ connectionString: databaseUrl }, { schema });
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
+function createPrismaClient() {
+  return new PrismaClient({ adapter });
+}
+
+function hasInquiryDelegates(client: PrismaClient) {
+  const runtimeClient = client as unknown as Record<string, unknown>;
+  return (
+    "productInquiry" in runtimeClient &&
+    "productInquiryMessage" in runtimeClient &&
+    "productOffer" in runtimeClient
+  );
+}
+
+const devClient = globalForPrisma.prisma;
+const shouldRefreshDevClient =
+  process.env.NODE_ENV !== "production" &&
+  (!devClient || !hasInquiryDelegates(devClient));
+
 export const prisma =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter });
+  process.env.NODE_ENV === "production"
+    ? createPrismaClient()
+    : shouldRefreshDevClient
+      ? createPrismaClient()
+      : (devClient as PrismaClient);
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

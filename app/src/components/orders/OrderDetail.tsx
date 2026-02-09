@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -187,7 +187,7 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
                   <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
                   {optionParts.length > 0 && (
                     <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {optionParts.join(" � ")}
+                      {optionParts.join(" · ")}
                     </p>
                   )}
                 </div>
@@ -288,6 +288,7 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
+
 
 
 

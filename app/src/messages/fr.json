@@ -152,7 +152,7 @@
       "preorder": "Precommande",
       "dropship": "Dropshipping"
     },
-    "remove": "Retirer",
+    "remove": "Retirer des favoris",
     "clear": "Vider le panier",
     "items": {
       "0": {
@@ -188,7 +188,7 @@
     },
     "filters": {
       "allStatus": "Tous les statuts",
-      "rangeAll": "Toutes les périodes",
+      "rangeAll": "Toutes les periodes",
       "range7": "7 jours",
       "range30": "30 jours",
       "range90": "90 jours",
@@ -209,22 +209,22 @@
       "products": "Produits",
       "unknown": "Produit inconnu",
       "proof": "Preuve disponible",
-      "view": "Voir détail",
+      "view": "Voir detail",
       "messages": "Messagerie",
       "noEmail": "Aucun email"
     },
     "payment": {
       "pending": "En attente",
-      "paid": "Payé",
-      "failed": "Échoué",
-      "refunded": "Remboursé"
+      "paid": "Paye",
+      "failed": "Echoue",
+      "refunded": "Rembourse"
     },
     "timeline": {
-      "pending": "Commande enregistrée",
-      "confirmed": "Paiement confirmé",
-      "fulfilling": "Préparation",
-      "shipped": "Expédiée",
-      "delivered": "Livrée"
+      "pending": "Commande enregistree",
+      "confirmed": "Paiement confirme",
+      "fulfilling": "Preparation",
+      "shipped": "Expediee",
+      "delivered": "Livree"
     },
     "status": {
       "pending": "En attente",
@@ -1016,7 +1016,7 @@
       "unknown": "Vendeur inconnu",
       "addToCart": "Ajouter au panier",
       "added": "Ajoute",
-      "remove": "Retirer"
+      "remove": "Retirer des favoris"
     },
     "fields": {
       "email": "Email",
@@ -1116,10 +1116,11 @@
   },
   "Favorites": {
     "title": "Favoris",
-    "subtitle": "Produits que tu as aimés.",
+    "subtitle": "Produits que tu as aimes.",
     "loading": "Chargement des favoris...",
     "empty": "Aucun favori pour le moment.",
-    "remove": "Retirer",
+    "add": "Favoris",
+    "remove": "Retirer des favoris",
     "unknownSeller": "Vendeur inconnu",
     "errors": {
       "load": "Impossible de charger les favoris."
@@ -1169,7 +1170,7 @@
       "back": "Retour aux boutiques",
       "kicker": "JONTAADO PRESTA",
       "title": "Des services locaux fiables.",
-      "subtitle": "Professionnels verifiés, disponibilites claires.",
+      "subtitle": "Professionnels verifies, disponibilites claires.",
       "features": [
         "Prestations par categorie",
         "Reservation rapide",
@@ -1200,3 +1201,4 @@
     }
   }
 }
+

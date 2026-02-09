@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type TouchEvent } from "react";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 
@@ -42,6 +42,9 @@ export default function ProductPurchasePanel({
 }: ProductPurchasePanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
 
   const colorOptions = useMemo(
     () =>
@@ -51,168 +54,354 @@ export default function ProductPurchasePanel({
     [locale]
   );
 
-  const sizeOptions = useMemo(
-    () => ["S", "M", "L", "XL", "XXL"],
-    []
-  );
+  const sizeOptions = useMemo(() => ["S", "M", "L", "XL", "XXL"], []);
 
   const [selectedColor, setSelectedColor] = useState(colorOptions[0] ?? "");
   const [selectedSize, setSelectedSize] = useState(sizeOptions[2] ?? sizeOptions[0] ?? "");
 
   const safeImages = images.filter((image) => Boolean(image.url));
   const hasImages = safeImages.length > 0;
+
+  useEffect(() => {
+    if (safeImages.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+
+    if (activeIndex >= safeImages.length) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, safeImages.length]);
+
+  useEffect(() => {
+    if (safeImages.length <= 1 || isLightboxOpen) return;
+
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((idx) => (idx + 1) % safeImages.length);
+    }, 4200);
+
+    return () => window.clearInterval(intervalId);
+  }, [safeImages.length, isLightboxOpen]);
+
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsLightboxOpen(false);
+        setIsZoomed(false);
+      }
+      if (event.key === "ArrowLeft") {
+        setActiveIndex((idx) => (idx - 1 + safeImages.length) % safeImages.length);
+      }
+      if (event.key === "ArrowRight") {
+        setActiveIndex((idx) => (idx + 1) % safeImages.length);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isLightboxOpen, safeImages.length]);
+
   const currentImage = hasImages ? safeImages[activeIndex] : null;
+  const favoriteAddLabel = locale === "fr" ? "Favoris" : "Favorites";
+  const favoriteRemoveLabel = locale === "fr" ? "Retirer des favoris" : "Remove from favorites";
 
   const nextImage = () => {
-    if (!hasImages) return;
+    if (safeImages.length <= 1) return;
     setActiveIndex((idx) => (idx + 1) % safeImages.length);
   };
 
   const prevImage = () => {
-    if (!hasImages) return;
+    if (safeImages.length <= 1) return;
     setActiveIndex((idx) => (idx - 1 + safeImages.length) % safeImages.length);
   };
 
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    setTouchStartX(event.touches[0]?.clientX ?? null);
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (touchStartX === null || safeImages.length <= 1) return;
+
+    const endX = event.changedTouches[0]?.clientX ?? touchStartX;
+    const delta = endX - touchStartX;
+
+    if (Math.abs(delta) >= 35) {
+      if (delta < 0) nextImage();
+      else prevImage();
+    }
+
+    setTouchStartX(null);
+  };
+
   return (
-    <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
-        <div className="relative flex h-80 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
-          {currentImage ? (
-            <img
-              src={currentImage.url}
-              alt={currentImage.alt ?? title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="text-sm text-zinc-500">
-              {locale === "fr" ? "Aucune image disponible" : "No image available"}
-            </div>
-          )}
+    <>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
+          <div
+            className="relative flex h-80 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            {currentImage ? (
+              <img
+                src={currentImage.url}
+                alt={currentImage.alt ?? title}
+                className="h-full w-full cursor-zoom-in object-cover"
+                onClick={() => setIsLightboxOpen(true)}
+              />
+            ) : (
+              <div className="text-sm text-zinc-500">
+                {locale === "fr" ? "Aucune image disponible" : "No image available"}
+              </div>
+            )}
+
+            {safeImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={prevImage}
+                  aria-label={locale === "fr" ? "Image precedente" : "Previous image"}
+                  className="absolute left-3 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-zinc-950/75 text-sm font-semibold text-white transition hover:border-emerald-300/60"
+                >
+                  &#8249;
+                </button>
+                <button
+                  type="button"
+                  onClick={nextImage}
+                  aria-label={locale === "fr" ? "Image suivante" : "Next image"}
+                  className="absolute right-3 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/25 bg-zinc-950/75 text-sm font-semibold text-white transition hover:border-emerald-300/60"
+                >
+                  &#8250;
+                </button>
+                <span className="absolute bottom-3 right-3 rounded-full bg-zinc-950/75 px-2 py-1 text-[11px] text-zinc-300">
+                  {activeIndex + 1}/{safeImages.length}
+                </span>
+              </>
+            )}
+          </div>
 
           {safeImages.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={prevImage}
-                className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-zinc-950/70 px-3 py-1 text-sm text-white"
-              >
-                �
-              </button>
-              <button
-                type="button"
-                onClick={nextImage}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-zinc-950/70 px-3 py-1 text-sm text-white"
-              >
-                �
-              </button>
-              <span className="absolute bottom-3 right-3 rounded-full bg-zinc-950/70 px-2 py-1 text-[11px] text-zinc-300">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {safeImages.map((image, index) => (
+                <button
+                  key={`${image.url}-${index}`}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border transition ${
+                    index === activeIndex
+                      ? "border-emerald-300/80"
+                      : "border-white/10 hover:border-white/30"
+                  }`}
+                >
+                  <img src={image.url} alt={image.alt ?? title} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-2 text-[11px] text-zinc-500">
+            {locale === "fr"
+              ? "Defilement auto actif. Clique pour plein ecran, glisse pour naviguer."
+              : "Auto slideshow enabled. Click for fullscreen, swipe to browse."}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
+          <div className="grid gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-zinc-400">
+                {locale === "fr" ? "Quantite" : "Quantity"}
+              </p>
+              <div className="mt-2 inline-flex items-center gap-3 rounded-full border border-white/15 bg-zinc-900 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
+                >
+                  -
+                </button>
+                <span className="min-w-[28px] text-center text-sm font-semibold">{quantity}</span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {showColorOptions && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-zinc-400">
+                  {locale === "fr" ? "Couleur" : "Color"}
+                </p>
+                <select
+                  value={selectedColor}
+                  onChange={(e) => setSelectedColor(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                >
+                  {colorOptions.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {showSizeOptions && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-zinc-400">
+                  {locale === "fr" ? "Taille" : "Size"}
+                </p>
+                <select
+                  value={selectedSize}
+                  onChange={(e) => setSelectedSize(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
+                >
+                  {sizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(showColorOptions || showSizeOptions) && (
+              <div className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
+                {showColorOptions && <span>{locale === "fr" ? "Couleur" : "Color"}: {selectedColor}</span>}
+                {showColorOptions && showSizeOptions && <span className="px-2 text-zinc-500">-</span>}
+                {showSizeOptions && <span>{locale === "fr" ? "Taille" : "Size"}: {selectedSize}</span>}
+              </div>
+            )}
+
+            <div id="purchase-actions" className="mt-1 grid gap-3 sm:grid-cols-2">
+              <AddToCartButton
+                id={productId}
+                slug={slug}
+                title={title}
+                priceCents={priceCents}
+                currency={currency}
+                type={type}
+                sellerName={sellerName}
+                quantity={quantity}
+                optionColor={showColorOptions ? selectedColor : undefined}
+                optionSize={showSizeOptions ? selectedSize : undefined}
+                label={addLabel}
+                addedLabel={addedLabel}
+                className="w-full rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-zinc-950"
+              />
+
+              <FavoriteButton
+                productId={productId}
+                addLabel={favoriteAddLabel}
+                removeLabel={favoriteRemoveLabel}
+                className="w-full rounded-xl border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-100"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isLightboxOpen && currentImage && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/90 p-3 md:p-6"
+          onClick={() => {
+            setIsLightboxOpen(false);
+            setIsZoomed(false);
+          }}
+        >
+          <div
+            className="mx-auto flex h-full w-full max-w-6xl flex-col rounded-2xl border border-white/15 bg-zinc-950/95"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <p className="text-sm text-zinc-300">
                 {activeIndex + 1}/{safeImages.length}
-              </span>
-            </>
-          )}
-        </div>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsZoomed((value) => !value)}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+                >
+                  {isZoomed ? "Zoom -" : "Zoom +"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLightboxOpen(false);
+                    setIsZoomed(false);
+                  }}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+                >
+                  {locale === "fr" ? "Fermer" : "Close"}
+                </button>
+              </div>
+            </div>
 
-        {safeImages.length > 1 && (
-          <div className="mt-3 grid grid-cols-5 gap-2">
-            {safeImages.slice(0, 10).map((image, index) => (
-              <button
-                key={`${image.url}-${index}`}
-                type="button"
-                onClick={() => setActiveIndex(index)}
-                className={`overflow-hidden rounded-lg border ${
-                  index === activeIndex ? "border-emerald-300/70" : "border-white/10"
+            <div
+              className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <img
+                src={currentImage.url}
+                alt={currentImage.alt ?? title}
+                className={`max-h-full max-w-full object-contain transition duration-200 ${
+                  isZoomed ? "scale-125 cursor-zoom-out" : "scale-100 cursor-zoom-in"
                 }`}
-              >
-                <img src={image.url} alt={image.alt ?? title} className="h-14 w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+                onClick={() => setIsZoomed((value) => !value)}
+              />
 
-      <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
-        <div className="grid gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-zinc-400">
-              {locale === "fr" ? "Quantite" : "Quantity"}
-            </p>
-            <div className="mt-2 inline-flex items-center gap-3 rounded-full border border-white/15 bg-zinc-900 px-3 py-2">
-              <button
-                type="button"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
-              >
-                -
-              </button>
-              <span className="min-w-[28px] text-center text-sm font-semibold">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => setQuantity((q) => Math.min(99, q + 1))}
-                className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
-              >
-                +
-              </button>
+              {safeImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-zinc-900/75 text-white"
+                    aria-label={locale === "fr" ? "Image precedente" : "Previous image"}
+                  >
+                    &#8249;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-zinc-900/75 text-white"
+                    aria-label={locale === "fr" ? "Image suivante" : "Next image"}
+                  >
+                    &#8250;
+                  </button>
+                </>
+              )}
             </div>
-          </div>
 
-          {showColorOptions && (
-            <div>
-              <p className="text-xs uppercase tracking-wide text-zinc-400">
-                {locale === "fr" ? "Couleur" : "Color"}
-              </p>
-              <select
-                value={selectedColor}
-                onChange={(e) => setSelectedColor(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
-              >
-                {colorOptions.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
+            {safeImages.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-3">
+                {safeImages.map((image, index) => (
+                  <button
+                    key={`${image.url}-modal-${index}`}
+                    type="button"
+                    onClick={() => setActiveIndex(index)}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border transition ${
+                      index === activeIndex
+                        ? "border-emerald-300/80"
+                        : "border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    <img src={image.url} alt={image.alt ?? title} className="h-full w-full object-cover" />
+                  </button>
                 ))}
-              </select>
-            </div>
-          )}
-
-          {showSizeOptions && (
-            <div>
-              <p className="text-xs uppercase tracking-wide text-zinc-400">
-                {locale === "fr" ? "Taille" : "Size"}
-              </p>
-              <select
-                value={selectedSize}
-                onChange={(e) => setSelectedSize(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
-              >
-                {sizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-            <AddToCartButton
-              id={productId}
-              slug={slug}
-              title={title}
-              priceCents={priceCents}
-              currency={currency}
-              type={type}
-              sellerName={sellerName}
-              quantity={quantity}
-              optionColor={showColorOptions ? selectedColor : undefined}
-              optionSize={showSizeOptions ? selectedSize : undefined}
-              label={addLabel}
-              addedLabel={addedLabel}
-              className="w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
-            />
-            <FavoriteButton productId={productId} />
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
+

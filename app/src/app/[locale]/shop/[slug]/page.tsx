@@ -10,6 +10,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { slugify } from "@/lib/slug";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
+import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
+import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
+
+type RelatedProductCard = {
+  id: string;
+  title: string;
+  slug: string;
+  priceCents: number;
+  discountPercent: number | null;
+  currency: string;
+  images: { url: string; alt: string | null }[];
+  seller: { displayName: string } | null;
+};
 
 export default async function ProductPage({
   params,
@@ -29,7 +42,11 @@ export default async function ProductPage({
       OR: slugCandidates.map((candidate) => ({ slug: candidate })),
     },
     include: {
-      seller: true,
+      seller: {
+        include: {
+          user: { select: { email: true, phone: true, image: true } },
+        },
+      },
       images: { orderBy: { position: "asc" } },
       categories: {
         include: {
@@ -47,8 +64,42 @@ export default async function ProductPage({
     redirect(`/${locale}/shop/${product.slug}`);
   }
 
+  const sellerProductsCount = await prisma.product.count({
+    where: { sellerId: product.sellerId, isActive: true },
+  });
+
+  const demandWindowStart = new Date();
+  demandWindowStart.setDate(demandWindowStart.getDate() - 14);
+
+  const [recentSalesCount, totalSalesCount, favoritesCount, sellerSalesCount] =
+    await Promise.all([
+      prisma.orderItem.count({
+        where: {
+          productId: product.id,
+          order: { paymentStatus: "PAID", createdAt: { gte: demandWindowStart } },
+        },
+      }),
+      prisma.orderItem.count({
+        where: {
+          productId: product.id,
+          order: { paymentStatus: "PAID" },
+        },
+      }),
+      prisma.favorite.count({ where: { productId: product.id } }),
+      prisma.order.count({
+        where: { sellerId: product.sellerId, paymentStatus: "PAID" },
+      }),
+    ]);
+
+  const isHotDemand = recentSalesCount >= 3 || favoritesCount >= 8;
+  const isLowStock =
+    product.type === "LOCAL" &&
+    product.stockQuantity !== null &&
+    product.stockQuantity > 0 &&
+    product.stockQuantity <= 3;
+
   const categoryIds = product.categories.map((entry) => entry.categoryId);
-  const relatedByCategory = await prisma.product.findMany({
+  const similarProducts = await prisma.product.findMany({
     where: {
       isActive: true,
       id: { not: product.id },
@@ -61,32 +112,26 @@ export default async function ProductPage({
       images: { orderBy: { position: "asc" }, take: 1 },
       seller: { select: { displayName: true } },
     },
-    take: 6,
+    take: 8,
   });
 
-  const relatedBySeller = await prisma.product.findMany({
+  const complementaryCandidates = await prisma.product.findMany({
     where: {
       isActive: true,
       id: { not: product.id },
-      sellerId: product.sellerId,
+      OR: [{ sellerId: product.sellerId }, { type: product.type }],
     },
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { position: "asc" }, take: 1 },
       seller: { select: { displayName: true } },
     },
-    take: 6,
+    take: 12,
   });
 
-  const seen = new Set<string>();
-  const relatedProducts = [...relatedByCategory, ...relatedBySeller]
-    .filter((item) => {
-      if (seen.has(item.id)) {
-        return false;
-      }
-      seen.add(item.id);
-      return true;
-    })
+  const similarIds = new Set(similarProducts.map((item) => item.id));
+  const bundleProducts = complementaryCandidates
+    .filter((item) => !similarIds.has(item.id))
     .slice(0, 8);
 
   const sizeCategorySlugs = new Set(["vetements", "chaussures", "enfants", "mode"]);
@@ -106,6 +151,26 @@ export default async function ProductPage({
     product.categories.some((entry) => colorCategorySlugs.has(entry.category.slug)) ||
     product.type === "LOCAL";
 
+  const sellerPhone = product.seller?.user?.phone?.trim();
+  const isSellerOwner = session?.user?.id === product.seller?.userId;
+  const sellerEmail = product.seller?.user?.email?.trim();
+
+  const sellerPhoneHref = sellerPhone ? `tel:${sellerPhone}` : undefined;
+  const sellerEmailHref = sellerEmail
+    ? `mailto:${sellerEmail}?subject=${encodeURIComponent(product.title)}`
+    : undefined;
+
+  let whatsappNumber = sellerPhone ? sellerPhone.replace(/[^0-9]/g, "") : "";
+  if (whatsappNumber.startsWith("00")) whatsappNumber = whatsappNumber.slice(2);
+  if (whatsappNumber.length === 9) whatsappNumber = `221${whatsappNumber}`;
+  const sellerWhatsappHref = whatsappNumber
+    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+        locale === "fr"
+          ? `Bonjour, je suis interesse par ${product.title}`
+          : `Hello, I am interested in ${product.title}`
+      )}`
+    : undefined;
+
   const typeLabel =
     product.type === "PREORDER"
       ? t("badge.preorder")
@@ -119,10 +184,7 @@ export default async function ProductPage({
       ? t("badge.localEta")
       : t("badge.dropshipEta");
   const priceLabel = formatMoney(product.priceCents, product.currency, locale);
-  const discountedCents = getDiscountedPrice(
-    product.priceCents,
-    product.discountPercent
-  );
+  const discountedCents = getDiscountedPrice(product.priceCents, product.discountPercent);
   const hasDiscount =
     product.discountPercent !== null &&
     product.discountPercent !== undefined &&
@@ -131,6 +193,102 @@ export default async function ProductPage({
   const boosted =
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > new Date());
+  const sellerScore = product.seller?.rating ?? 5;
+  const reviewDelegate = (prisma as any).productReview as
+    | {
+        aggregate: (args: any) => Promise<{ _avg: { rating: number | null }; _count: { _all: number } }>;
+        findMany: (args: any) => Promise<any[]>;
+      }
+    | undefined;
+
+  let reviewAverage = 0;
+  let reviewCount = 0;
+  let reviewItems: Array<{
+    id: string;
+    rating: number;
+    sellerRating?: number | null;
+    title?: string | null;
+    comment?: string | null;
+    createdAt: string;
+    mine?: boolean;
+    buyer: { id: string; name?: string | null; image?: string | null };
+  }> = [];
+  let canReview = false;
+
+  if (reviewDelegate) {
+    const [reviewStats, latestReviews, paidOrderItem] = await Promise.all([
+      reviewDelegate.aggregate({
+        where: { productId: product.id },
+        _avg: { rating: true },
+        _count: { _all: true },
+      }),
+      reviewDelegate.findMany({
+        where: { productId: product.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+          buyer: { select: { id: true, name: true, image: true } },
+        },
+      }),
+      session?.user?.id
+        ? prisma.orderItem.findFirst({
+            where: {
+              productId: product.id,
+              order: {
+                userId: session.user.id,
+                paymentStatus: "PAID",
+              },
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    reviewAverage = reviewStats._avg.rating ?? 0;
+    reviewCount = reviewStats._count._all;
+    reviewItems = latestReviews.map((review: any) => ({
+      id: review.id,
+      rating: review.rating,
+      sellerRating: review.sellerRating,
+      title: review.title,
+      comment: review.comment,
+      createdAt: review.createdAt.toISOString(),
+      mine: review.buyerId === session?.user?.id,
+      buyer: review.buyer,
+    }));
+    canReview = Boolean(session?.user?.id && paidOrderItem && !isSellerOwner);
+  }
+
+  const renderProductCard = (item: RelatedProductCard) => (
+    <Link
+      key={item.id}
+      href={`/shop/${item.slug}`}
+      className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition hover:border-emerald-300/60"
+    >
+      <div className="h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+        {item.images[0]?.url ? (
+          <img
+            src={item.images[0].url}
+            alt={item.images[0].alt ?? item.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+            {locale === "fr" ? "Image a venir" : "Image coming soon"}
+          </div>
+        )}
+      </div>
+      <h3 className="mt-3 line-clamp-2 text-sm font-semibold text-white">{item.title}</h3>
+      <p className="mt-1 text-xs text-zinc-400">{item.seller?.displayName ?? "-"}</p>
+      <p className="mt-2 text-sm font-semibold text-emerald-200">
+        {formatMoney(
+          getDiscountedPrice(item.priceCents, item.discountPercent),
+          item.currency,
+          locale
+        )}
+      </p>
+    </Link>
+  );
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -195,11 +353,20 @@ export default async function ProductPage({
                 {locale === "fr" ? "Booste" : "Boosted"}
               </span>
             )}
+            {isHotDemand && (
+              <span className="rounded-full bg-orange-400/20 px-3 py-1 text-orange-200">
+                {locale === "fr" ? "ðŸ”¥ Tres demande" : "ðŸ”¥ In demand"}
+              </span>
+            )}
+            {isLowStock && (
+              <span className="rounded-full bg-rose-400/20 px-3 py-1 text-rose-200">
+                {locale === "fr" ? "â³ Bientot fini" : "â³ Almost sold out"}
+              </span>
+            )}
           </div>
+
           <h1 className="mt-6 text-3xl font-semibold">{product.title}</h1>
-          <p className="mt-3 text-sm text-zinc-300">
-            {product.description ?? t("subtitle")}
-          </p>
+          <p className="mt-3 text-sm text-zinc-300">{product.description ?? t("subtitle")}</p>
 
           <ProductPurchasePanel
             locale={locale}
@@ -223,58 +390,87 @@ export default async function ProductPage({
               {hasDiscount ? (
                 <span className="flex items-center gap-2 text-base font-semibold text-emerald-200">
                   {discountedLabel}
-                  <span className="text-xs text-zinc-500 line-through">
-                    {priceLabel}
-                  </span>
+                  <span className="text-xs text-zinc-500 line-through">{priceLabel}</span>
                   <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
                     -{product.discountPercent}%
                   </span>
                 </span>
               ) : (
-                <span className="text-base font-semibold text-emerald-200">
-                  {priceLabel}
-                </span>
+                <span className="text-base font-semibold text-emerald-200">{priceLabel}</span>
               )}
             </div>
+
             <div className="flex items-center justify-between">
               <span>{t("details.seller")}</span>
               <span>{product.seller?.displayName ?? t("details.sellerValue")}</span>
             </div>
+
             <div className="flex items-center justify-between">
               <span>{t("details.stock")}</span>
               <span>
                 {product.type === "LOCAL" && product.stockQuantity !== null
-                  ? t("details.stockLocal", {
-                      count: product.stockQuantity ?? 0,
-                    })
+                  ? t("details.stockLocal", { count: product.stockQuantity ?? 0 })
                   : t("details.stockValue")}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>{locale === "fr" ? "Avis vendeur" : "Seller rating"}</span>
+              <span className="text-emerald-200">
+                â˜… {sellerScore.toFixed(1)} <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>{locale === "fr" ? "Tendance" : "Demand"}</span>
+              <span className="text-zinc-200">
+                {locale === "fr"
+                  ? `${recentSalesCount} ventes / 14j Â· ${favoritesCount} favoris`
+                  : `${recentSalesCount} sales / 14d Â· ${favoritesCount} favorites`}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>{locale === "fr" ? "Historique ventes" : "Sales history"}</span>
+              <span className="text-zinc-200">
+                {locale === "fr" ? `${totalSalesCount} ventes totales` : `${totalSalesCount} total sales`}
               </span>
             </div>
           </div>
         </section>
 
-        <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-8 fade-up">
-          <h2 className="text-xl font-semibold">{t("aside.title")}</h2>
-          <p className="mt-3 text-sm text-zinc-300">{t("aside.desc")}</p>
-          <div className="mt-6 grid gap-4 text-xs text-zinc-400">
-            <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-              <p className="text-sm font-semibold text-white">
-                {t("aside.steps.0.title")}
-              </p>
-              <p className="mt-2">{t("aside.steps.0.desc")}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-              <p className="text-sm font-semibold text-white">
-                {t("aside.steps.1.title")}
-              </p>
-              <p className="mt-2">{t("aside.steps.1.desc")}</p>
-            </div>
-          </div>
-        </aside>
+        <PurchaseInfoPanel
+          locale={locale}
+          productId={product.id}
+          productType={product.type}
+          preorderLeadDays={product.preorderLeadDays}
+          deliveryOptions={product.deliveryOptions}
+          pickupLocation={product.pickupLocation}
+          sellerName={product.seller?.displayName ?? undefined}
+          sellerRating={product.seller?.rating}
+          sellerAvatarUrl={product.seller?.user?.image ?? null}
+          sellerProductsCount={sellerProductsCount}
+          sellerPhoneHref={sellerPhoneHref}
+          sellerEmailHref={sellerEmailHref}
+          sellerWhatsappHref={sellerWhatsappHref}
+          buyHref="#purchase-actions"
+          isAuthenticated={Boolean(session?.user)}
+          isSellerOwner={Boolean(isSellerOwner)}
+        />
       </main>
+      <ProductReviewsPanel
+        locale={locale}
+        productId={product.id}
+        isAuthenticated={Boolean(session?.user)}
+        canReview={canReview}
+        isSellerOwner={Boolean(isSellerOwner)}
+        initialAverage={reviewAverage}
+        initialCount={reviewCount}
+        initialReviews={reviewItems}
+      />
 
-      {relatedProducts.length > 0 && (
-        <section className="mx-auto mb-16 w-full max-w-6xl px-6 fade-up">
+      {similarProducts.length > 0 && (
+        <section className="mx-auto mb-10 w-full max-w-6xl px-6 fade-up">
           <div className="mb-4 flex items-end justify-between">
             <h2 className="text-2xl font-semibold text-white">
               {locale === "fr" ? "Produits similaires" : "Similar products"}
@@ -284,36 +480,23 @@ export default async function ProductPage({
             </span>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {relatedProducts.map((item) => (
-              <Link
-                key={item.id}
-                href={`/shop/${item.slug}`}
-                className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition hover:border-emerald-300/60"
-              >
-                <div className="h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
-                  {item.images[0]?.url ? (
-                    <img
-                      src={item.images[0].url}
-                      alt={item.images[0].alt ?? item.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-                      {locale === "fr" ? "Image a venir" : "Image coming soon"}
-                    </div>
-                  )}
-                </div>
-                <h3 className="mt-3 line-clamp-2 text-sm font-semibold text-white">{item.title}</h3>
-                <p className="mt-1 text-xs text-zinc-400">{item.seller?.displayName ?? "-"}</p>
-                <p className="mt-2 text-sm font-semibold text-emerald-200">
-                  {formatMoney(
-                    getDiscountedPrice(item.priceCents, item.discountPercent),
-                    item.currency,
-                    locale
-                  )}
-                </p>
-              </Link>
-            ))}
+            {similarProducts.map((item) => renderProductCard(item))}
+          </div>
+        </section>
+      )}
+
+      {bundleProducts.length > 0 && (
+        <section className="mx-auto mb-16 w-full max-w-6xl px-6 fade-up">
+          <div className="mb-4 flex items-end justify-between">
+            <h2 className="text-2xl font-semibold text-white">
+              {locale === "fr" ? "A associer avec ce produit" : "Complete your purchase"}
+            </h2>
+            <span className="text-xs uppercase tracking-[0.2em] text-zinc-400">
+              {locale === "fr" ? "Suggestions complementaires" : "Complementary picks"}
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {bundleProducts.map((item) => renderProductCard(item))}
           </div>
         </section>
       )}
@@ -322,3 +505,6 @@ export default async function ProductPage({
     </div>
   );
 }
+
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
@@ -15,6 +15,8 @@ type OrderItem = {
   quantity: number;
   unitPriceCents: number;
   type: string;
+  optionColor?: string | null;
+  optionSize?: string | null;
 };
 
 type OrderEvent = {
@@ -218,14 +220,32 @@ export default function OrdersLookup() {
                 <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-4">
                   <p className="text-xs text-zinc-400">{t("labels.products")}</p>
                   <ul className="mt-2 grid gap-2 text-xs text-zinc-200">
-                    {order.items.map((item) => (
-                      <li key={item.id} className="flex items-center justify-between">
-                        <span className="truncate">
-                          {item.product?.title ?? t("labels.unknown")}
-                        </span>
-                        <span className="text-zinc-400">x{item.quantity}</span>
-                      </li>
-                    ))}
+                    {order.items.map((item) => {
+                      const optionParts = [
+                        item.optionColor
+                          ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
+                          : null,
+                        item.optionSize
+                          ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
+                          : null,
+                      ].filter(Boolean);
+
+                      return (
+                        <li key={item.id} className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate">
+                              {item.product?.title ?? t("labels.unknown")}
+                            </p>
+                            {optionParts.length > 0 && (
+                              <p className="mt-0.5 text-[11px] text-zinc-500">
+                                {optionParts.join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               </div>
@@ -237,4 +257,6 @@ export default function OrdersLookup() {
     </div>
   );
 }
+
+
 

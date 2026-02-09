@@ -45,7 +45,31 @@ export default async function HomePage({
   ]);
   const session = await getServerSession(authOptions);
   const t = await getTranslations("Home");
-  const query = q?.trim();
+  const query = q?.trim();  const sellerProfile = session?.user?.id
+    ? await prisma.sellerProfile.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true },
+      })
+    : null;
+
+  const inquiryWhere: Prisma.ProductInquiryWhereInput | null = session?.user?.id
+    ? {
+        OR: [
+          { buyerId: session.user.id },
+          ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : []),
+        ],
+      }
+    : null;
+
+  const inboxCount = inquiryWhere
+    ? await prisma.productInquiry.count({
+        where: {
+          ...inquiryWhere,
+          status: "OPEN",
+        },
+      })
+    : 0;
+
 
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
@@ -206,7 +230,7 @@ export default async function HomePage({
                 className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-emerald-300/60"
               >
                 <span>{item.label}</span>
-                <span className="text-zinc-500">›</span>
+                <span className="text-zinc-500">Ã¢â‚¬Âº</span>
               </Link>
             ))}
           </div>
@@ -242,7 +266,7 @@ export default async function HomePage({
 
           <div className="fade-up">
             <h2 className="text-2xl font-semibold">
-              {query ? `Resultats pour "${query}"` : "Produits disponibles 🔥"}
+              {query ? `Resultats pour "${query}"` : "Produits disponibles Ã°Å¸â€Â¥"}
             </h2>
             <p className="mt-2 text-sm text-zinc-300">
               {query
@@ -320,6 +344,8 @@ export default async function HomePage({
     </div>
   );
 }
+
+
 
 
 
