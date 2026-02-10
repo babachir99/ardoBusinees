@@ -177,6 +177,9 @@ model Product {
   stockQuantity    Int?        @default(0)
   pickupLocation   String?
   deliveryOptions  String?
+  colorOptions     String[]    @default([])
+  sizeOptions      String[]    @default([])
+  attributes       Json?
   isActive         Boolean     @default(true)
   discountPercent  Int?
   boostStatus      BoostStatus @default(NONE)
@@ -210,7 +213,8 @@ model Store {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  products Product[]
+  products   Product[]
+  categories StoreCategory[]
 }
 
 model Category {
@@ -226,8 +230,20 @@ model Category {
   parent   Category?         @relation("CategoryTree", fields: [parentId], references: [id])
   children Category[]        @relation("CategoryTree")
   products ProductCategory[]
+  stores   StoreCategory[]
 }
 
+
+model StoreCategory {
+  storeId    String
+  categoryId String
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([storeId, categoryId])
+  @@index([categoryId])
+}
 model ProductCategory {
   productId  String
   categoryId String

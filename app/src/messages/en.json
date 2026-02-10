@@ -66,8 +66,7 @@
       "desc": "Open your store, manage orders, and get paid automatically.",
       "cta": "Create my seller space"
     }
-  }
-  ,
+  },
   "Shop": {
     "filters": {
       "all": "All",
@@ -305,8 +304,7 @@
       "desc": "Thanks! We are preparing your order.",
       "cta": "See my orders"
     }
-  }
-  ,
+  },
   "Seller": {
     "nav": {
       "admin": "Admin",
@@ -605,6 +603,10 @@
     "subtitle": "Add a product and an image.",
     "sellerId": "Seller ID",
     "storeId": "Store ID (optional)",
+    "storeLabel": "Target store",
+    "storePlaceholder": "Choose a store",
+    "storesLoading": "Loading stores...",
+    "noStores": "No active store available",
     "titleLabel": "Title",
     "slug": "Slug",
     "description": "Description",
@@ -640,12 +642,74 @@
       "fileSize": "Image too large (max {max}).",
       "dimensions": "Image too small. Minimum {min}.",
       "maxFiles": "Maximum {max} images.",
-      "sellerMissing": "No seller profile found. Activate a seller role in your profile."
+      "sellerMissing": "No seller profile found. Activate a seller role in your profile.",
+      "titleRequired": "Title is required.",
+      "priceRequired": "Price must be greater than 0.",
+      "slugRequired": "Slug is invalid.",
+      "preorderLeadDays": "Preorder lead time must be between 1 and 365 days.",
+      "dropshipSupplierRequired": "Dropship supplier is required.",
+      "stockInvalid": "Local stock must be 0 or more.",
+      "pickupRequired": "Pickup location is required for local products.",
+      "imageRequired": "Add at least one image (upload or URL).",
+      "categoryRequired": "Choose a category before publishing.",
+      "attributeRequired": "The {field} field is required."
     },
     "guard": {
       "title": "Seller access required",
       "subtitle": "Connect with a seller account to add products.",
       "cta": "Sign in"
+    },
+    "sections": {
+      "basics": "Basic information",
+      "saleModel": "Sales model",
+      "media": "Product media"
+    },
+    "slugAuto": "Slug is generated from title by default (editable).",
+    "requiredHint": "* required fields",
+    "categoriesSuggested": "Choose a suggested category",
+    "categoriesLoading": "Loading categories...",
+    "noCategoryMatch": "No relevant suggestion for this title.",
+    "categoryEngineLoading": "Smart analysis...",
+    "categoryEngineConfidence": "Confidence",
+    "categoryEngineDetected": "Detected keywords",
+    "categoryEngineAlternatives": "Alternatives",
+    "categoryEngineExplain": "Reasoning",
+    "orChooseCategory": "Or choose another category *",
+    "categoryPlaceholder": "Choose a category",
+    "categorySearchPlaceholder": "Search a category...",
+    "showAllCategories": "Show all categories",
+    "hideAllCategories": "Hide full list",
+    "allCategoriesLabel": "Full catalog",
+    "categoriesCount": "{count} categories available",
+    "categoryPickHint": "Pick an AI suggestion or open the full catalog to search your final category.",
+    "selectedCategory": "Selected category",
+    "noCategories": "No category available for now",
+    "colorOptions": "Available colors",
+    "sizeOptions": "Available sizes",
+    "colorOptionsPlaceholder": "Ex: Black, White, Green",
+    "sizeOptionsPlaceholder": "Ex: S, M, L, XL",
+    "optionsHint": "Separate options with commas.",
+    "coverPhoto": "Cover photo",
+    "moveLeft": "Move up",
+    "moveRight": "Move down",
+    "categoryDetails": "Category-specific details",
+    "photosCount": "Photos count",
+    "mediaTip": "Add at least 3 photos to improve conversion.",
+    "emptyColor": "No color added",
+    "emptySize": "No size added",
+    "advanced": {
+      "show": "Show advanced options",
+      "hide": "Hide advanced options"
+    },
+    "wizard": {
+      "title": "Guided listing",
+      "step": "Step {current}/{total}",
+      "basics": "Basics",
+      "media": "Photos",
+      "details": "Details",
+      "publish": "Publish",
+      "prev": "Back",
+      "next": "Continue"
     }
   },
   "Admin": {
@@ -967,20 +1031,20 @@
       "phone": "Phone",
       "avatar": "Profile photo"
     },
-      "errors": {
-        "invalid": "Invalid email or password.",
-        "generic": "Something went wrong."
-      },
-      "verify": {
-        "title": "Verify email",
-        "subtitle": "Enter the token sent to your email.",
-        "submit": "Verify",
-        "loading": "Verifying...",
-        "token": "Verification token",
-        "success": "Email verified successfully.",
-        "cta": "Go to login"
-      }
+    "errors": {
+      "invalid": "Invalid email or password.",
+      "generic": "Something went wrong."
     },
+    "verify": {
+      "title": "Verify email",
+      "subtitle": "Enter the token sent to your email.",
+      "submit": "Verify",
+      "loading": "Verifying...",
+      "token": "Verification token",
+      "success": "Email verified successfully.",
+      "cta": "Go to login"
+    }
+  },
   "Profile": {
     "title": "My profile",
     "subtitle": "Manage your personal information and role.",
@@ -1195,4 +1259,8 @@
     }
   }
 }
+
+
+
+
 

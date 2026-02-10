@@ -304,8 +304,7 @@
       "desc": "Merci ! Nous preparons ta commande.",
       "cta": "Voir mes commandes"
     }
-  }
-  ,
+  },
   "Seller": {
     "nav": {
       "admin": "Admin",
@@ -604,7 +603,30 @@
     "subtitle": "Ajoute un produit et une image.",
     "sellerId": "Identifiant vendeur",
     "storeId": "Identifiant boutique (optionnel)",
+    "storeLabel": "Boutique cible",
+    "storePlaceholder": "Choisissez une boutique",
+    "storesLoading": "Chargement des boutiques...",
+    "noStores": "Aucune boutique active disponible",
     "titleLabel": "Titre",
+    "requiredHint": "* champs obligatoires",
+    "categoriesSuggested": "Choisissez une categorie suggeree",
+    "categoriesLoading": "Chargement des categories...",
+    "noCategoryMatch": "Aucune suggestion pertinente pour ce titre.",
+    "categoryEngineLoading": "Analyse intelligente...",
+    "categoryEngineConfidence": "Confiance",
+    "categoryEngineDetected": "Mots detectes",
+    "categoryEngineAlternatives": "Alternatives",
+    "categoryEngineExplain": "Logique",
+    "orChooseCategory": "Ou choisissez une autre categorie *",
+    "categoryPlaceholder": "Choisissez une categorie",
+    "categorySearchPlaceholder": "Rechercher une categorie...",
+    "showAllCategories": "Voir toutes les categories",
+    "hideAllCategories": "Masquer la liste complete",
+    "allCategoriesLabel": "Catalogue complet",
+    "categoriesCount": "{count} categories disponibles",
+    "categoryPickHint": "Choisis une suggestion IA ou ouvre le catalogue complet pour rechercher une categorie.",
+    "selectedCategory": "Categorie selectionnee",
+    "noCategories": "Aucune categorie disponible pour le moment",
     "slug": "Slug",
     "description": "Description",
     "price": "Prix (en CFA)",
@@ -621,6 +643,11 @@
     "stockQuantity": "Stock local",
     "pickupLocation": "Lieu de retrait",
     "deliveryOptions": "Options de livraison",
+    "colorOptions": "Couleurs disponibles",
+    "sizeOptions": "Tailles disponibles",
+    "colorOptionsPlaceholder": "Ex: Noir, Blanc, Vert",
+    "sizeOptionsPlaceholder": "Ex: S, M, L, XL",
+    "optionsHint": "Separe les options par virgule.",
     "imageUrl": "URL image produit",
     "imageFile": "Importer une image",
     "dropzone": "Glisse une image ici ou clique pour choisir",
@@ -639,12 +666,50 @@
       "fileSize": "Image trop lourde (max {max}).",
       "dimensions": "Image trop petite. Minimum {min}.",
       "maxFiles": "Maximum {max} images.",
-      "sellerMissing": "Aucun profil vendeur detecte. Active un role vendeur dans ton profil."
+      "sellerMissing": "Aucun profil vendeur detecte. Active un role vendeur dans ton profil.",
+      "titleRequired": "Le titre est obligatoire.",
+      "priceRequired": "Le prix doit etre superieur a 0.",
+      "slugRequired": "Le slug est invalide.",
+      "preorderLeadDays": "Le delai precommande doit etre entre 1 et 365 jours.",
+      "dropshipSupplierRequired": "Le fournisseur dropshipping est obligatoire.",
+      "stockInvalid": "Le stock local doit etre superieur ou egal a 0.",
+      "pickupRequired": "Le lieu de retrait est obligatoire pour un produit local.",
+      "imageRequired": "Ajoute au moins une image (upload ou URL).",
+      "categoryRequired": "Choisis une categorie avant de publier.",
+      "attributeRequired": "Le champ {field} est obligatoire."
     },
     "guard": {
       "title": "Acces vendeur requis",
       "subtitle": "Connecte-toi avec un compte vendeur pour ajouter des produits.",
       "cta": "Se connecter"
+    },
+    "sections": {
+      "basics": "Informations de base",
+      "saleModel": "Mode de vente",
+      "media": "Medias produit"
+    },
+    "slugAuto": "Slug genere automatiquement depuis le titre (modifiable).",
+    "coverPhoto": "Photo de couverture",
+    "moveLeft": "Monter",
+    "moveRight": "Descendre",
+    "categoryDetails": "Details selon la categorie",
+    "photosCount": "Nombre de photos",
+    "mediaTip": "Ajoute au moins 3 photos pour mieux convertir.",
+    "emptyColor": "Aucune couleur ajoutee",
+    "emptySize": "Aucune taille ajoutee",
+    "advanced": {
+      "show": "Afficher options avancees",
+      "hide": "Masquer options avancees"
+    },
+    "wizard": {
+      "title": "Publication guidee",
+      "step": "Etape {current}/{total}",
+      "basics": "Essentiel",
+      "media": "Photos",
+      "details": "Details",
+      "publish": "Publication",
+      "prev": "Retour",
+      "next": "Continuer"
     }
   },
   "Admin": {
@@ -782,7 +847,7 @@
       "date": "Date",
       "noEmail": "Aucun email",
       "noMethod": "Aucun moyen",
-      "items": "Articles",
+      "items": "{count} articles",
       "newEvent": "Nouvel evenement",
       "note": "Note",
       "proof": "URL preuve",
@@ -790,7 +855,6 @@
       "shipping": "Livraison",
       "shippingEmpty": "Aucune adresse fournie",
       "products": "Produits",
-      "items": "{count} articles",
       "fees": "Frais",
       "total": "Total",
       "upload": "Uploader preuve",
@@ -1201,4 +1265,8 @@
     }
   }
 }
+
+
+
+
 

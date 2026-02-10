@@ -5,6 +5,38 @@ import type { Prisma, ProductType } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
+function sanitizeStringList(
+  value: unknown,
+  maxItems = 20,
+  maxLength = 64
+): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => String(item ?? "").trim())
+        .filter((item) => item.length > 0)
+        .map((item) => item.slice(0, maxLength))
+    )
+  ).slice(0, maxItems);
+}
+
+function sanitizeAttributes(value: unknown): Prisma.JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => [String(key).trim().slice(0, 64), String(raw ?? "").trim().slice(0, 256)] as const)
+    .filter(([key, val]) => key.length > 0 && val.length > 0)
+    .slice(0, 24);
+
+  if (entries.length === 0) return undefined;
+
+  return Object.fromEntries(entries) as Prisma.JsonObject;
+}
+
 async function ensureUniqueProductSlug(sellerId: string, baseSlug: string) {
   let candidate = baseSlug;
   let suffix = 2;
@@ -27,9 +59,7 @@ async function ensureUniqueProductSlug(sellerId: string, baseSlug: string) {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const takeParam = Number(searchParams.get("take") ?? "20");
-  const take = Number.isFinite(takeParam)
-    ? Math.min(Math.max(takeParam, 1), 50)
-    : 20;
+  const take = Number.isFinite(takeParam) ? Math.min(Math.max(takeParam, 1), 50) : 20;
 
   const typeParam = searchParams.get("type");
   const type = typeParam ? typeParam.toUpperCase() : undefined;
@@ -109,21 +139,70 @@ export async function POST(request: NextRequest) {
   }
 
   if (!baseSlug) {
-    return NextResponse.json(
-      { error: "slug is invalid" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "slug is invalid" }, { status: 400 });
   }
 
   const slug = await ensureUniqueProductSlug(sellerId, baseSlug);
 
-  const imageUrls = Array.isArray(body.imageUrls)
-    ? body.imageUrls.filter(Boolean)
+  const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls.filter(Boolean) : [];
+
+  const colorOptions = sanitizeStringList(body.colorOptions, 20, 40);
+  const sizeOptions = sanitizeStringList(body.sizeOptions, 20, 32);
+  const attributes = sanitizeAttributes(body.attributes);
+
+  const storeId = body.storeId ? String(body.storeId).trim() : "";
+
+  const categoryIds: string[] = Array.isArray(body.categoryIds)
+    ? Array.from(
+        new Set(
+          (body.categoryIds as unknown[])
+            .map((id) => String(id).trim())
+            .filter((id): id is string => id.length > 0)
+        )
+      )
     : [];
+
+  let validCategoryIds: string[] = [];
+  if (categoryIds.length > 0) {
+    const rows = await prisma.category.findMany({
+      where: { id: { in: categoryIds }, isActive: true },
+      select: { id: true },
+    });
+    validCategoryIds = rows.map((row) => row.id);
+  }
+
+  if (categoryIds.length > 0 && validCategoryIds.length === 0) {
+    return NextResponse.json(
+      { error: "Selected categories are invalid or inactive" },
+      { status: 400 }
+    );
+  }
+
+  if (storeId && validCategoryIds.length > 0) {
+    const allowed = await prisma.storeCategory.findMany({
+      where: {
+        storeId,
+        categoryId: { in: validCategoryIds },
+      },
+      select: { categoryId: true },
+    });
+
+    const allowedSet = new Set(allowed.map((row) => row.categoryId));
+    const incompatible = validCategoryIds.filter((id) => !allowedSet.has(id));
+    if (incompatible.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Selected categories are not available for the selected store",
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   const data: Prisma.ProductCreateInput = {
     seller: { connect: { id: sellerId } },
-    ...(body.storeId ? { store: { connect: { id: String(body.storeId) } } } : {}),
+    ...(storeId ? { store: { connect: { id: storeId } } } : {}),
     title,
     slug,
     description: body.description ?? undefined,
@@ -135,6 +214,9 @@ export async function POST(request: NextRequest) {
     stockQuantity: body.stockQuantity ?? undefined,
     pickupLocation: body.pickupLocation ?? undefined,
     deliveryOptions: body.deliveryOptions ?? undefined,
+    colorOptions: colorOptions.length > 0 ? colorOptions : undefined,
+    sizeOptions: sizeOptions.length > 0 ? sizeOptions : undefined,
+    attributes,
     isActive: typeof body.isActive === "boolean" ? body.isActive : true,
     images:
       imageUrls.length > 0
@@ -143,6 +225,14 @@ export async function POST(request: NextRequest) {
               url,
               alt: body.imageAlt ?? body.title,
               position: index,
+            })),
+          }
+        : undefined,
+    categories:
+      validCategoryIds.length > 0
+        ? {
+            create: validCategoryIds.map((categoryId) => ({
+              category: { connect: { id: categoryId } },
             })),
           }
         : undefined,
@@ -157,9 +247,10 @@ export async function POST(request: NextRequest) {
     data.boostRequestedAt = new Date();
   }
 
-  const product = await prisma.product.create({
-    data,
-  });
+  const product = await prisma.product.create({ data });
 
   return NextResponse.json(product, { status: 201 });
 }
+
+
+

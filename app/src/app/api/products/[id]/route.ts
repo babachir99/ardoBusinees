@@ -3,8 +3,41 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
+
+function sanitizeStringList(
+  value: unknown,
+  maxItems = 20,
+  maxLength = 64
+): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => String(item ?? "").trim())
+        .filter((item) => item.length > 0)
+        .map((item) => item.slice(0, maxLength))
+    )
+  ).slice(0, maxItems);
+}
+
+function sanitizeAttributes(value: unknown): Prisma.JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => [String(key).trim().slice(0, 64), String(raw ?? "").trim().slice(0, 256)] as const)
+    .filter(([key, val]) => key.length > 0 && val.length > 0)
+    .slice(0, 24);
+
+  if (entries.length === 0) return undefined;
+
+  return Object.fromEntries(entries) as Prisma.JsonObject;
+}
 
 async function ensureUniqueProductSlug(
   sellerId: string,
@@ -136,6 +169,15 @@ export async function PATCH(
   }
   if (body.deliveryOptions !== undefined) {
     data.deliveryOptions = body.deliveryOptions;
+  }
+  if (body.colorOptions !== undefined) {
+    data.colorOptions = sanitizeStringList(body.colorOptions, 20, 40);
+  }
+  if (body.sizeOptions !== undefined) {
+    data.sizeOptions = sanitizeStringList(body.sizeOptions, 20, 32);
+  }
+  if (body.attributes !== undefined) {
+    data.attributes = sanitizeAttributes(body.attributes) ?? null;
   }
   if (body.isActive !== undefined) {
     data.isActive = Boolean(body.isActive);

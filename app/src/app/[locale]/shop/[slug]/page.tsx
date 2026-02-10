@@ -1,4 +1,4 @@
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import CartBadge from "@/components/cart/CartBadge";
@@ -23,6 +23,77 @@ type RelatedProductCard = {
   images: { url: string; alt: string | null }[];
   seller: { displayName: string; rating?: number | null } | null;
 };
+
+function getStars(value: number) {
+  const safe = Number.isFinite(value) ? Math.max(0, Math.min(5, value)) : 0;
+  const filled = Math.round(safe);
+  return `${"\u2605".repeat(filled)}${"\u2606".repeat(5 - filled)}`;
+}
+
+function normalizeStringArray(
+  values: string[] | null | undefined,
+  maxItems = 20,
+  maxLength = 64
+): string[] {
+  if (!Array.isArray(values)) return [];
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter((value) => value.length > 0)
+        .map((value) => value.slice(0, maxLength))
+    )
+  ).slice(0, maxItems);
+}
+
+function readAttributeEntries(
+  raw: unknown
+): Array<{ key: string; value: string }> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return [];
+  }
+
+  return Object.entries(raw as Record<string, unknown>)
+    .map(([key, value]) => ({
+      key: String(key ?? "").trim(),
+      value: String(value ?? "").trim(),
+    }))
+    .filter((entry) => entry.key.length > 0 && entry.value.length > 0)
+    .slice(0, 24);
+}
+
+function formatAttributeLabel(key: string, locale: string) {
+  const normalized = key
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  const map: Record<string, { fr: string; en: string }> = {
+    brand: { fr: "Marque", en: "Brand" },
+    model: { fr: "Modele", en: "Model" },
+    year: { fr: "Annee", en: "Year" },
+    mileage: { fr: "Kilometrage", en: "Mileage" },
+    fuel: { fr: "Carburant", en: "Fuel" },
+    condition: { fr: "Etat", en: "Condition" },
+    material: { fr: "Matiere", en: "Material" },
+    gender: { fr: "Genre", en: "Gender" },
+    collection: { fr: "Collection", en: "Collection" },
+    surface: { fr: "Surface", en: "Area" },
+    rooms: { fr: "Pieces", en: "Rooms" },
+    location: { fr: "Zone", en: "Location" },
+    warranty: { fr: "Garantie", en: "Warranty" },
+  };
+
+  if (map[normalized]) {
+    return locale === "fr" ? map[normalized].fr : map[normalized].en;
+  }
+
+  return normalized
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
 
 export default async function ProductPage({
   params,
@@ -140,6 +211,10 @@ export default async function ProductPage({
     .filter((item) => !similarIds.has(item.id))
     .slice(0, 8);
 
+  const explicitColorOptions = normalizeStringArray(product.colorOptions, 20, 40);
+  const explicitSizeOptions = normalizeStringArray(product.sizeOptions, 20, 32);
+  const attributeEntries = readAttributeEntries(product.attributes);
+
   const sizeCategorySlugs = new Set(["vetements", "chaussures", "enfants", "mode"]);
   const colorCategorySlugs = new Set([
     "vetements",
@@ -150,10 +225,11 @@ export default async function ProductPage({
     "local",
   ]);
 
-  const showSizeOptions = product.categories.some((entry) =>
-    sizeCategorySlugs.has(entry.category.slug)
-  );
+  const showSizeOptions =
+    explicitSizeOptions.length > 0 ||
+    product.categories.some((entry) => sizeCategorySlugs.has(entry.category.slug));
   const showColorOptions =
+    explicitColorOptions.length > 0 ||
     product.categories.some((entry) => colorCategorySlugs.has(entry.category.slug)) ||
     product.type === "LOCAL";
 
@@ -314,18 +390,41 @@ export default async function ProductPage({
           locale
         )}
       </p>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-400">
-        <span>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-zinc-400">
+        <div className="min-w-0">
+          <p className="truncate">{locale === "fr" ? "Produit" : "Product"}</p>
           {(() => {
             const rating = relatedRatingMap.get(item.id);
-            return rating && rating.count > 0
-              ? `${locale === "fr" ? "Produit" : "Product"}: * ${rating.average.toFixed(1)} (${rating.count})`
-              : `${locale === "fr" ? "Produit" : "Product"}: ${locale === "fr" ? "Nouveau" : "New"}`;
+            if (rating && rating.count > 0) {
+              return (
+                <p className="mt-0.5 flex items-center gap-1">
+                  <span className="tracking-[0.06em] text-amber-300">
+                    {getStars(rating.average)}
+                  </span>
+                  <span className="text-zinc-400">
+                    {rating.average.toFixed(1)} ({rating.count} {locale === "fr" ? "avis" : "reviews"})
+                  </span>
+                </p>
+              );
+            }
+            return (
+              <p className="mt-0.5 text-zinc-500">{locale === "fr" ? "Nouveau" : "New"}</p>
+            );
           })()}
-        </span>
-        <span>
-          {locale === "fr" ? "Vendeur" : "Seller"}: * {typeof item.seller?.rating === "number" ? item.seller.rating.toFixed(1) : locale === "fr" ? "Nouveau" : "New"}
-        </span>
+        </div>
+        <div className="min-w-0 text-right">
+          <p className="truncate">{locale === "fr" ? "Vendeur" : "Seller"}</p>
+          {typeof item.seller?.rating === "number" ? (
+            <p className="mt-0.5 flex items-center justify-end gap-1">
+              <span className="tracking-[0.06em] text-amber-300">
+                {getStars(item.seller.rating)}
+              </span>
+              <span className="text-zinc-400">{item.seller.rating.toFixed(1)}/5</span>
+            </p>
+          ) : (
+            <p className="mt-0.5 text-zinc-500">{locale === "fr" ? "Nouveau" : "New"}</p>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -435,6 +534,8 @@ export default async function ProductPage({
             addedLabel={t("cta.added")}
             showColorOptions={showColorOptions}
             showSizeOptions={showSizeOptions}
+            colorOptions={explicitColorOptions}
+            sizeOptions={explicitSizeOptions}
           />
 
           <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/70 p-5 text-sm text-zinc-300">
@@ -467,10 +568,28 @@ export default async function ProductPage({
               </span>
             </div>
 
+            {attributeEntries.length > 0 && (
+              <div className="grid gap-2 rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-zinc-400">
+                  {locale === "fr" ? "Caracteristiques" : "Attributes"}
+                </p>
+                <div className="grid gap-1.5">
+                  {attributeEntries.map((entry) => (
+                    <div key={entry.key} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="text-zinc-400">{formatAttributeLabel(entry.key, locale)}</span>
+                      <span className="max-w-[65%] text-right text-zinc-200">{entry.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <span>{locale === "fr" ? "Avis vendeur" : "Seller rating"}</span>
-              <span className="text-emerald-200">
-                * {sellerScore.toFixed(1)} <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
+              <span className="inline-flex items-center gap-1 text-emerald-200">
+                <span className="tracking-[0.06em] text-amber-300">{getStars(sellerScore)}</span>
+                <span>{sellerScore.toFixed(1)}</span>
+                <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
               </span>
             </div>
 
@@ -559,12 +678,3 @@ export default async function ProductPage({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

@@ -11,20 +11,6 @@ import { authOptions } from "@/lib/auth";
 import SignOutIconButton from "@/components/auth/SignOutIconButton";
 import { getInboxUnreadCount } from "@/lib/inboxCount";
 
-const sidebarCategories = [
-  { label: "JONTAADO IMMO", href: "/stores/jontaado-immo" },
-  { label: "JONTAADO CARS", href: "/stores/jontaado-cars" },
-  { label: "JONTAADO PRESTA", href: "/stores/jontaado-presta" },
-  { label: "JONTAADO GP", href: "/stores/jontaado-gp" },
-  { label: "JONTAADO TIAK TIAK", href: "/stores/jontaado-tiak-tiak" },
-  { label: "Vetements", href: "/shop?category=lifestyle" },
-  { label: "Electronique", href: "/shop?category=tech" },
-  { label: "Maison", href: "/shop?category=local" },
-  { label: "Cosmetiques", href: "/shop?category=local" },
-  { label: "Enfants", href: "/shop?category=local" },
-  { label: "Services", href: "/stores/jontaado-presta" },
-];
-
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
   "jontaado-cars": "/stores/cars.png",
@@ -64,7 +50,11 @@ export default async function HomePage({
       ...(category
         ? {
             categories: {
-              some: { category: { slug: category } },
+              some: {
+                category: {
+                  OR: [{ slug: category }, { parent: { slug: category } }],
+                },
+              },
             },
           }
         : {}),
@@ -87,7 +77,7 @@ export default async function HomePage({
     orderBy,
     take: 24,
     include: {
-      seller: { select: { displayName: true, rating: true } },
+      seller: { select: { displayName: true } },
       images: { orderBy: { position: "asc" }, take: 1 },
     },
   });
@@ -106,30 +96,7 @@ export default async function HomePage({
   });
   const displayedProducts = sortedProducts.slice(0, 12);
 
-  const productRatingMap = new Map<string, { average: number; count: number }>();
-  const reviewDelegate = (prisma as any).productReview as
-    | {
-        groupBy: (args: any) => Promise<Array<{ productId: string; _avg: { rating: number | null }; _count: { _all: number } }>>;
-      }
-    | undefined;
-
-  if (reviewDelegate && displayedProducts.length > 0) {
-    const ratingStats = await reviewDelegate.groupBy({
-      by: ["productId"],
-      where: { productId: { in: displayedProducts.map((product) => product.id) } },
-      _avg: { rating: true },
-      _count: { _all: true },
-    });
-
-    for (const stat of ratingStats) {
-      productRatingMap.set(stat.productId, {
-        average: stat._avg.rating ?? 0,
-        count: stat._count._all,
-      });
-    }
-  }
-
-  const [stores, categories, suggestions, sellerHints, storeHints] =
+  const [stores, categories, suggestions, sellerHints, storeHints, sidebarRootCategories] =
     await Promise.all([
     prisma.store.findMany({
       where: { isActive: true },
@@ -157,22 +124,46 @@ export default async function HomePage({
       take: 6,
       select: { name: true },
     }),
+    prisma.category.findMany({
+      where: {
+        isActive: true,
+        parentId: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        children: {
+          where: {
+            isActive: true,
+          },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, slug: true },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
+
+  const orderedSidebarRoots = [...sidebarRootCategories].sort((a, b) =>
+    a.name.localeCompare(b.name, locale)
+  );
+
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-6 fade-up lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+      <header className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-6 fade-up xl:flex-row xl:items-center xl:justify-between">
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/logo.png"
             alt="JONTAADO logo"
             width={140}
             height={140}
-            className="h-[115px] w-auto md:h-[135px]"
+            className="h-[90px] w-auto md:h-[108px]"
             priority
           />
         </Link>
-        <div className="w-full lg:max-w-[380px] lg:justify-self-center">
+        <div className="w-full xl:max-w-[560px] xl:flex-1 xl:px-6">
           <SearchBar
             initialQuery={query}
             initialCategory={category}
@@ -185,7 +176,7 @@ export default async function HomePage({
             ]}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-self-end">
+        <div className="flex items-center gap-2 text-sm xl:shrink-0">
           {session?.user?.role === "ADMIN" && (
             <Link
               href="/admin"
@@ -194,7 +185,10 @@ export default async function HomePage({
               Admin
             </Link>
           )}
-          <Link href="/seller" className="text-zinc-300 hover:text-white">
+          <Link
+            href="/seller"
+            className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-white/50 hover:text-white"
+          >
             Vendre
           </Link>
           {session && (
@@ -204,7 +198,18 @@ export default async function HomePage({
               aria-label="Messagerie"
               title="Messagerie"
             >
-              <span aria-hidden="true">{"\u{1F4AC}"}</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
+              >
+                <path d="M7 10h10M7 14h6" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M21 11.5c0 5-4 8.5-9 8.5-1.5 0-3-.3-4.2-.9L3 20l1.1-3.8C3.4 14.8 3 13.2 3 11.5 3 6.5 7 3 12 3s9 3.5 9 8.5Z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               {inboxCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
                   {inboxCount > 99 ? "99+" : inboxCount}
@@ -240,17 +245,63 @@ export default async function HomePage({
           <div className="rounded-2xl border border-white/10 bg-zinc-950/60 px-3 py-1.5 text-xs text-zinc-300">
             Categories
           </div>
-          <div className="mt-2.5 grid gap-1.5 text-xs text-zinc-200">
-            {sidebarCategories.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-emerald-300/60"
-              >
-                <span>{item.label}</span>
-                <span className="text-zinc-500">&gt;</span>
-              </Link>
-            ))}
+          <div className="mt-2.5 space-y-1.5">
+            {orderedSidebarRoots.map((root) => {
+              const isActiveRoot =
+                category === root.slug ||
+                root.children.some((child) => child.slug === category);
+
+              if (root.children.length === 0) {
+                return (
+                  <Link
+                    key={root.id}
+                    href={`/shop?category=${root.slug}`}
+                    className={`block rounded-lg px-2.5 py-1 text-[11px] transition ${
+                      isActiveRoot
+                        ? "bg-emerald-300/10 text-emerald-100"
+                        : "text-zinc-200 hover:bg-zinc-950/40 hover:text-white"
+                    }`}
+                  >
+                    <span className="truncate">{root.name}</span>
+                  </Link>
+                );
+              }
+
+              return (
+                <details key={root.id} className="border-b border-white/10 pb-1">
+                  <summary
+                    className={`flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] transition marker:content-[''] ${
+                      isActiveRoot
+                        ? "text-emerald-100"
+                        : "text-zinc-200 hover:bg-zinc-950/40 hover:text-white"
+                    }`}
+                  >
+                    <Link
+                      href={`/shop?category=${root.slug}`}
+                      className="min-w-0 flex-1 truncate underline-offset-2 hover:underline"
+                    >
+                      {root.name}
+                    </Link>
+                    <span className="shrink-0 text-[10px] text-zinc-500">v</span>
+                  </summary>
+                  <div className="mt-1 space-y-1 pl-3">
+                    {root.children.map((child) => (
+                      <Link
+                        key={child.id}
+                        href={`/shop?category=${child.slug}`}
+                        className={`block rounded-md px-2 py-1 text-[10px] transition ${
+                          category === child.slug
+                            ? "bg-emerald-300/10 text-emerald-100"
+                            : "text-zinc-300 hover:bg-zinc-950/40 hover:text-white"
+                        }`}
+                      >
+                        {child.name}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
           <Link
             href="/shop"
@@ -296,19 +347,6 @@ export default async function HomePage({
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
             {displayedProducts.map((product) => {
               const boosted = isBoosted(product);
-              const ratingSnapshot = productRatingMap.get(product.id);
-              const productRatingLabel =
-                ratingSnapshot && ratingSnapshot.count > 0
-                  ? `${ratingSnapshot.average.toFixed(1)} (${ratingSnapshot.count})`
-                  : locale === "fr"
-                  ? "Nouveau"
-                  : "New";
-              const sellerRatingLabel =
-                typeof product.seller?.rating === "number"
-                  ? product.seller.rating.toFixed(1)
-                  : locale === "fr"
-                  ? "Nouveau"
-                  : "New";
               return (
               <Link
                 key={product.id}
@@ -366,10 +404,7 @@ export default async function HomePage({
                     {formatMoney(product.priceCents, product.currency, locale)}
                   </p>
                 )}
-                <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
-                  <span>{locale === "fr" ? "Produit" : "Product"}: * {productRatingLabel}</span>
-                  <span>{locale === "fr" ? "Vendeur" : "Seller"}: * {sellerRatingLabel}</span>
-                </div>
+
               </Link>
             )})}
           </div>
@@ -379,13 +414,6 @@ export default async function HomePage({
     </div>
   );
 }
-
-
-
-
-
-
-
 
 
 

@@ -46,7 +46,9 @@ export default function SearchBar({
       onSubmit={onSubmit}
       className="flex w-full items-center gap-1.5 rounded-full border border-white/10 bg-gradient-to-r from-zinc-950/70 via-zinc-950/60 to-zinc-950/70 px-2 py-1 text-xs text-zinc-300 shadow-[0_10px_30px_rgba(0,0,0,0.2)]"
     >
-      <span className="text-zinc-500">🔎</span>
+      <span className="text-zinc-500" aria-hidden="true">
+        {"\u{1F50E}"}
+      </span>
       <input
         list="search-suggestions"
         value={query}
@@ -63,7 +65,7 @@ export default function SearchBar({
         <select
           value={category}
           onChange={(event) => setCategory(event.target.value)}
-          className="rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
+          className="w-[112px] rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
         >
           <option value="">Categories</option>
           {categories.map((cat) => (
@@ -75,11 +77,12 @@ export default function SearchBar({
         <select
           value={sort}
           onChange={(event) => setSort(event.target.value)}
-          className="rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
+          className="w-[96px] rounded-full border border-white/10 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-200"
         >
           <option value="recent">Recents</option>
           <option value="price_asc">Prix croissant</option>
           <option value="price_desc">Prix decroissant</option>
+          <option value="top_rated">Mieux notes</option>
         </select>
         <button
           type="button"
@@ -93,7 +96,7 @@ export default function SearchBar({
           aria-label="Effacer"
           title="Effacer"
         >
-          🗑️
+          {"\u{1F5D1}\u{FE0F}"}
         </button>
       </div>
       <button
@@ -101,7 +104,7 @@ export default function SearchBar({
         className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-[10px] font-semibold leading-none text-zinc-950"
         aria-label="Rechercher"
       >
-        🔍
+        {"\u{1F50D}"}
       </button>
     </form>
   );

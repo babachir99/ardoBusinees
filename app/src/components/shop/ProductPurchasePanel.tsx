@@ -24,6 +24,8 @@ type ProductPurchasePanelProps = {
   addedLabel: string;
   showColorOptions: boolean;
   showSizeOptions: boolean;
+  colorOptions?: string[];
+  sizeOptions?: string[];
 };
 
 export default function ProductPurchasePanel({
@@ -41,6 +43,8 @@ export default function ProductPurchasePanel({
   addedLabel,
   showColorOptions,
   showSizeOptions,
+  colorOptions,
+  sizeOptions,
 }: ProductPurchasePanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -48,18 +52,51 @@ export default function ProductPurchasePanel({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
 
-  const colorOptions = useMemo(
-    () =>
-      locale === "fr"
-        ? ["Noir", "Blanc", "Bleu", "Rouge", "Vert"]
-        : ["Black", "White", "Blue", "Red", "Green"],
-    [locale]
-  );
+  const resolvedColorOptions = useMemo(() => {
+    const normalized = (colorOptions ?? [])
+      .map((value) => String(value).trim())
+      .filter((value) => value.length > 0)
+      .slice(0, 20);
 
-  const sizeOptions = useMemo(() => ["S", "M", "L", "XL", "XXL"], []);
+    if (normalized.length > 0) return normalized;
+    if (!showColorOptions) return [];
 
-  const [selectedColor, setSelectedColor] = useState(colorOptions[0] ?? "");
-  const [selectedSize, setSelectedSize] = useState(sizeOptions[2] ?? sizeOptions[0] ?? "");
+    return locale === "fr"
+      ? ["Noir", "Blanc", "Bleu", "Rouge", "Vert"]
+      : ["Black", "White", "Blue", "Red", "Green"];
+  }, [colorOptions, locale, showColorOptions]);
+
+  const resolvedSizeOptions = useMemo(() => {
+    const normalized = (sizeOptions ?? [])
+      .map((value) => String(value).trim().toUpperCase())
+      .filter((value) => value.length > 0)
+      .slice(0, 20);
+
+    if (normalized.length > 0) return normalized;
+    if (!showSizeOptions) return [];
+
+    return ["S", "M", "L", "XL", "XXL"];
+  }, [showSizeOptions, sizeOptions]);
+
+  const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
+
+
+  useEffect(() => {
+    setSelectedColor((current) =>
+      resolvedColorOptions.includes(current)
+        ? current
+        : (resolvedColorOptions[0] ?? "")
+    );
+  }, [resolvedColorOptions]);
+
+  useEffect(() => {
+    setSelectedSize((current) =>
+      resolvedSizeOptions.includes(current)
+        ? current
+        : (resolvedSizeOptions[0] ?? "")
+    );
+  }, [resolvedSizeOptions]);
 
   const safeImages = images.filter((image) => Boolean(image.url));
   const hasImages = safeImages.length > 0;
@@ -257,7 +294,7 @@ export default function ProductPurchasePanel({
                   onChange={(e) => setSelectedColor(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 >
-                  {colorOptions.map((color) => (
+                  {resolvedColorOptions.map((color) => (
                     <option key={color} value={color}>
                       {color}
                     </option>
@@ -276,7 +313,7 @@ export default function ProductPurchasePanel({
                   onChange={(e) => setSelectedSize(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 >
-                  {sizeOptions.map((size) => (
+                  {resolvedSizeOptions.map((size) => (
                     <option key={size} value={size}>
                       {size}
                     </option>
@@ -285,7 +322,7 @@ export default function ProductPurchasePanel({
               </div>
             )}
 
-            {(showColorOptions || showSizeOptions) && (
+            {((showColorOptions && Boolean(selectedColor)) || (showSizeOptions && Boolean(selectedSize))) && (
               <div className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
                 {showColorOptions && <span>{locale === "fr" ? "Couleur" : "Color"}: {selectedColor}</span>}
                 {showColorOptions && showSizeOptions && <span className="px-2 text-zinc-500">-</span>}
@@ -303,8 +340,8 @@ export default function ProductPurchasePanel({
                 type={type}
                 sellerName={sellerName}
                 quantity={quantity}
-                optionColor={showColorOptions ? selectedColor : undefined}
-                optionSize={showSizeOptions ? selectedSize : undefined}
+                optionColor={showColorOptions ? selectedColor || undefined : undefined}
+                optionSize={showSizeOptions ? selectedSize || undefined : undefined}
                 maxQuantity={maxSelectableQuantity}
                 label={addLabel}
                 addedLabel={addedLabel}
