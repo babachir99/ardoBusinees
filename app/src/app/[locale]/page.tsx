@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,7 @@ import SearchBar from "@/components/search/SearchBar";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignOutIconButton from "@/components/auth/SignOutIconButton";
+import { getInboxUnreadCount } from "@/lib/inboxCount";
 
 const sidebarCategories = [
   { label: "JONTAADO IMMO", href: "/stores/jontaado-immo" },
@@ -45,31 +46,10 @@ export default async function HomePage({
   ]);
   const session = await getServerSession(authOptions);
   const t = await getTranslations("Home");
-  const query = q?.trim();  const sellerProfile = session?.user?.id
-    ? await prisma.sellerProfile.findUnique({
-        where: { userId: session.user.id },
-        select: { id: true },
-      })
-    : null;
-
-  const inquiryWhere: Prisma.ProductInquiryWhereInput | null = session?.user?.id
-    ? {
-        OR: [
-          { buyerId: session.user.id },
-          ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : []),
-        ],
-      }
-    : null;
-
-  const inboxCount = inquiryWhere
-    ? await prisma.productInquiry.count({
-        where: {
-          ...inquiryWhere,
-          status: "OPEN",
-        },
-      })
+  const query = q?.trim();
+  const inboxCount = session?.user?.id
+    ? await getInboxUnreadCount(session.user.id)
     : 0;
-
 
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
@@ -107,7 +87,7 @@ export default async function HomePage({
     orderBy,
     take: 24,
     include: {
-      seller: { select: { displayName: true } },
+      seller: { select: { displayName: true, rating: true } },
       images: { orderBy: { position: "asc" }, take: 1 },
     },
   });
@@ -125,6 +105,29 @@ export default async function HomePage({
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
   const displayedProducts = sortedProducts.slice(0, 12);
+
+  const productRatingMap = new Map<string, { average: number; count: number }>();
+  const reviewDelegate = (prisma as any).productReview as
+    | {
+        groupBy: (args: any) => Promise<Array<{ productId: string; _avg: { rating: number | null }; _count: { _all: number } }>>;
+      }
+    | undefined;
+
+  if (reviewDelegate && displayedProducts.length > 0) {
+    const ratingStats = await reviewDelegate.groupBy({
+      by: ["productId"],
+      where: { productId: { in: displayedProducts.map((product) => product.id) } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    for (const stat of ratingStats) {
+      productRatingMap.set(stat.productId, {
+        average: stat._avg.rating ?? 0,
+        count: stat._count._all,
+      });
+    }
+  }
 
   const [stores, categories, suggestions, sellerHints, storeHints] =
     await Promise.all([
@@ -194,6 +197,21 @@ export default async function HomePage({
           <Link href="/seller" className="text-zinc-300 hover:text-white">
             Vendre
           </Link>
+          {session && (
+            <Link
+              href="/messages"
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50"
+              aria-label="Messagerie"
+              title="Messagerie"
+            >
+              <span aria-hidden="true">{"\u{1F4AC}"}</span>
+              {inboxCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
+                  {inboxCount > 99 ? "99+" : inboxCount}
+                </span>
+              )}
+            </Link>
+          )}
           <Link
             href={session ? "/profile" : "/login"}
             className="flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
@@ -230,7 +248,7 @@ export default async function HomePage({
                 className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-emerald-300/60"
               >
                 <span>{item.label}</span>
-                <span className="text-zinc-500">Ã¢â‚¬Âº</span>
+                <span className="text-zinc-500">&gt;</span>
               </Link>
             ))}
           </div>
@@ -266,7 +284,7 @@ export default async function HomePage({
 
           <div className="fade-up">
             <h2 className="text-2xl font-semibold">
-              {query ? `Resultats pour "${query}"` : "Produits disponibles Ã°Å¸â€Â¥"}
+              {query ? `Resultats pour "${query}"` : "Produits disponibles"}
             </h2>
             <p className="mt-2 text-sm text-zinc-300">
               {query
@@ -278,6 +296,19 @@ export default async function HomePage({
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
             {displayedProducts.map((product) => {
               const boosted = isBoosted(product);
+              const ratingSnapshot = productRatingMap.get(product.id);
+              const productRatingLabel =
+                ratingSnapshot && ratingSnapshot.count > 0
+                  ? `${ratingSnapshot.average.toFixed(1)} (${ratingSnapshot.count})`
+                  : locale === "fr"
+                  ? "Nouveau"
+                  : "New";
+              const sellerRatingLabel =
+                typeof product.seller?.rating === "number"
+                  ? product.seller.rating.toFixed(1)
+                  : locale === "fr"
+                  ? "Nouveau"
+                  : "New";
               return (
               <Link
                 key={product.id}
@@ -335,6 +366,10 @@ export default async function HomePage({
                     {formatMoney(product.priceCents, product.currency, locale)}
                   </p>
                 )}
+                <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+                  <span>{locale === "fr" ? "Produit" : "Product"}: * {productRatingLabel}</span>
+                  <span>{locale === "fr" ? "Vendeur" : "Seller"}: * {sellerRatingLabel}</span>
+                </div>
               </Link>
             )})}
           </div>
@@ -344,6 +379,13 @@ export default async function HomePage({
     </div>
   );
 }
+
+
+
+
+
+
+
 
 
 

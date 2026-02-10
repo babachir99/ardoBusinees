@@ -509,14 +509,16 @@ model KycSubmission {
 }
 
 model ProductInquiry {
-  id            String        @id @default(cuid())
-  productId     String
-  buyerId       String
-  sellerId      String
-  status        InquiryStatus @default(OPEN)
-  lastMessageAt DateTime      @default(now())
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               String         @id @default(cuid())
+  productId        String
+  buyerId          String
+  sellerId         String
+  status           InquiryStatus  @default(OPEN)
+  lastMessageAt    DateTime       @default(now())
+  buyerLastReadAt  DateTime?
+  sellerLastReadAt DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   product  Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   buyer    User                    @relation("InquiryBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
@@ -567,3 +569,5 @@ model ProductOffer {
   @@index([sellerId, status, createdAt])
   @@index([buyerId, status, createdAt])
 }
+
+

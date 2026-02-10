@@ -16,17 +16,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const payment = await prisma.payment.create({
-    data: {
-      orderId: order.id,
-      provider: "paydunya_mock",
-      amountCents: order.totalCents,
-      currency: order.currency,
-      status: "PAID",
-      method: order.paymentMethod ?? undefined,
-      splitMeta: { mode: "mock" },
-    },
+  const existingPayment = await prisma.payment.findUnique({
+    where: { orderId: order.id },
   });
+
+  const payment = existingPayment
+    ? await prisma.payment.update({
+        where: { orderId: order.id },
+        data: {
+          status: "PAID",
+          method: order.paymentMethod ?? undefined,
+        },
+      })
+    : await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: "paydunya_mock",
+          amountCents: order.totalCents,
+          currency: order.currency,
+          status: "PAID",
+          method: order.paymentMethod ?? undefined,
+          splitMeta: { mode: "mock" },
+        },
+      });
 
   await prisma.order.update({
     where: { id: order.id },

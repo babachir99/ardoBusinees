@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
 
 export async function GET(
   _request: NextRequest,
@@ -77,6 +78,16 @@ export async function GET(
     },
   });
 
+  if (inquiry) {
+    const readUpdate = getInquiryReadTrackingUpdate("buyer", new Date());
+    if (Object.keys(readUpdate).length > 0) {
+      await prisma.productInquiry.update({
+        where: { id: inquiry.id },
+        data: readUpdate,
+      });
+    }
+  }
+
   return NextResponse.json({
     isSellerOwner: false,
     productId: product.id,
@@ -110,3 +121,5 @@ export async function GET(
       })) ?? [],
   });
 }
+
+

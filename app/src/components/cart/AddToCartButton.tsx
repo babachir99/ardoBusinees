@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useCart } from "./CartProvider";
@@ -14,6 +14,7 @@ type AddToCartButtonProps = {
   quantity?: number;
   optionColor?: string;
   optionSize?: string;
+  maxQuantity?: number;
   label: string;
   addedLabel?: string;
   className?: string;
@@ -30,6 +31,7 @@ export default function AddToCartButton({
   quantity = 1,
   optionColor,
   optionSize,
+  maxQuantity,
   label,
   addedLabel = "Added",
   className = "rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950",
@@ -49,6 +51,7 @@ export default function AddToCartButton({
         sellerName,
         optionColor,
         optionSize,
+        maxQuantity,
       },
       quantity
     );

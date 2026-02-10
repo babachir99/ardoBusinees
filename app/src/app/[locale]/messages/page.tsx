@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
@@ -8,16 +8,21 @@ import type { Prisma } from "@prisma/client";
 
 export default async function MessagesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ status?: string }>;
 }) {
-  const { locale } = await params;
+  const [{ locale }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const isFr = locale === "fr";
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     redirect(`/${locale}/login`);
   }
+
+  const statusParam = String(resolvedSearchParams?.status ?? "all").toLowerCase();
+  const statusFilter = statusParam === "open" || statusParam === "closed" ? statusParam : "all";
 
   const sellerProfile = await prisma.sellerProfile.findUnique({
     where: { userId: session.user.id },
@@ -29,6 +34,11 @@ export default async function MessagesPage({
       { buyerId: session.user.id },
       ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : []),
     ],
+    ...(statusFilter === "all"
+      ? {}
+      : {
+          status: statusFilter === "open" ? "OPEN" : "CLOSED",
+        }),
   };
 
   const inquiries = await prisma.productInquiry.findMany({
@@ -52,7 +62,17 @@ export default async function MessagesPage({
         select: { id: true, name: true, email: true },
       },
       seller: {
-        select: { id: true, displayName: true },
+        select: { id: true, displayName: true, userId: true },
+      },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          body: true,
+          senderId: true,
+          createdAt: true,
+        },
       },
       _count: {
         select: {
@@ -62,6 +82,35 @@ export default async function MessagesPage({
       },
     },
   });
+
+  const unreadByInquiryId = new Map<string, boolean>();
+
+  for (const inquiry of inquiries) {
+    const lastMessage = inquiry.messages[0];
+    if (!lastMessage || lastMessage.senderId === session.user.id) {
+      unreadByInquiryId.set(inquiry.id, false);
+      continue;
+    }
+
+    const isBuyer = inquiry.buyerId === session.user.id;
+    const isSeller = inquiry.seller?.userId === session.user.id;
+    const lastReadAt = isBuyer
+      ? inquiry.buyerLastReadAt
+      : isSeller
+      ? inquiry.sellerLastReadAt
+      : null;
+
+    const unread = !lastReadAt || lastMessage.createdAt.getTime() > new Date(lastReadAt).getTime();
+    unreadByInquiryId.set(inquiry.id, unread);
+  }
+
+  const unreadCount = Array.from(unreadByInquiryId.values()).filter(Boolean).length;
+
+  const filters = [
+    { key: "all", label: isFr ? "Toutes" : "All" },
+    { key: "open", label: isFr ? "Ouvertes" : "Open" },
+    { key: "closed", label: isFr ? "Fermees" : "Closed" },
+  ] as const;
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -76,17 +125,38 @@ export default async function MessagesPage({
             </h1>
             <p className="mt-2 text-sm text-zinc-400">
               {isFr
-                ? "Ouvre une fiche produit puis clique sur Contacter le vendeur pour continuer l'echange."
-                : "Open a product page and click Contact seller to continue the conversation."}
+                ? `Discussions actives: ${inquiries.length} · Non lus: ${unreadCount}`
+                : `Active threads: ${inquiries.length} · Unread: ${unreadCount}`}
             </p>
           </div>
 
-          <Link
-            href="/"
-            className="rounded-full border border-white/20 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/40"
-          >
-            {isFr ? "Retour accueil" : "Back home"}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="rounded-full border border-white/20 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+            >
+              {isFr ? "Retour accueil" : "Back home"}
+            </Link>
+          </div>
+        </div>
+
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {filters.map((filter) => {
+            const active = statusFilter === filter.key;
+            return (
+              <Link
+                key={filter.key}
+                href={filter.key === "all" ? "/messages" : `/messages?status=${filter.key}`}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  active
+                    ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-200"
+                    : "border-white/15 bg-zinc-900/70 text-zinc-300 hover:border-white/40"
+                }`}
+              >
+                {filter.label}
+              </Link>
+            );
+          })}
         </div>
 
         {inquiries.length === 0 ? (
@@ -96,16 +166,23 @@ export default async function MessagesPage({
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {inquiries.map((item) => {
-              const iamBuyer = item.buyerId === session.user.id;
-              const counterpart = iamBuyer
+              const iAmBuyer = item.buyerId === session.user.id;
+              const counterpart = iAmBuyer
                 ? item.seller?.displayName || (isFr ? "Vendeur" : "Seller")
                 : item.buyer?.name || item.buyer?.email || (isFr ? "Client" : "Customer");
+
+              const lastMessage = item.messages[0];
+              const unread = unreadByInquiryId.get(item.id) ?? false;
 
               return (
                 <Link
                   key={item.id}
-                  href={`/shop/${item.product.slug}`}
-                  className="rounded-3xl border border-white/10 bg-zinc-900/70 p-4 transition hover:border-emerald-300/50"
+                  href={`/messages/${item.id}`}
+                  className={`rounded-3xl border bg-zinc-900/70 p-4 transition ${
+                    unread
+                      ? "border-emerald-300/50 shadow-[0_0_24px_rgba(16,185,129,0.08)]"
+                      : "border-white/10 hover:border-emerald-300/50"
+                  }`}
                 >
                   <div className="flex gap-4">
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
@@ -115,14 +192,31 @@ export default async function MessagesPage({
                           alt={item.product.images[0].alt ?? item.product.title}
                           className="h-full w-full object-cover"
                         />
-                      ) : null}
+                      ) : (
+                        <div className="grid h-full w-full place-items-center text-[10px] text-zinc-600">
+                          {isFr ? "Pas d'image" : "No image"}
+                        </div>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">{item.product.title}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-sm font-semibold text-white">{item.product.title}</p>
+                        {unread && (
+                          <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
+                            {isFr ? "Nouveau" : "New"}
+                          </span>
+                        )}
+                      </div>
+
                       <p className="mt-1 text-xs text-zinc-400">
                         {isFr ? "Avec" : "With"}: {counterpart}
                       </p>
+
+                      <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-zinc-200" : "text-zinc-500"}`}>
+                        {lastMessage?.body || (isFr ? "Aucun message pour le moment." : "No messages yet.")}
+                      </p>
+
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
                         <span className="rounded-full border border-white/10 px-2 py-0.5">
                           {isFr ? "Messages" : "Messages"}: {item._count.messages}
@@ -140,6 +234,7 @@ export default async function MessagesPage({
                             : "Closed"}
                         </span>
                       </div>
+
                       <p className="mt-2 text-[11px] text-zinc-500">
                         {new Date(item.lastMessageAt).toLocaleString(locale)}
                       </p>

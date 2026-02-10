@@ -18,6 +18,7 @@ type ProductPurchasePanelProps = {
   currency: string;
   type: "PREORDER" | "DROPSHIP" | "LOCAL";
   sellerName?: string;
+  stockQuantity?: number | null;
   images: ProductImage[];
   addLabel: string;
   addedLabel: string;
@@ -34,6 +35,7 @@ export default function ProductPurchasePanel({
   currency,
   type,
   sellerName,
+  stockQuantity,
   images,
   addLabel,
   addedLabel,
@@ -61,6 +63,12 @@ export default function ProductPurchasePanel({
 
   const safeImages = images.filter((image) => Boolean(image.url));
   const hasImages = safeImages.length > 0;
+
+  const stockLimit =
+    type === "LOCAL" && Number.isFinite(stockQuantity) && Number(stockQuantity) > 0
+      ? Math.floor(Number(stockQuantity))
+      : undefined;
+  const maxSelectableQuantity = stockLimit ?? 99;
 
   useEffect(() => {
     if (safeImages.length === 0) {
@@ -104,7 +112,7 @@ export default function ProductPurchasePanel({
   }, [isLightboxOpen, safeImages.length]);
 
   const currentImage = hasImages ? safeImages[activeIndex] : null;
-  const favoriteAddLabel = locale === "fr" ? "Favoris" : "Favorites";
+  const favoriteAddLabel = locale === "fr" ? "Ajouter aux favoris" : "Add to favorites";
   const favoriteRemoveLabel = locale === "fr" ? "Retirer des favoris" : "Remove from favorites";
 
   const nextImage = () => {
@@ -137,10 +145,10 @@ export default function ProductPurchasePanel({
 
   return (
     <>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_0.9fr]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
           <div
-            className="relative flex h-80 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900"
+            className="relative flex h-[360px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
@@ -225,12 +233,18 @@ export default function ProductPurchasePanel({
                 <span className="min-w-[28px] text-center text-sm font-semibold">{quantity}</span>
                 <button
                   type="button"
-                  onClick={() => setQuantity((q) => Math.min(99, q + 1))}
-                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
+                  onClick={() => setQuantity((q) => Math.min(maxSelectableQuantity, q + 1))}
+                  disabled={quantity >= maxSelectableQuantity}
+                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   +
                 </button>
               </div>
+              {stockLimit && (
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  {locale === "fr" ? `Stock max: ${stockLimit}` : `Max stock: ${stockLimit}`}
+                </p>
+              )}
             </div>
 
             {showColorOptions && (
@@ -279,7 +293,7 @@ export default function ProductPurchasePanel({
               </div>
             )}
 
-            <div id="purchase-actions" className="mt-1 grid gap-3 sm:grid-cols-2">
+            <div id="purchase-actions" className="mt-1 grid gap-3">
               <AddToCartButton
                 id={productId}
                 slug={slug}
@@ -291,16 +305,17 @@ export default function ProductPurchasePanel({
                 quantity={quantity}
                 optionColor={showColorOptions ? selectedColor : undefined}
                 optionSize={showSizeOptions ? selectedSize : undefined}
+                maxQuantity={maxSelectableQuantity}
                 label={addLabel}
                 addedLabel={addedLabel}
-                className="w-full rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-zinc-950"
+                className="w-full whitespace-nowrap rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-zinc-950"
               />
 
               <FavoriteButton
                 productId={productId}
                 addLabel={favoriteAddLabel}
                 removeLabel={favoriteRemoveLabel}
-                className="w-full rounded-xl border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-100"
+                className="w-full whitespace-nowrap rounded-xl border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-100"
               />
             </div>
           </div>

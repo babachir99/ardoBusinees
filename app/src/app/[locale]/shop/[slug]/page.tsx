@@ -1,10 +1,9 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import CartBadge from "@/components/cart/CartBadge";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { getTranslations } from "next-intl/server";
-import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -12,6 +11,7 @@ import { slugify } from "@/lib/slug";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
+import { getInboxUnreadCount } from "@/lib/inboxCount";
 
 type RelatedProductCard = {
   id: string;
@@ -21,16 +21,22 @@ type RelatedProductCard = {
   discountPercent: number | null;
   currency: string;
   images: { url: string; alt: string | null }[];
-  seller: { displayName: string } | null;
+  seller: { displayName: string; rating?: number | null } | null;
 };
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; slug: string }>;
+  searchParams: Promise<{ chat?: string }>;
 }) {
   const { locale, slug } = await params;
+  const resolvedSearchParams = await searchParams;
+  const openChatDefault =
+    resolvedSearchParams?.chat === "1" || resolvedSearchParams?.chat === "true";
   const session = await getServerSession(authOptions);
+  const inboxCount = session?.user?.id ? await getInboxUnreadCount(session.user.id) : 0;
   const t = await getTranslations("Product");
   const normalizedSlug = slugify(slug);
   const slugCandidates =
@@ -61,7 +67,7 @@ export default async function ProductPage({
   }
 
   if (product.slug !== slug) {
-    redirect(`/${locale}/shop/${product.slug}`);
+    redirect(`/${locale}/shop/${product.slug}${openChatDefault ? "?chat=1" : ""}`);
   }
 
   const sellerProductsCount = await prisma.product.count({
@@ -110,7 +116,7 @@ export default async function ProductPage({
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { position: "asc" }, take: 1 },
-      seller: { select: { displayName: true } },
+      seller: { select: { displayName: true, rating: true } },
     },
     take: 8,
   });
@@ -124,7 +130,7 @@ export default async function ProductPage({
     orderBy: { createdAt: "desc" },
     include: {
       images: { orderBy: { position: "asc" }, take: 1 },
-      seller: { select: { displayName: true } },
+      seller: { select: { displayName: true, rating: true } },
     },
     take: 12,
   });
@@ -198,6 +204,7 @@ export default async function ProductPage({
     | {
         aggregate: (args: any) => Promise<{ _avg: { rating: number | null }; _count: { _all: number } }>;
         findMany: (args: any) => Promise<any[]>;
+        groupBy: (args: any) => Promise<Array<{ productId: string; _avg: { rating: number | null }; _count: { _all: number } }>>;
       }
     | undefined;
 
@@ -259,6 +266,26 @@ export default async function ProductPage({
     canReview = Boolean(session?.user?.id && paidOrderItem && !isSellerOwner);
   }
 
+  const relatedProductIds = Array.from(
+    new Set([...similarProducts, ...bundleProducts].map((item) => item.id))
+  );
+  const relatedRatingMap = new Map<string, { average: number; count: number }>();
+
+  if (reviewDelegate && relatedProductIds.length > 0) {
+    const relatedRatingStats = await reviewDelegate.groupBy({
+      by: ["productId"],
+      where: { productId: { in: relatedProductIds } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    for (const stat of relatedRatingStats) {
+      relatedRatingMap.set(stat.productId, {
+        average: stat._avg.rating ?? 0,
+        count: stat._count._all,
+      });
+    }
+  }
   const renderProductCard = (item: RelatedProductCard) => (
     <Link
       key={item.id}
@@ -287,6 +314,19 @@ export default async function ProductPage({
           locale
         )}
       </p>
+      <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-400">
+        <span>
+          {(() => {
+            const rating = relatedRatingMap.get(item.id);
+            return rating && rating.count > 0
+              ? `${locale === "fr" ? "Produit" : "Product"}: * ${rating.average.toFixed(1)} (${rating.count})`
+              : `${locale === "fr" ? "Produit" : "Product"}: ${locale === "fr" ? "Nouveau" : "New"}`;
+          })()}
+        </span>
+        <span>
+          {locale === "fr" ? "Vendeur" : "Seller"}: * {typeof item.seller?.rating === "number" ? item.seller.rating.toFixed(1) : locale === "fr" ? "Nouveau" : "New"}
+        </span>
+      </div>
     </Link>
   );
 
@@ -294,13 +334,10 @@ export default async function ProductPage({
     <div className="min-h-screen bg-jonta text-zinc-100">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
         <Link href="/" className="flex items-center gap-3">
-          <Image
+          <img
             src="/logo.png"
             alt="JONTAADO logo"
-            width={140}
-            height={140}
             className="h-[115px] w-auto md:h-[135px]"
-            priority
           />
         </Link>
         <div className="flex items-center gap-3">
@@ -310,6 +347,21 @@ export default async function ProductPage({
               className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
             >
               Admin
+            </Link>
+          )}
+          {session && (
+            <Link
+              href="/messages"
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50"
+              aria-label={locale === "fr" ? "Messagerie" : "Messages"}
+              title={locale === "fr" ? "Messagerie" : "Messages"}
+            >
+              <span aria-hidden="true">{"\u{1F4AC}"}</span>
+              {inboxCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
+                  {inboxCount > 99 ? "99+" : inboxCount}
+                </span>
+              )}
             </Link>
           )}
           <Link
@@ -355,12 +407,12 @@ export default async function ProductPage({
             )}
             {isHotDemand && (
               <span className="rounded-full bg-orange-400/20 px-3 py-1 text-orange-200">
-                {locale === "fr" ? "ðŸ”¥ Tres demande" : "ðŸ”¥ In demand"}
+                {locale === "fr" ? "Tres demande" : "In demand"}
               </span>
             )}
             {isLowStock && (
               <span className="rounded-full bg-rose-400/20 px-3 py-1 text-rose-200">
-                {locale === "fr" ? "â³ Bientot fini" : "â³ Almost sold out"}
+                {locale === "fr" ? "Bientot fini" : "Almost sold out"}
               </span>
             )}
           </div>
@@ -377,6 +429,7 @@ export default async function ProductPage({
             currency={product.currency}
             type={product.type}
             sellerName={product.seller?.displayName ?? undefined}
+            stockQuantity={product.stockQuantity}
             images={product.images}
             addLabel={t("cta.add")}
             addedLabel={t("cta.added")}
@@ -417,7 +470,7 @@ export default async function ProductPage({
             <div className="flex items-center justify-between">
               <span>{locale === "fr" ? "Avis vendeur" : "Seller rating"}</span>
               <span className="text-emerald-200">
-                â˜… {sellerScore.toFixed(1)} <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
+                * {sellerScore.toFixed(1)} <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
               </span>
             </div>
 
@@ -425,8 +478,8 @@ export default async function ProductPage({
               <span>{locale === "fr" ? "Tendance" : "Demand"}</span>
               <span className="text-zinc-200">
                 {locale === "fr"
-                  ? `${recentSalesCount} ventes / 14j Â· ${favoritesCount} favoris`
-                  : `${recentSalesCount} sales / 14d Â· ${favoritesCount} favorites`}
+                  ? `${recentSalesCount} ventes / 14j - ${favoritesCount} favoris`
+                  : `${recentSalesCount} sales / 14d - ${favoritesCount} favorites`}
               </span>
             </div>
 
@@ -456,6 +509,7 @@ export default async function ProductPage({
           buyHref="#purchase-actions"
           isAuthenticated={Boolean(session?.user)}
           isSellerOwner={Boolean(isSellerOwner)}
+          openChatDefault={openChatDefault}
         />
       </main>
       <ProductReviewsPanel
@@ -505,6 +559,12 @@ export default async function ProductPage({
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -46,65 +46,77 @@ export default function CartView() {
         </div>
 
         <div className="mt-6 grid gap-4">
-          {items.map((item) => (
-            <div
-              key={item.lineId}
-              className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-zinc-950/60 p-5 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="text-sm font-semibold">{item.title}</p>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {item.type === "PREORDER"
-                    ? t("labels.preorder")
-                    : item.type === "LOCAL"
-                    ? locale === "fr"
-                      ? "Local"
-                      : "Local"
-                    : t("labels.dropship")}
-                </p>
-                {(item.optionColor || item.optionSize) && (
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {item.optionColor
-                      ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
-                      : ""}
-                    {item.optionColor && item.optionSize ? " � " : ""}
-                    {item.optionSize
-                      ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
-                      : ""}
+          {items.map((item) => {
+            const reachedMax = Boolean(item.maxQuantity && item.quantity >= item.maxQuantity);
+
+            return (
+              <div
+                key={item.lineId}
+                className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-zinc-950/60 p-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{item.title}</p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {item.type === "PREORDER"
+                      ? t("labels.preorder")
+                      : item.type === "LOCAL"
+                      ? locale === "fr"
+                        ? "Local"
+                        : "Local"
+                      : t("labels.dropship")}
                   </p>
-                )}
+                  {(item.optionColor || item.optionSize || item.maxQuantity) && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {item.optionColor
+                        ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
+                        : ""}
+                      {item.optionColor && item.optionSize ? " - " : ""}
+                      {item.optionSize
+                        ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
+                        : ""}
+                      {item.maxQuantity
+                        ? `${item.optionColor || item.optionSize ? " - " : ""}${
+                            locale === "fr" ? "Stock max" : "Max stock"
+                          }: ${item.maxQuantity}`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 text-xs text-zinc-300">
+                  <button
+                    type="button"
+                    onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                    className="rounded-full border border-white/15 px-3 py-1"
+                  >
+                    -
+                  </button>
+                  <span className="min-w-[24px] text-center">{item.quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
+                    disabled={reachedMax}
+                    className="rounded-full border border-white/15 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                  <span className="text-sm font-semibold text-emerald-200">
+                    {formatMoney(item.priceCents, item.currency, locale)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.lineId)}
+                    className="text-xs text-zinc-400 underline decoration-white/20"
+                  >
+                    {t("remove")}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-zinc-300">
-                <button
-                  type="button"
-                  onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
-                  className="rounded-full border border-white/15 px-3 py-1"
-                >
-                  -
-                </button>
-                <span className="min-w-[24px] text-center">{item.quantity}</span>
-                <button
-                  type="button"
-                  onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
-                  className="rounded-full border border-white/15 px-3 py-1"
-                >
-                  +
-                </button>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-zinc-400">
-                <span className="text-sm font-semibold text-emerald-200">
-                  {formatMoney(item.priceCents, item.currency, locale)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeItem(item.lineId)}
-                  className="text-xs text-zinc-400 underline decoration-white/20"
-                >
-                  {t("remove")}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

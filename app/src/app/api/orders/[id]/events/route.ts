@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus, PaymentStatus } from "@prisma/client";
 
 const allowedStatuses = new Set([
   "PENDING",
@@ -37,7 +37,21 @@ export async function POST(
 
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, sellerId: true, userId: true },
+    select: {
+      id: true,
+      sellerId: true,
+      userId: true,
+      status: true,
+      paymentMethod: true,
+      paymentStatus: true,
+      items: {
+        select: {
+          productId: true,
+          quantity: true,
+          type: true,
+        },
+      },
+    },
   });
 
   if (!order) {
@@ -54,18 +68,66 @@ export async function POST(
     }
   }
 
-  const event = await prisma.orderEvent.create({
-    data: {
-      orderId: order.id,
-      status: typedStatus,
-      note: body.note ?? undefined,
-      proofUrl: body.proofUrl ?? undefined,
-    },
-  });
+  const wasFinalState = order.status === "CANCELED" || order.status === "REFUNDED";
+  const isFinalState = typedStatus === "CANCELED" || typedStatus === "REFUNDED";
+  const shouldRestock = isFinalState && !wasFinalState;
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { status: typedStatus },
+  let nextPaymentStatus: PaymentStatus | undefined;
+  if (typedStatus === "REFUNDED") {
+    nextPaymentStatus = "REFUNDED";
+  } else if (typedStatus === "CANCELED") {
+    nextPaymentStatus = order.paymentStatus === "PAID" ? "REFUNDED" : "FAILED";
+  } else if (
+    typedStatus === "DELIVERED" &&
+    order.paymentMethod === "CASH" &&
+    order.paymentStatus === "PENDING"
+  ) {
+    nextPaymentStatus = "PAID";
+  }
+
+  const localItemsByProduct = new Map<string, number>();
+  if (shouldRestock) {
+    for (const item of order.items) {
+      if (item.type !== "LOCAL") continue;
+      localItemsByProduct.set(
+        item.productId,
+        (localItemsByProduct.get(item.productId) ?? 0) + item.quantity
+      );
+    }
+  }
+
+  const event = await prisma.$transaction(async (tx) => {
+    const createdEvent = await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        status: typedStatus,
+        note: body.note ?? undefined,
+        proofUrl: body.proofUrl ?? undefined,
+      },
+    });
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: typedStatus,
+        paymentStatus: nextPaymentStatus,
+      },
+    });
+
+    if (localItemsByProduct.size > 0) {
+      for (const [productId, quantity] of localItemsByProduct.entries()) {
+        await tx.product.update({
+          where: { id: productId },
+          data: {
+            stockQuantity: {
+              increment: quantity,
+            },
+          },
+        });
+      }
+    }
+
+    return createdEvent;
   });
 
   await prisma.activityLog.create({
@@ -74,7 +136,11 @@ export async function POST(
       action: "ORDER_STATUS_UPDATED",
       entityType: "Order",
       entityId: order.id,
-      metadata: { status: typedStatus },
+      metadata: {
+        status: typedStatus,
+        paymentStatus: nextPaymentStatus,
+        restocked: shouldRestock,
+      },
     },
   });
 

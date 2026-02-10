@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   createContext,
@@ -18,17 +18,25 @@ export type CartItem = {
   type: "PREORDER" | "DROPSHIP" | "LOCAL";
   quantity: number;
   sellerName?: string;
+  offerId?: string;
   optionColor?: string;
   optionSize?: string;
+  maxQuantity?: number;
   lineId: string;
 };
 
 function makeLineId(input: {
   id: string;
+  offerId?: string;
   optionColor?: string;
   optionSize?: string;
 }) {
-  return [input.id, input.optionColor ?? "", input.optionSize ?? ""].join("::");
+  return [
+    input.id,
+    input.offerId ?? "",
+    input.optionColor ?? "",
+    input.optionSize ?? "",
+  ].join("::");
 }
 
 type AddItemInput = Omit<CartItem, "quantity" | "lineId">;
@@ -46,6 +54,12 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 const STORAGE_KEY = "ardo_cart";
 
+function toSafeMaxQuantity(value: unknown): number | undefined {
+  const max = Number(value);
+  if (!Number.isFinite(max) || max <= 0) return undefined;
+  return Math.floor(max);
+}
+
 function parseStored(value: string | null): CartItem[] {
   if (!value) return [];
   try {
@@ -58,10 +72,14 @@ function parseStored(value: string | null): CartItem[] {
         const id = String(item.id ?? "");
         if (!id) return null;
 
+        const maxQuantity = toSafeMaxQuantity(item.maxQuantity);
         const quantityRaw = Number(item.quantity);
-        const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+        let quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1;
+        if (maxQuantity) quantity = Math.min(quantity, maxQuantity);
+
         const optionColor = item.optionColor ? String(item.optionColor) : undefined;
         const optionSize = item.optionSize ? String(item.optionSize) : undefined;
+        const offerId = item.offerId ? String(item.offerId) : undefined;
 
         return {
           id,
@@ -74,12 +92,14 @@ function parseStored(value: string | null): CartItem[] {
               ? item.type
               : "LOCAL",
           sellerName: item.sellerName ? String(item.sellerName) : undefined,
+          offerId,
           optionColor,
           optionSize,
+          maxQuantity,
           quantity,
           lineId: item.lineId
             ? String(item.lineId)
-            : makeLineId({ id, optionColor, optionSize }),
+            : makeLineId({ id, offerId, optionColor, optionSize }),
         } satisfies CartItem;
       })
       .filter(Boolean) as CartItem[];
@@ -109,21 +129,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   const addItem = useCallback((item: AddItemInput, quantity = 1) => {
-    const safeQty = Math.max(1, Math.floor(quantity));
+    const requestedQty = Math.max(1, Math.floor(quantity));
+    const incomingMax = toSafeMaxQuantity(item.maxQuantity);
     const lineId = makeLineId({
       id: item.id,
+      offerId: item.offerId,
       optionColor: item.optionColor,
       optionSize: item.optionSize,
     });
 
     setItems((current) => {
       const existing = current.find((entry) => entry.lineId === lineId);
+      const effectiveMax =
+        existing?.maxQuantity && incomingMax
+          ? Math.min(existing.maxQuantity, incomingMax)
+          : existing?.maxQuantity ?? incomingMax;
+
       if (!existing) {
-        return [...current, { ...item, quantity: safeQty, lineId }];
+        const safeQty = effectiveMax ? Math.min(requestedQty, effectiveMax) : requestedQty;
+        return [...current, { ...item, quantity: safeQty, maxQuantity: effectiveMax, lineId }];
       }
+
+      const nextQty = effectiveMax
+        ? Math.min(existing.quantity + requestedQty, effectiveMax)
+        : existing.quantity + requestedQty;
+
       return current.map((entry) =>
         entry.lineId === lineId
-          ? { ...entry, quantity: entry.quantity + safeQty }
+          ? { ...entry, maxQuantity: effectiveMax, quantity: nextQty }
           : entry
       );
     });
@@ -135,11 +168,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateQuantity = useCallback((lineId: string, quantity: number) => {
     setItems((current) => {
+      const entry = current.find((item) => item.lineId === lineId);
+      if (!entry) return current;
+
       if (quantity <= 0) {
-        return current.filter((entry) => entry.lineId !== lineId);
+        return current.filter((item) => item.lineId !== lineId);
       }
-      return current.map((entry) =>
-        entry.lineId === lineId ? { ...entry, quantity } : entry
+
+      let nextQty = Math.max(1, Math.floor(quantity));
+      if (entry.maxQuantity) {
+        nextQty = Math.min(nextQty, entry.maxQuantity);
+      }
+
+      return current.map((item) =>
+        item.lineId === lineId ? { ...item, quantity: nextQty } : item
       );
     });
   }, []);
@@ -168,3 +210,5 @@ export function useCart() {
   }
   return ctx;
 }
+
+

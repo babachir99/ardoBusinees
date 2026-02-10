@@ -1,4 +1,4 @@
-import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
+﻿import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
 
 type PurchaseInfoPanelProps = {
   locale: string;
@@ -17,6 +17,7 @@ type PurchaseInfoPanelProps = {
   buyHref?: string;
   isAuthenticated?: boolean;
   isSellerOwner?: boolean;
+  openChatDefault?: boolean;
 };
 
 export default function PurchaseInfoPanel({
@@ -36,6 +37,7 @@ export default function PurchaseInfoPanel({
   buyHref,
   isAuthenticated,
   isSellerOwner,
+  openChatDefault,
 }: PurchaseInfoPanelProps) {
   const isFr = locale === "fr";
   const leadDays = preorderLeadDays ?? 14;
@@ -94,7 +96,7 @@ export default function PurchaseInfoPanel({
       : "Growing reliability";
 
   return (
-    <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:p-6 fade-up">
+    <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:sticky md:top-6 md:p-6 fade-up">
       <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
         <div className="flex items-start gap-3">
           <div className="h-14 w-14 overflow-hidden rounded-full border border-white/10 bg-zinc-800">
@@ -129,12 +131,20 @@ export default function PurchaseInfoPanel({
           </span>
         </div>
 
+        <p className="mt-3 text-xs text-zinc-400">
+          {isFr
+            ? "Cette zone sert a contacter le vendeur via la messagerie interne et suivre vos offres en securite."
+            : "Use this panel to contact the seller through internal chat and track offers safely."}
+        </p>
+
         <ProductActionCardClient
           locale={locale}
           productId={productId}
+          productType={productType}
           buyHref={buyHref ?? "#purchase-actions"}
           isAuthenticated={Boolean(isAuthenticated)}
           isSellerOwner={Boolean(isSellerOwner)}
+          openChatDefault={Boolean(openChatDefault)}
           sellerPhoneHref={sellerPhoneHref}
           sellerEmailHref={sellerEmailHref}
           sellerWhatsappHref={sellerWhatsappHref}
@@ -173,3 +183,8 @@ export default function PurchaseInfoPanel({
     </aside>
   );
 }
+
+
+
+
+

@@ -1,8 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { UserRole } from "@prisma/client";
+import {
+  getMessagePolicyErrorMessage,
+  getMessagePolicyViolation,
+} from "@/lib/messagePolicy";
 
 export async function GET(
   _request: NextRequest,
@@ -69,8 +73,20 @@ export async function POST(
 
   const message = String(body.message ?? "").trim();
   if (!message) {
+    return NextResponse.json({ error: "message is required" }, { status: 400 });
+  }
+
+  if (message.length > 1200) {
+    return NextResponse.json({ error: "message too long" }, { status: 400 });
+  }
+
+  const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("fr")
+    ? "fr"
+    : "en";
+  const violation = getMessagePolicyViolation(message);
+  if (violation) {
     return NextResponse.json(
-      { error: "message is required" },
+      { error: getMessagePolicyErrorMessage(locale) },
       { status: 400 }
     );
   }
@@ -109,5 +125,3 @@ export async function POST(
 
   return NextResponse.json(created, { status: 201 });
 }
-
-

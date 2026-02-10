@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, ProductType } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 const allowedPaymentMethods = new Set([
@@ -110,6 +110,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const session = await getServerSession(authOptions);
+  const sessionUserId = session?.user?.id ?? null;
+
   let userId = body.userId ? String(body.userId) : "";
   const sellerId = body.sellerId ? String(body.sellerId) : undefined;
   const currency = body.currency ?? "XOF";
@@ -144,9 +147,28 @@ export async function POST(request: NextRequest) {
 
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, priceCents: true, discountPercent: true, type: true },
+    select: { id: true, priceCents: true, discountPercent: true, type: true, stockQuantity: true },
   });
   const productMap = new Map(products.map((product) => [product.id, product]));
+
+  const offerIds = items
+    .map((item: { offerId?: string }) => String(item.offerId ?? "").trim())
+    .filter(Boolean);
+
+  const offers = offerIds.length
+    ? await prisma.productOffer.findMany({
+        where: { id: { in: offerIds } },
+        select: {
+          id: true,
+          productId: true,
+          buyerId: true,
+          quantity: true,
+          amountCents: true,
+          status: true,
+        },
+      })
+    : [];
+  const offerMap = new Map(offers.map((offer) => [offer.id, offer]));
 
   if (!userId) {
     const email = String(body.email);
@@ -163,7 +185,14 @@ export async function POST(request: NextRequest) {
   }
 
   let subtotalCents = 0;
-  const mappedItems = [];
+  const mappedItems: Array<{
+    productId: string;
+    quantity: number;
+    unitPriceCents: number;
+    type: ProductType;
+    optionColor?: string;
+    optionSize?: string;
+  }> = [];
 
   for (const item of items) {
     const quantity = Number(item.quantity ?? 1);
@@ -191,10 +220,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const unitPriceCents = getDiscountedPrice(
-      product.priceCents,
-      product.discountPercent
-    );
+    const offerId = item.offerId ? String(item.offerId).trim() : undefined;
+    const matchedOffer = offerId ? offerMap.get(offerId) : undefined;
+
+    if (offerId) {
+      if (!sessionUserId) {
+        return NextResponse.json(
+          { error: "Sign in to pay an accepted offer." },
+          { status: 401 }
+        );
+      }
+
+      if (!matchedOffer) {
+        return NextResponse.json({ error: "Offer not found." }, { status: 400 });
+      }
+
+      if (matchedOffer.buyerId !== sessionUserId) {
+        return NextResponse.json(
+          { error: "This offer does not belong to your account." },
+          { status: 403 }
+        );
+      }
+
+      if (matchedOffer.productId !== productId) {
+        return NextResponse.json({ error: "Offer/product mismatch." }, { status: 400 });
+      }
+
+      if (matchedOffer.status !== "ACCEPTED") {
+        return NextResponse.json(
+          { error: "Offer is not accepted yet." },
+          { status: 400 }
+        );
+      }
+
+      if (quantity > matchedOffer.quantity) {
+        return NextResponse.json(
+          { error: "Requested quantity exceeds accepted offer quantity." },
+          { status: 400 }
+        );
+      }
+    }
+
+    const unitPriceCents = matchedOffer
+      ? matchedOffer.amountCents
+      : getDiscountedPrice(product.priceCents, product.discountPercent);
     subtotalCents += quantity * unitPriceCents;
 
     const optionColor = item.optionColor
@@ -237,45 +306,95 @@ export async function POST(request: NextRequest) {
 
   const typedPaymentMethod = paymentMethod as PaymentMethod | undefined;
 
-  const order = await prisma.order.create({
-    data: {
-      userId,
-      sellerId,
-      buyerName: body.name ?? undefined,
-      buyerEmail: body.email ?? undefined,
-      buyerPhone: body.phone ?? undefined,
-      shippingAddress: body.shippingAddress ?? undefined,
-      shippingCity: body.shippingCity ?? undefined,
-      paymentMethod: typedPaymentMethod ?? undefined,
-      subtotalCents,
-      shippingCents,
-      feesCents,
-      totalCents,
-      currency,
-      items: { create: mappedItems },
-      events: {
-        create: [
-          {
-            status: "PENDING",
-            note: "Order placed",
+  const localRequestedByProduct = new Map<string, number>();
+  for (const item of mappedItems) {
+    if (item.type !== "LOCAL") continue;
+    localRequestedByProduct.set(
+      item.productId,
+      (localRequestedByProduct.get(item.productId) ?? 0) + item.quantity
+    );
+  }
+
+  for (const [productId, quantity] of localRequestedByProduct.entries()) {
+    const product = productMap.get(productId);
+    const available = product?.stockQuantity ?? 0;
+    if (available < quantity) {
+      return NextResponse.json(
+        { error: `Insufficient stock for product ${productId}` },
+        { status: 409 }
+      );
+    }
+  }
+
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      for (const [productId, quantity] of localRequestedByProduct.entries()) {
+        const updateResult = await tx.product.updateMany({
+          where: {
+            id: productId,
+            isActive: true,
+            stockQuantity: { gte: quantity },
           },
-        ],
-      },
-    },
-    include: { items: true },
-  });
+          data: {
+            stockQuantity: { decrement: quantity },
+          },
+        });
 
-  await prisma.activityLog.create({
-    data: {
-      userId,
-      action: "ORDER_CREATED",
-      entityType: "Order",
-      entityId: order.id,
-    },
-  });
+        if (updateResult.count !== 1) {
+          throw new Error(`OUT_OF_STOCK:${productId}`);
+        }
+      }
 
-  return NextResponse.json(order, { status: 201 });
+      const createdOrder = await tx.order.create({
+        data: {
+          userId,
+          sellerId,
+          buyerName: body.name ?? undefined,
+          buyerEmail: body.email ?? undefined,
+          buyerPhone: body.phone ?? undefined,
+          shippingAddress: body.shippingAddress ?? undefined,
+          shippingCity: body.shippingCity ?? undefined,
+          paymentMethod: typedPaymentMethod ?? undefined,
+          subtotalCents,
+          shippingCents,
+          feesCents,
+          totalCents,
+          currency,
+          items: { create: mappedItems },
+          events: {
+            create: [
+              {
+                status: "PENDING",
+                note: "Order placed",
+              },
+            ],
+          },
+        },
+        include: { items: true },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: "ORDER_CREATED",
+          entityType: "Order",
+          entityId: createdOrder.id,
+        },
+      });
+
+      return createdOrder;
+    });
+
+    return NextResponse.json(order, { status: 201 });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("OUT_OF_STOCK:")) {
+      return NextResponse.json(
+        { error: "One or more products are out of stock." },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 }
-
 
 

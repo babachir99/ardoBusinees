@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -65,6 +65,7 @@ export default function CheckoutForm() {
           type: item.type,
           optionColor: item.optionColor,
           optionSize: item.optionSize,
+          offerId: item.offerId,
         })),
       };
 
@@ -231,5 +232,7 @@ export default function CheckoutForm() {
     </div>
   );
 }
+
+
 
 

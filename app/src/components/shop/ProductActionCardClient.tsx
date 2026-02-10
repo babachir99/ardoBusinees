@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 
@@ -32,9 +32,11 @@ type InquiryPayload = {
 type ProductActionCardClientProps = {
   locale: string;
   productId: string;
+  productType: "PREORDER" | "DROPSHIP" | "LOCAL";
   buyHref: string;
   isAuthenticated: boolean;
   isSellerOwner?: boolean;
+  openChatDefault?: boolean;
   sellerPhoneHref?: string;
   sellerEmailHref?: string;
   sellerWhatsappHref?: string;
@@ -51,15 +53,18 @@ const offerStatusLabel: Record<string, { fr: string; en: string }> = {
 export default function ProductActionCardClient({
   locale,
   productId,
+  productType,
   buyHref,
   isAuthenticated,
   isSellerOwner,
+  openChatDefault,
   sellerPhoneHref,
   sellerEmailHref,
   sellerWhatsappHref,
 }: ProductActionCardClientProps) {
   const isFr = locale === "fr";
   const [panel, setPanel] = useState<"none" | "chat" | "offer">("none");
+  const [autoOpenedChat, setAutoOpenedChat] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<InquiryPayload | null>(null);
@@ -71,6 +76,11 @@ export default function ProductActionCardClient({
   const [offerQuantity, setOfferQuantity] = useState(1);
   const [offerNote, setOfferNote] = useState("");
   const [sendingOffer, setSendingOffer] = useState(false);
+  const [showExternalContacts, setShowExternalContacts] = useState(false);
+
+  const disabledByOwner = Boolean(isSellerOwner || payload?.isSellerOwner);
+  const canNegotiate = productType === "LOCAL";
+  const hasExternalContacts = Boolean(sellerPhoneHref || sellerEmailHref || sellerWhatsappHref);
 
   const labels = useMemo(
     () => ({
@@ -95,6 +105,11 @@ export default function ProductActionCardClient({
         ? "Action indisponible sur ton produit."
         : "Action unavailable on your own product.",
       loading: isFr ? "Chargement..." : "Loading...",
+      localOnly: isFr
+        ? "Messagerie et offres disponibles uniquement pour les produits locaux."
+        : "Chat and offers are available only for local products.",
+      moreContacts: isFr ? "Autres moyens de contact" : "Other contact options",
+      hideContacts: isFr ? "Masquer" : "Hide",
     }),
     [isFr]
   );
@@ -122,11 +137,29 @@ export default function ProductActionCardClient({
   };
 
   const openPanel = async (next: "chat" | "offer") => {
+    if (!canNegotiate) {
+      setError(labels.localOnly);
+      return;
+    }
+
+    setError(null);
     setPanel(next);
     if (!payload) {
       await loadInquiry();
     }
   };
+
+  useEffect(() => {
+    if (!openChatDefault || autoOpenedChat) return;
+    if (!isAuthenticated || disabledByOwner || !canNegotiate) return;
+
+    setAutoOpenedChat(true);
+    setPanel("chat");
+
+    if (!payload) {
+      void loadInquiry();
+    }
+  }, [autoOpenedChat, canNegotiate, disabledByOwner, isAuthenticated, openChatDefault, payload]);
 
   const sendMessage = async () => {
     const message = messageDraft.trim();
@@ -208,7 +241,6 @@ export default function ProductActionCardClient({
     }
   };
 
-  const disabledByOwner = Boolean(isSellerOwner || payload?.isSellerOwner);
 
   return (
     <div className="mt-4 grid gap-2">
@@ -220,24 +252,30 @@ export default function ProductActionCardClient({
       </a>
 
       {isAuthenticated ? (
-        <>
-          <button
-            type="button"
-            onClick={() => openPanel("offer")}
-            disabled={disabledByOwner}
-            className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/45 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {labels.offer}
-          </button>
-          <button
-            type="button"
-            onClick={() => openPanel("chat")}
-            disabled={disabledByOwner}
-            className="inline-flex items-center justify-center rounded-xl border border-sky-300/50 bg-sky-300/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:border-sky-300/80 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {labels.contact}
-          </button>
-        </>
+        canNegotiate ? (
+          <>
+            <button
+              type="button"
+              onClick={() => openPanel("offer")}
+              disabled={disabledByOwner}
+              className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/45 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {labels.offer}
+            </button>
+            <button
+              type="button"
+              onClick={() => openPanel("chat")}
+              disabled={disabledByOwner}
+              className="inline-flex items-center justify-center rounded-xl border border-sky-300/50 bg-sky-300/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:border-sky-300/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {labels.contact}
+            </button>
+          </>
+        ) : (
+          <p className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+            {labels.localOnly}
+          </p>
+        )
       ) : (
         <Link
           href="/login"
@@ -247,37 +285,52 @@ export default function ProductActionCardClient({
         </Link>
       )}
 
-      {sellerPhoneHref && (
-        <a
-          href={sellerPhoneHref}
-          className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:border-white/45"
+      {canNegotiate && hasExternalContacts && isAuthenticated && !disabledByOwner && (
+        <button
+          type="button"
+          onClick={() => setShowExternalContacts((value) => !value)}
+          className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-zinc-900/60 px-4 py-2 text-xs font-semibold text-zinc-300 transition hover:border-white/45"
         >
-          {labels.call}
-        </a>
+          {showExternalContacts ? labels.hideContacts : labels.moreContacts}
+        </button>
       )}
 
-      {sellerEmailHref && (
-        <a
-          href={sellerEmailHref}
-          className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:border-white/45"
-        >
-          {labels.email}
-        </a>
-      )}
+      {canNegotiate && hasExternalContacts && showExternalContacts && isAuthenticated && !disabledByOwner && (
+        <div className="grid gap-2">
+          {sellerPhoneHref && (
+            <a
+              href={sellerPhoneHref}
+              className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:border-white/45"
+            >
+              {labels.call}
+            </a>
+          )}
 
-      {sellerWhatsappHref && (
-        <a
-          href={sellerWhatsappHref}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center rounded-xl border border-emerald-300/45 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/80"
-        >
-          {labels.whatsapp}
-        </a>
+          {sellerEmailHref && (
+            <a
+              href={sellerEmailHref}
+              className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-zinc-100 transition hover:border-white/45"
+            >
+              {labels.email}
+            </a>
+          )}
+
+          {sellerWhatsappHref && (
+            <a
+              href={sellerWhatsappHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/45 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition hover:border-emerald-300/80"
+            >
+              {labels.whatsapp}
+            </a>
+          )}
+        </div>
       )}
 
       {error && <p className="text-xs text-rose-300">{error}</p>}
       {disabledByOwner && <p className="text-xs text-zinc-500">{labels.notAllowed}</p>}
+      {!canNegotiate && <p className="text-xs text-zinc-500">{labels.localOnly}</p>}
 
       {panel === "chat" && (
         <div className="mt-2 rounded-2xl border border-white/10 bg-zinc-950/70 p-3">
@@ -398,6 +451,18 @@ export default function ProductActionCardClient({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
