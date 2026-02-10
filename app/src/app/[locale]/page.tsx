@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import SearchBar from "@/components/search/SearchBar";
+import ProductCardCarousel from "@/components/shop/ProductCardCarousel";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignOutIconButton from "@/components/auth/SignOutIconButton";
@@ -78,7 +79,7 @@ export default async function HomePage({
     take: 24,
     include: {
       seller: { select: { displayName: true } },
-      images: { orderBy: { position: "asc" }, take: 1 },
+      images: { orderBy: { position: "asc" }, take: 5 },
     },
   });
 
@@ -358,17 +359,11 @@ export default async function HomePage({
                 }`}
               >
                 <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
-                  {product.images[0] ? (
-                    <img
-                      src={product.images[0].url}
-                      alt={product.images[0].alt ?? product.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-                      Image a venir
-                    </div>
-                  )}
+                  <ProductCardCarousel
+                    images={product.images}
+                    title={product.title}
+                    locale={locale}
+                  />
                   {boosted && (
                     <span className="absolute right-4 top-4 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
                       {locale === "fr" ? "Booste" : "Boosted"}
@@ -404,7 +399,6 @@ export default async function HomePage({
                     {formatMoney(product.priceCents, product.currency, locale)}
                   </p>
                 )}
-
               </Link>
             )})}
           </div>
@@ -414,6 +408,14 @@ export default async function HomePage({
     </div>
   );
 }
+
+
+
+
+
+
+
+
 
 
 
