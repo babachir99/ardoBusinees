@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import SignOutIconButton from "@/components/auth/SignOutIconButton";
 import { getInboxUnreadCount } from "@/lib/inboxCount";
+import CartHeaderButton from "@/components/cart/CartHeaderButton";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -35,6 +36,9 @@ export default async function HomePage({
   const inboxCount = session?.user?.id
     ? await getInboxUnreadCount(session.user.id)
     : 0;
+  const profileInitial = (session?.user?.name?.trim() || session?.user?.email?.trim() || "?")
+    .slice(0, 1)
+    .toUpperCase();
 
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
@@ -216,25 +220,32 @@ export default async function HomePage({
               )}
             </Link>
           )}
-          <Link
-            href={session ? "/profile" : "/login"}
-            className="flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
-          >
-            {session?.user?.image ? (
-              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
+          <CartHeaderButton label={locale === "fr" ? "Panier" : "Cart"} />
+          {session ? (
+            <Link
+              href="/profile"
+              className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-400 text-xs font-semibold text-zinc-950"
+              aria-label={locale === "fr" ? "Profil" : "Profile"}
+              title={locale === "fr" ? "Profil" : "Profile"}
+            >
+              {session.user.image ? (
                 <img
                   src={session.user.image}
                   alt={session.user.name ?? "Profil"}
                   className="h-full w-full object-cover"
                 />
-              </span>
-            ) : session?.user?.name ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
-                {session.user.name.slice(0, 1).toUpperCase()}
-              </span>
-            ) : null}
-            {session ? "Profil" : "Se connecter / S'inscrire"}
-          </Link>
+              ) : (
+                <span>{profileInitial}</span>
+              )}
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
+            >
+              Se connecter / S'inscrire
+            </Link>
+          )}
           {session && <SignOutIconButton />}
         </div>
       </header>
@@ -406,6 +417,10 @@ export default async function HomePage({
     </div>
   );
 }
+
+
+
+
 
 
 
