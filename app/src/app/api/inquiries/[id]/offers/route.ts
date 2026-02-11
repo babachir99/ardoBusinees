@@ -1,8 +1,12 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
+import {
+  getMessagePolicyErrorMessage,
+  getMessagePolicyViolation,
+} from "@/lib/messagePolicy";
 
 function canAccessInquiry(
   inquiry: {
@@ -97,6 +101,22 @@ export async function POST(
     return NextResponse.json({ error: "note too long" }, { status: 400 });
   }
 
+  if (note) {
+    const locale = request.headers
+      .get("accept-language")
+      ?.toLowerCase()
+      .startsWith("fr")
+      ? "fr"
+      : "en";
+    const violation = getMessagePolicyViolation(note);
+    if (violation) {
+      return NextResponse.json(
+        { error: getMessagePolicyErrorMessage(locale) },
+        { status: 400 }
+      );
+    }
+  }
+
   const inquiry = await prisma.productInquiry.findUnique({
     where: { id },
     select: {
@@ -176,8 +196,3 @@ export async function POST(
 
   return NextResponse.json(created, { status: 201 });
 }
-
-
-
-
-

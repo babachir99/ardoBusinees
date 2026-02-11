@@ -5,6 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 
 function sanitizeStringList(
@@ -78,10 +81,15 @@ export async function GET(
   });
 
   if (!product) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Not found" },
+      { status: 404, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
-  return NextResponse.json(product);
+  return NextResponse.json(product, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 export async function PATCH(

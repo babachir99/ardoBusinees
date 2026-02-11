@@ -11,7 +11,10 @@ type Order = {
   totalCents: number;
   currency: string;
   createdAt: string;
-  items: { id: string }[];
+  items: {
+    id: string;
+    product?: { images?: { url: string }[] | null } | null;
+  }[];
 };
 
 const statusMap: Record<string, string> = {
@@ -118,39 +121,59 @@ export default function OrdersList() {
 
       {orders.length > 0 && (
         <div className="mt-6 grid gap-4">
-          {orders.map((order) => (
-            <div
-              key={order.id}
-              className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs text-zinc-400">{t("labels.order")}</p>
-                  <p className="text-sm font-semibold text-white">
-                    {order.id.slice(0, 10)}...
-                  </p>
+          {orders.map((order) => {
+            const previewImage = order.items[0]?.product?.images?.[0]?.url;
+
+            return (
+              <div
+                key={order.id}
+                className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-900/70">
+                    {previewImage ? (
+                      <img
+                        src={previewImage}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-500">
+                        Image
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-zinc-400">{t("labels.order")}</p>
+                        <p className="text-sm font-semibold text-white">
+                          {order.id.slice(0, 10)}...
+                        </p>
+                      </div>
+                      <p className="text-xs text-emerald-300">
+                        {t(`status.${statusMap[order.status] ?? "pending"}`)}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-sm text-zinc-300">
+                      <span>{t("labels.items", { count: order.items.length })}</span>
+                      <span>{formatMoney(order.totalCents, order.currency, locale)}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+                      <span>{new Date(order.createdAt).toLocaleDateString(locale)}</span>
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-emerald-300/60"
+                      >
+                        {t("labels.view")}
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-emerald-300">
-                  {t(`status.${statusMap[order.status] ?? "pending"}`)}
-                </p>
               </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-zinc-300">
-                <span>
-                  {t("labels.items", { count: order.items.length })}
-                </span>
-                <span>{formatMoney(order.totalCents, order.currency, locale)}</span>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
-                <span>{new Date(order.createdAt).toLocaleDateString(locale)}</span>
-                <Link
-                  href={`/orders/${order.id}`}
-                  className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-emerald-300/60"
-                >
-                  {t("labels.view")}
-                </Link>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

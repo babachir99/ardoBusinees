@@ -1,4 +1,4 @@
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import SellerTrendsPanel from "@/components/seller/SellerTrendsPanel";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type SellerPageProps = {
   searchParams?: Promise<{ range?: string; paid?: string }>;
@@ -774,5 +776,3 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
     </div>
   );
 }
-
-

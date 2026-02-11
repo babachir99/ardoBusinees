@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -27,7 +27,12 @@ type OrderItem = {
   unitPriceCents: number;
   optionColor?: string | null;
   optionSize?: string | null;
-  product?: { id: string; title: string; slug: string } | null;
+  product?: {
+    id: string;
+    title: string;
+    slug: string;
+    images?: { url: string }[];
+  } | null;
 };
 
 type Order = {
@@ -183,13 +188,26 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
 
             return (
               <li key={item.id} className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
-                  {optionParts.length > 0 && (
-                    <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {optionParts.join(" · ")}
-                    </p>
-                  )}
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/70">
+                    {item.product?.images?.[0]?.url ? (
+                      <img
+                        src={item.product.images[0].url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
+                    {optionParts.length > 0 && (
+                      <p className="mt-0.5 text-[11px] text-zinc-500">
+                        {optionParts.join(" · ")}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
               </li>
@@ -288,7 +306,3 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
-
-
-
-

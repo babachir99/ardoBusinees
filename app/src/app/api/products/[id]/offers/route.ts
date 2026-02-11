@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getMessagePolicyErrorMessage,
+  getMessagePolicyViolation,
+} from "@/lib/messagePolicy";
 
 export async function GET(
   _request: NextRequest,
@@ -127,6 +131,22 @@ export async function POST(
     return NextResponse.json({ error: "note too long" }, { status: 400 });
   }
 
+  if (note) {
+    const locale = request.headers
+      .get("accept-language")
+      ?.toLowerCase()
+      .startsWith("fr")
+      ? "fr"
+      : "en";
+    const violation = getMessagePolicyViolation(note);
+    if (violation) {
+      return NextResponse.json(
+        { error: getMessagePolicyErrorMessage(locale) },
+        { status: 400 }
+      );
+    }
+  }
+
   const product = await prisma.product.findUnique({
     where: { id },
     select: {
@@ -210,7 +230,3 @@ export async function POST(
 
   return NextResponse.json(result, { status: 201 });
 }
-
-
-
-
