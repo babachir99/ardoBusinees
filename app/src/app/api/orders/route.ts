@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
   const sessionUserId = session?.user?.id ?? null;
 
   let userId = body.userId ? String(body.userId) : "";
-  const sellerId = body.sellerId ? String(body.sellerId) : undefined;
+  const requestedSellerId = body.sellerId ? String(body.sellerId) : undefined;
   const currency = body.currency ?? "XOF";
   const paymentMethod = body.paymentMethod
     ? String(body.paymentMethod).toUpperCase()
@@ -147,9 +147,42 @@ export async function POST(request: NextRequest) {
 
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, priceCents: true, discountPercent: true, type: true, stockQuantity: true },
+    select: {
+      id: true,
+      sellerId: true,
+      priceCents: true,
+      discountPercent: true,
+      type: true,
+      stockQuantity: true,
+    },
   });
   const productMap = new Map(products.map((product) => [product.id, product]));
+  const uniqueSellerIds = Array.from(
+    new Set(products.map((product) => product.sellerId).filter(Boolean))
+  );
+
+  if (uniqueSellerIds.length === 0) {
+    return NextResponse.json(
+      { error: "Unable to resolve seller for selected products." },
+      { status: 400 }
+    );
+  }
+
+  if (uniqueSellerIds.length > 1) {
+    return NextResponse.json(
+      { error: "All items in a single checkout must belong to one seller." },
+      { status: 400 }
+    );
+  }
+
+  const inferredSellerId = uniqueSellerIds[0];
+  if (requestedSellerId && requestedSellerId !== inferredSellerId) {
+    return NextResponse.json(
+      { error: "sellerId does not match selected products." },
+      { status: 400 }
+    );
+  }
+  const sellerId = requestedSellerId ?? inferredSellerId;
 
   const offerIds = items
     .map((item: { offerId?: string }) => String(item.offerId ?? "").trim())
@@ -396,5 +429,3 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 }
-
-

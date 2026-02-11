@@ -90,11 +90,14 @@ export default function ProductPurchasePanel({
   const safeImages = images.filter((image) => Boolean(image.url));
   const hasImages = safeImages.length > 0;
 
+  const isLocalSoldOut =
+    type === "LOCAL" && Number.isFinite(stockQuantity) && Number(stockQuantity) <= 0;
   const stockLimit =
     type === "LOCAL" && Number.isFinite(stockQuantity) && Number(stockQuantity) > 0
       ? Math.floor(Number(stockQuantity))
       : undefined;
-  const maxSelectableQuantity = stockLimit ?? 99;
+  const maxSelectableQuantity = isLocalSoldOut ? 0 : stockLimit ?? 99;
+  const canAddToCart = maxSelectableQuantity > 0;
 
   useEffect(() => {
     if (safeImages.length <= 1 || isLightboxOpen) return;
@@ -130,6 +133,8 @@ export default function ProductPurchasePanel({
   const currentImage = hasImages ? safeImages[normalizedIndex] : null;
   const favoriteAddLabel = locale === "fr" ? "Ajouter aux favoris" : "Add to favorites";
   const favoriteRemoveLabel = locale === "fr" ? "Retirer des favoris" : "Remove from favorites";
+  const soldOutLabel = locale === "fr" ? "Epuise" : "Sold out";
+  const checkingLabel = locale === "fr" ? "Verification..." : "Checking...";
 
   const nextImage = () => {
     if (safeImages.length <= 1) return;
@@ -242,7 +247,8 @@ export default function ProductPurchasePanel({
                 <button
                   type="button"
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none"
+                  disabled={!canAddToCart || quantity <= 1}
+                  className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   -
                 </button>
@@ -250,16 +256,22 @@ export default function ProductPurchasePanel({
                 <button
                   type="button"
                   onClick={() => setQuantity((q) => Math.min(maxSelectableQuantity, q + 1))}
-                  disabled={quantity >= maxSelectableQuantity}
+                  disabled={!canAddToCart || quantity >= maxSelectableQuantity}
                   className="h-8 w-8 rounded-full border border-white/20 text-lg leading-none disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   +
                 </button>
               </div>
-              {stockLimit && (
-                <p className="mt-2 text-[11px] text-zinc-500">
-                  {locale === "fr" ? `Stock max: ${stockLimit}` : `Max stock: ${stockLimit}`}
+              {isLocalSoldOut ? (
+                <p className="mt-2 text-[11px] text-rose-300">
+                  {locale === "fr" ? "Produit epuise" : "Product sold out"}
                 </p>
+              ) : (
+                stockLimit && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    {locale === "fr" ? `Stock max: ${stockLimit}` : `Max stock: ${stockLimit}`}
+                  </p>
+                )
               )}
             </div>
 
@@ -313,8 +325,11 @@ export default function ProductPurchasePanel({
               <AddToCartButton
                 id={productId}
                 slug={slug}
+                disabled={!canAddToCart}
                 title={title}
                 priceCents={priceCents}
+                soldOutLabel={soldOutLabel}
+                checkingLabel={checkingLabel}
                 currency={currency}
                 type={type}
                 sellerName={sellerName}
@@ -435,8 +450,3 @@ export default function ProductPurchasePanel({
     </>
   );
 }
-
-
-
-
-

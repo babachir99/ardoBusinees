@@ -131,6 +131,7 @@ async function main() {
     { slug: "vacances", name: "Vacances", storeSlugs: ["marketplace"] },
     { slug: "emploi", name: "Emploi", storeSlugs: ["marketplace", "jontaado-presta"] },
     { slug: "mode", name: "Mode", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique", name: "Cosmetique", storeSlugs: ["marketplace"] },
     { slug: "maison-jardin", name: "Maison & Jardin", storeSlugs: ["marketplace"] },
     { slug: "famille", name: "Famille", storeSlugs: ["marketplace"] },
     { slug: "electronique", name: "Electronique", storeSlugs: ["marketplace"] },
@@ -186,6 +187,13 @@ async function main() {
     { slug: "mode-chaussures", name: "Chaussures", parentSlug: "mode", storeSlugs: ["marketplace"] },
     { slug: "mode-montres-bijoux", name: "Montres & Bijoux", parentSlug: "mode", storeSlugs: ["marketplace"] },
     { slug: "mode-accessoires-bagagerie", name: "Accessoires & Bagagerie", parentSlug: "mode", storeSlugs: ["marketplace"] },
+
+    { slug: "cosmetique-maquillage", name: "Maquillage", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique-soins-visage", name: "Soins visage", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique-soins-corps", name: "Soins corps", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique-cheveux", name: "Cheveux", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique-parfums", name: "Parfums", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
+    { slug: "cosmetique-hygiene", name: "Hygiene", parentSlug: "cosmetique", storeSlugs: ["marketplace"] },
 
     { slug: "maison-meubles", name: "Ameublement", parentSlug: "maison-jardin", storeSlugs: ["marketplace"] },
     { slug: "maison-electromenager", name: "Electromenager", parentSlug: "maison-jardin", storeSlugs: ["marketplace"] },
@@ -494,3 +502,5 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+

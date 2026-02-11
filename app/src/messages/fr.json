@@ -825,6 +825,21 @@
       "title": "Acces refuse",
       "subtitle": "Tu dois avoir un compte admin pour acceder a cette page.",
       "cta": "Se connecter"
+    },
+    "categories": {
+      "title": "Categories",
+      "subtitle": "Ajouter, modifier et supprimer categories et sous-categories.",
+      "cta": "Gerer les categories"
+    },
+    "stores": {
+      "title": "Sous-boutiques",
+      "subtitle": "Gerer les verticales JONTAADO et leurs categories.",
+      "cta": "Gerer les sous-boutiques"
+    },
+    "sellers": {
+      "title": "Vendeurs",
+      "subtitle": "Ajouter, modifier, suspendre ou supprimer un profil vendeur.",
+      "cta": "Gerer les vendeurs"
     }
   },
   "AdminOrders": {
@@ -1265,8 +1280,3 @@
     }
   }
 }
-
-
-
-
-

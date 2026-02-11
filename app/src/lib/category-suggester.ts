@@ -1,4 +1,4 @@
-﻿type CategoryLite = {
+type CategoryLite = {
   id: string;
   name: string;
   slug: string;
@@ -49,6 +49,11 @@ const BRAND_RULES = [
   "dell",
   "lenovo",
   "asus",
+  "loreal",
+  "maybelline",
+  "nivea",
+  "garnier",
+  "dior",
 ];
 
 const SEMANTIC_RULES: SemanticRule[] = [
@@ -71,6 +76,27 @@ const SEMANTIC_RULES: SemanticRule[] = [
     key: "chaussure",
     terms: ["chaussure", "sneaker", "basket", "airmax", "sandale", "bottine"],
     categoryHints: ["chaussure", "mode", "sport"],
+  },
+  {
+    key: "cosmetique",
+    terms: [
+      "cosmetique",
+      "beaute",
+      "maquillage",
+      "rouge",
+      "levres",
+      "fond",
+      "teint",
+      "serum",
+      "creme",
+      "parfum",
+      "shampooing",
+      "hygiene",
+      "skincare",
+      "soin",
+      "cheveux",
+    ],
+    categoryHints: ["cosmetique", "maquillage", "soins", "parfum", "cheveux", "hygiene", "beaute"],
   },
   {
     key: "voiture",
@@ -290,4 +316,6 @@ export function suggestCategoriesFromTitle(
     suggestions: topSuggestions,
   };
 }
+
+
 

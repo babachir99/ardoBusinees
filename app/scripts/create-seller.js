@@ -64,6 +64,7 @@ async function main() {
       status: "APPROVED",
       commissionRate: 10,
     },
+    
   });
 
   const store = await prisma.store.upsert({

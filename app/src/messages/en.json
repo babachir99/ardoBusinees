@@ -825,6 +825,21 @@
       "title": "Access denied",
       "subtitle": "You need an admin account to access this page.",
       "cta": "Sign in"
+    },
+    "categories": {
+      "title": "Categories",
+      "subtitle": "Create, edit, and remove categories and sub-categories.",
+      "cta": "Manage categories"
+    },
+    "stores": {
+      "title": "Stores",
+      "subtitle": "Manage JONTAADO verticals and their category links.",
+      "cta": "Manage stores"
+    },
+    "sellers": {
+      "title": "Sellers",
+      "subtitle": "Create, edit, suspend, or remove seller profiles.",
+      "cta": "Manage sellers"
     }
   },
   "AdminOrders": {
@@ -1259,8 +1274,3 @@
     }
   }
 }
-
-
-
-
-

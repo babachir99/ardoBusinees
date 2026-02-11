@@ -44,6 +44,9 @@ export default async function AdminPage() {
 
   const [
     usersCount,
+    sellersCount,
+    storesCount,
+    categoriesCount,
     pendingKycCount,
     pendingOrdersCount,
     inactiveProductsCount,
@@ -58,6 +61,9 @@ export default async function AdminPage() {
     topSellerStats,
   ] = await Promise.all([
     prisma.user.count(),
+    prisma.sellerProfile.count(),
+    prisma.store.count(),
+    prisma.category.count(),
     prisma.kycSubmission.count({ where: { status: "PENDING" } }),
     prisma.order.count({ where: { status: "PENDING" } }),
     prisma.product.count({ where: { isActive: false } }),
@@ -225,156 +231,7 @@ export default async function AdminPage() {
           <p className="mt-3 text-sm text-zinc-300">{t("hero.subtitle")}</p>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
-          {[
-            {
-              label: t("quick.users"),
-              value: usersCount,
-              href: "/admin/users",
-            },
-            {
-              label: t("quick.kyc"),
-              value: pendingKycCount,
-              href: "/admin/kyc",
-            },
-            {
-              label: t("quick.orders"),
-              value: pendingOrdersCount,
-              href: "/admin/orders",
-            },
-            {
-              label: t("quick.products"),
-              value: inactiveProductsCount,
-              href: "/admin/products",
-            },
-          ].map((card) => (
-            <Link
-              key={card.label}
-              href={card.href}
-              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 transition hover:border-sky-300/60"
-            >
-              <p className="text-xs text-zinc-400">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-white">
-                {card.value}
-              </p>
-            </Link>
-          ))}
-        </section>
-
-        <AdminTrendsPanel
-          dates={trendDates}
-          revenueSeries={revenueSeries}
-          ordersSeries={ordersSeries}
-          usersSeries={usersSeries}
-        />
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">{t("topProducts.title")}</h2>
-                <p className="mt-2 text-sm text-zinc-300">{t("topProducts.subtitle")}</p>
-              </div>
-              <Link
-                href="/admin/products"
-                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-              >
-                {t("topProducts.cta")}
-              </Link>
-            </div>
-            {topItems.length === 0 && (
-              <p className="mt-4 text-sm text-zinc-400">{t("topProducts.empty")}</p>
-            )}
-            {topItems.length > 0 && (
-              <div className="mt-5 grid gap-3">
-                {topItems.map((item) => {
-                  const product = topProductMap.get(item.productId);
-                  const units = item._sum.quantity ?? 0;
-                  const width = Math.round((units / topProductMax) * 100);
-                  return (
-                    <div
-                      key={item.productId}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">
-                            {product?.title ?? t("topProducts.unknownProduct")}
-                          </p>
-                          <p className="mt-1 text-[11px] text-zinc-500">
-                            {product?.seller?.displayName ?? t("topProducts.unknownSeller")}
-                          </p>
-                        </div>
-                        <div className="text-emerald-200">
-                          {t("topProducts.units", { count: units })}
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
-                        <div
-                          className="h-2 rounded-full bg-emerald-400"
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">{t("topSellers.title")}</h2>
-                <p className="mt-2 text-sm text-zinc-300">{t("topSellers.subtitle")}</p>
-              </div>
-              <Link
-                href="/admin/users"
-                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-              >
-                {t("topSellers.cta")}
-              </Link>
-            </div>
-            {topSellers.length === 0 && (
-              <p className="mt-4 text-sm text-zinc-400">{t("topSellers.empty")}</p>
-            )}
-            {topSellers.length > 0 && (
-              <div className="mt-5 grid gap-3">
-                {topSellers.map((seller) => {
-                  const width = Math.round((seller.revenueCents / topSellerMax) * 100);
-                  return (
-                    <div
-                      key={seller.id}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">
-                            {seller.name}
-                          </p>
-                          <p className="mt-1 text-[11px] text-zinc-500">
-                            {t("topSellers.orders", { count: seller.orders })}
-                          </p>
-                        </div>
-                        <div className="text-sky-200">
-                          {formatMoney(seller.revenueCents, "XOF", locale)}
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
-                        <div
-                          className="h-2 rounded-full bg-sky-400"
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-4">
+                <section className="grid gap-4 md:grid-cols-4">
           {[
             {
               label: t("kpis.revenueTotal"),
@@ -404,6 +261,12 @@ export default async function AdminPage() {
             </div>
           ))}
         </section>
+        <AdminTrendsPanel
+          dates={trendDates}
+          revenueSeries={revenueSeries}
+          ordersSeries={ordersSeries}
+          usersSeries={usersSeries}
+        />
 
         <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
           <h2 className="text-xl font-semibold">{t("alerts.title")}</h2>
@@ -541,6 +404,24 @@ export default async function AdminPage() {
                 cta: t("products.cta"),
                 href: "/admin/products",
               },
+              {
+                title: t("categories.title"),
+                subtitle: t("categories.subtitle"),
+                cta: t("categories.cta"),
+                href: "/admin/categories",
+              },
+              {
+                title: t("stores.title"),
+                subtitle: t("stores.subtitle"),
+                cta: t("stores.cta"),
+                href: "/admin/stores",
+              },
+              {
+                title: t("sellers.title"),
+                subtitle: t("sellers.subtitle"),
+                cta: t("sellers.cta"),
+                href: "/admin/sellers",
+              },
             ].map((card) => (
               <div
                 key={card.title}
@@ -563,3 +444,9 @@ export default async function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
