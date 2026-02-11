@@ -1,6 +1,5 @@
 ﻿import { Link } from "@/i18n/navigation";
 import Image from "next/image";
-import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -32,7 +31,6 @@ export default async function HomePage({
     searchParams,
   ]);
   const session = await getServerSession(authOptions);
-  const t = await getTranslations("Home");
   const query = q?.trim();
   const inboxCount = session?.user?.id
     ? await getInboxUnreadCount(session.user.id)
@@ -408,6 +406,10 @@ export default async function HomePage({
     </div>
   );
 }
+
+
+
+
 
 
 

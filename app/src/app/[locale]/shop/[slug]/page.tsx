@@ -276,78 +276,56 @@ export default async function ProductPage({
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > new Date());
   const sellerScore = product.seller?.rating ?? 5;
-  const reviewDelegate = (prisma as any).productReview as
-    | {
-        aggregate: (args: any) => Promise<{ _avg: { rating: number | null }; _count: { _all: number } }>;
-        findMany: (args: any) => Promise<any[]>;
-        groupBy: (args: any) => Promise<Array<{ productId: string; _avg: { rating: number | null }; _count: { _all: number } }>>;
-      }
-    | undefined;
+  const reviewDelegate = prisma.productReview;
 
-  let reviewAverage = 0;
-  let reviewCount = 0;
-  let reviewItems: Array<{
-    id: string;
-    rating: number;
-    sellerRating?: number | null;
-    title?: string | null;
-    comment?: string | null;
-    createdAt: string;
-    mine?: boolean;
-    buyer: { id: string; name?: string | null; image?: string | null };
-  }> = [];
-  let canReview = false;
-
-  if (reviewDelegate) {
-    const [reviewStats, latestReviews, paidOrderItem] = await Promise.all([
-      reviewDelegate.aggregate({
-        where: { productId: product.id },
-        _avg: { rating: true },
-        _count: { _all: true },
-      }),
-      reviewDelegate.findMany({
-        where: { productId: product.id },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: {
-          buyer: { select: { id: true, name: true, image: true } },
-        },
-      }),
-      session?.user?.id
-        ? prisma.orderItem.findFirst({
-            where: {
-              productId: product.id,
-              order: {
-                userId: session.user.id,
-                paymentStatus: "PAID",
-              },
+  const [reviewStats, latestReviews, paidOrderItem] = await Promise.all([
+    reviewDelegate.aggregate({
+      where: { productId: product.id },
+      _avg: { rating: true },
+      _count: { _all: true },
+    }),
+    reviewDelegate.findMany({
+      where: { productId: product.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        buyer: { select: { id: true, name: true, image: true } },
+      },
+    }),
+    session?.user?.id
+      ? prisma.orderItem.findFirst({
+          where: {
+            productId: product.id,
+            order: {
+              userId: session.user.id,
+              paymentStatus: "PAID",
             },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-    ]);
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
-    reviewAverage = reviewStats._avg.rating ?? 0;
-    reviewCount = reviewStats._count._all;
-    reviewItems = latestReviews.map((review: any) => ({
-      id: review.id,
-      rating: review.rating,
-      sellerRating: review.sellerRating,
-      title: review.title,
-      comment: review.comment,
-      createdAt: review.createdAt.toISOString(),
-      mine: review.buyerId === session?.user?.id,
-      buyer: review.buyer,
-    }));
-    canReview = Boolean(session?.user?.id && paidOrderItem && !isSellerOwner);
-  }
+  const reviewAverage = reviewStats._avg.rating ?? 0;
+  const reviewCount = reviewStats._count._all;
+  const reviewItems = latestReviews.map((review) => ({
+    id: review.id,
+    rating: review.rating,
+    sellerRating: review.sellerRating,
+    title: review.title,
+    comment: review.comment,
+    createdAt: review.createdAt.toISOString(),
+    mine: review.buyerId === session?.user?.id,
+    buyer: review.buyer,
+  }));
+  const canReview = Boolean(session?.user?.id && paidOrderItem && !isSellerOwner);
 
   const relatedProductIds = Array.from(
     new Set([...similarProducts, ...bundleProducts].map((item) => item.id))
   );
   const relatedRatingMap = new Map<string, { average: number; count: number }>();
 
-  if (reviewDelegate && relatedProductIds.length > 0) {
+  if (relatedProductIds.length > 0) {
     const relatedRatingStats = await reviewDelegate.groupBy({
       by: ["productId"],
       where: { productId: { in: relatedProductIds } },
@@ -678,3 +656,6 @@ export default async function ProductPage({
     </div>
   );
 }
+
+
+

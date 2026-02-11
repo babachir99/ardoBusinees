@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   createContext,
@@ -109,16 +109,14 @@ function parseStored(value: string | null): CartItem[] {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  useEffect(() => {
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
-      const stored = parseStored(localStorage.getItem(STORAGE_KEY));
-      setItems(stored);
+      return parseStored(window.localStorage.getItem(STORAGE_KEY));
     } catch {
-      setItems([]);
+      return [];
     }
-  }, []);
+  });
 
   useEffect(() => {
     try {
@@ -210,5 +208,6 @@ export function useCart() {
   }
   return ctx;
 }
+
 
 

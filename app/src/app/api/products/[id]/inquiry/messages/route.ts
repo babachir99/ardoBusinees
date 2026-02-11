@@ -60,6 +60,7 @@ export async function POST(
     where: { id },
     select: {
       id: true,
+      type: true,
       sellerId: true,
       seller: { select: { userId: true } },
     },
@@ -67,6 +68,13 @@ export async function POST(
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  if (product.type !== "LOCAL") {
+    return NextResponse.json(
+      { error: "Messaging is available only for local products." },
+      { status: 403 }
+    );
   }
 
   if (product.seller?.userId === session.user.id) {
@@ -130,5 +138,7 @@ export async function POST(
     { status: 201 }
   );
 }
+
+
 
 

@@ -40,21 +40,27 @@ export async function POST(request: NextRequest) {
         },
       });
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: {
-      status: "CONFIRMED",
-      paymentStatus: "PAID",
-      events: {
-        create: [
-          {
-            status: "CONFIRMED",
-            note: "Payment confirmed",
-          },
-        ],
+  const needsOrderUpdate = order.paymentStatus !== "PAID" || order.status !== "CONFIRMED";
+
+  if (needsOrderUpdate) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: "CONFIRMED",
+        paymentStatus: "PAID",
+        events: {
+          create: [
+            {
+              status: "CONFIRMED",
+              note: "Payment confirmed (mock)",
+            },
+          ],
+        },
       },
-    },
-  });
+    });
+  }
 
   return NextResponse.json(payment, { status: 201 });
 }
+
+

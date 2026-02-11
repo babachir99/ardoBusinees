@@ -31,6 +31,7 @@ export async function GET(
     select: {
       id: true,
       title: true,
+      type: true,
       sellerId: true,
       seller: { select: { userId: true, displayName: true } },
     },
@@ -41,6 +42,19 @@ export async function GET(
   }
 
   const isSellerOwner = product.seller?.userId === session.user.id;
+
+  if (!isSellerOwner && product.type !== "LOCAL") {
+    return NextResponse.json({
+      isSellerOwner: false,
+      canNegotiate: false,
+      productId: product.id,
+      productTitle: product.title,
+      meId: session.user.id,
+      inquiry: null,
+      messages: [],
+      offers: [],
+    });
+  }
 
   if (isSellerOwner) {
     return NextResponse.json({
@@ -121,5 +135,7 @@ export async function GET(
       })) ?? [],
   });
 }
+
+
 
 

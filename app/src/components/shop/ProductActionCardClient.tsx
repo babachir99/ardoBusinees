@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 
@@ -114,7 +114,7 @@ export default function ProductActionCardClient({
     [isFr]
   );
 
-  const loadInquiry = async () => {
+  const loadInquiry = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -133,8 +133,7 @@ export default function ProductActionCardClient({
       return null;
     } finally {
       setLoading(false);
-    }
-  };
+    }  }, [productId]);
 
   const openPanel = async (next: "chat" | "offer") => {
     if (!canNegotiate) {
@@ -159,7 +158,7 @@ export default function ProductActionCardClient({
     if (!payload) {
       void loadInquiry();
     }
-  }, [autoOpenedChat, canNegotiate, disabledByOwner, isAuthenticated, openChatDefault, payload]);
+  }, [autoOpenedChat, canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, openChatDefault, payload]);
 
   const sendMessage = async () => {
     const message = messageDraft.trim();
@@ -451,6 +450,9 @@ export default function ProductActionCardClient({
     </div>
   );
 }
+
+
+
 
 
 

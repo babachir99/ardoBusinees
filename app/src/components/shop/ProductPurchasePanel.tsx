@@ -78,25 +78,14 @@ export default function ProductPurchasePanel({
     return ["S", "M", "L", "XL", "XXL"];
   }, [showSizeOptions, sizeOptions]);
 
-  const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
-
-
-  useEffect(() => {
-    setSelectedColor((current) =>
-      resolvedColorOptions.includes(current)
-        ? current
-        : (resolvedColorOptions[0] ?? "")
-    );
-  }, [resolvedColorOptions]);
-
-  useEffect(() => {
-    setSelectedSize((current) =>
-      resolvedSizeOptions.includes(current)
-        ? current
-        : (resolvedSizeOptions[0] ?? "")
-    );
-  }, [resolvedSizeOptions]);
+  const [selectedColor, setSelectedColor] = useState(() => resolvedColorOptions[0] ?? "");
+  const [selectedSize, setSelectedSize] = useState(() => resolvedSizeOptions[0] ?? "");
+  const effectiveSelectedColor = resolvedColorOptions.includes(selectedColor)
+    ? selectedColor
+    : (resolvedColorOptions[0] ?? "");
+  const effectiveSelectedSize = resolvedSizeOptions.includes(selectedSize)
+    ? selectedSize
+    : (resolvedSizeOptions[0] ?? "");
 
   const safeImages = images.filter((image) => Boolean(image.url));
   const hasImages = safeImages.length > 0;
@@ -106,17 +95,6 @@ export default function ProductPurchasePanel({
       ? Math.floor(Number(stockQuantity))
       : undefined;
   const maxSelectableQuantity = stockLimit ?? 99;
-
-  useEffect(() => {
-    if (safeImages.length === 0) {
-      setActiveIndex(0);
-      return;
-    }
-
-    if (activeIndex >= safeImages.length) {
-      setActiveIndex(0);
-    }
-  }, [activeIndex, safeImages.length]);
 
   useEffect(() => {
     if (safeImages.length <= 1 || isLightboxOpen) return;
@@ -148,7 +126,8 @@ export default function ProductPurchasePanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isLightboxOpen, safeImages.length]);
 
-  const currentImage = hasImages ? safeImages[activeIndex] : null;
+  const normalizedIndex = safeImages.length > 0 ? activeIndex % safeImages.length : 0;
+  const currentImage = hasImages ? safeImages[normalizedIndex] : null;
   const favoriteAddLabel = locale === "fr" ? "Ajouter aux favoris" : "Add to favorites";
   const favoriteRemoveLabel = locale === "fr" ? "Retirer des favoris" : "Remove from favorites";
 
@@ -221,7 +200,7 @@ export default function ProductPurchasePanel({
                   &#8250;
                 </button>
                 <span className="absolute bottom-3 right-3 rounded-full bg-zinc-950/75 px-2 py-1 text-[11px] text-zinc-300">
-                  {activeIndex + 1}/{safeImages.length}
+                  {normalizedIndex + 1}/{safeImages.length}
                 </span>
               </>
             )}
@@ -235,7 +214,7 @@ export default function ProductPurchasePanel({
                   type="button"
                   onClick={() => setActiveIndex(index)}
                   className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border transition ${
-                    index === activeIndex
+                    index === normalizedIndex
                       ? "border-emerald-300/80"
                       : "border-white/10 hover:border-white/30"
                   }`}
@@ -290,7 +269,7 @@ export default function ProductPurchasePanel({
                   {locale === "fr" ? "Couleur" : "Color"}
                 </p>
                 <select
-                  value={selectedColor}
+                  value={effectiveSelectedColor}
                   onChange={(e) => setSelectedColor(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 >
@@ -309,7 +288,7 @@ export default function ProductPurchasePanel({
                   {locale === "fr" ? "Taille" : "Size"}
                 </p>
                 <select
-                  value={selectedSize}
+                  value={effectiveSelectedSize}
                   onChange={(e) => setSelectedSize(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white"
                 >
@@ -322,11 +301,11 @@ export default function ProductPurchasePanel({
               </div>
             )}
 
-            {((showColorOptions && Boolean(selectedColor)) || (showSizeOptions && Boolean(selectedSize))) && (
+            {((showColorOptions && Boolean(effectiveSelectedColor)) || (showSizeOptions && Boolean(effectiveSelectedSize))) && (
               <div className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
-                {showColorOptions && <span>{locale === "fr" ? "Couleur" : "Color"}: {selectedColor}</span>}
+                {showColorOptions && <span>{locale === "fr" ? "Couleur" : "Color"}: {effectiveSelectedColor}</span>}
                 {showColorOptions && showSizeOptions && <span className="px-2 text-zinc-500">-</span>}
-                {showSizeOptions && <span>{locale === "fr" ? "Taille" : "Size"}: {selectedSize}</span>}
+                {showSizeOptions && <span>{locale === "fr" ? "Taille" : "Size"}: {effectiveSelectedSize}</span>}
               </div>
             )}
 
@@ -340,8 +319,8 @@ export default function ProductPurchasePanel({
                 type={type}
                 sellerName={sellerName}
                 quantity={quantity}
-                optionColor={showColorOptions ? selectedColor || undefined : undefined}
-                optionSize={showSizeOptions ? selectedSize || undefined : undefined}
+                optionColor={showColorOptions ? effectiveSelectedColor || undefined : undefined}
+                optionSize={showSizeOptions ? effectiveSelectedSize || undefined : undefined}
                 maxQuantity={maxSelectableQuantity}
                 label={addLabel}
                 addedLabel={addedLabel}
@@ -373,7 +352,7 @@ export default function ProductPurchasePanel({
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <p className="text-sm text-zinc-300">
-                {activeIndex + 1}/{safeImages.length}
+                {normalizedIndex + 1}/{safeImages.length}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -440,7 +419,7 @@ export default function ProductPurchasePanel({
                     type="button"
                     onClick={() => setActiveIndex(index)}
                     className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border transition ${
-                      index === activeIndex
+                      index === normalizedIndex
                         ? "border-emerald-300/80"
                         : "border-white/10 hover:border-white/30"
                     }`}
@@ -456,4 +435,8 @@ export default function ProductPurchasePanel({
     </>
   );
 }
+
+
+
+
 

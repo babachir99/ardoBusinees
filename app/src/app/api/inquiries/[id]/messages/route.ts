@@ -39,6 +39,7 @@ export async function GET(
     where: getAccessWhere(session.user.id, session.user.role === "ADMIN", id),
     include: {
       seller: { select: { userId: true } },
+      product: { select: { type: true } },
       messages: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -123,11 +124,19 @@ export async function POST(
       id: true,
       buyerId: true,
       seller: { select: { userId: true } },
+      product: { select: { type: true } },
     },
   });
 
   if (!inquiry) {
     return NextResponse.json({ error: "Inquiry not found" }, { status: 404 });
+  }
+
+  if (inquiry.product.type !== "LOCAL") {
+    return NextResponse.json(
+      { error: "Messaging is available only for local products." },
+      { status: 403 }
+    );
   }
 
   const now = new Date();
@@ -174,5 +183,7 @@ export async function POST(
     { status: 201 }
   );
 }
+
+
 
 

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -16,19 +16,20 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-function hasInquiryDelegates(client: PrismaClient) {
+function hasRequiredDelegates(client: PrismaClient) {
   const runtimeClient = client as unknown as Record<string, unknown>;
   return (
     "productInquiry" in runtimeClient &&
     "productInquiryMessage" in runtimeClient &&
-    "productOffer" in runtimeClient
+    "productOffer" in runtimeClient &&
+    "userAddress" in runtimeClient
   );
 }
 
 const devClient = globalForPrisma.prisma;
 const shouldRefreshDevClient =
   process.env.NODE_ENV !== "production" &&
-  (!devClient || !hasInquiryDelegates(devClient));
+  (!devClient || !hasRequiredDelegates(devClient));
 
 export const prisma =
   process.env.NODE_ENV === "production"

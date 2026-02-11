@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, type TouchEvent } from "react";
 
@@ -33,12 +33,6 @@ export default function ProductCardCarousel({
 
     return () => window.clearInterval(intervalId);
   }, [safeImages.length]);
-
-  useEffect(() => {
-    if (activeIndex >= safeImages.length) {
-      setActiveIndex(0);
-    }
-  }, [activeIndex, safeImages.length]);
 
   const onPrev = () => {
     if (safeImages.length <= 1) return;
@@ -76,7 +70,8 @@ export default function ProductCardCarousel({
     );
   }
 
-  const currentImage = safeImages[activeIndex];
+  const normalizedIndex = safeImages.length > 0 ? activeIndex % safeImages.length : 0;
+  const currentImage = safeImages[normalizedIndex];
 
   return (
     <div
@@ -117,10 +112,13 @@ export default function ProductCardCarousel({
             &#8250;
           </button>
           <span className="absolute bottom-2 right-2 rounded-full bg-zinc-950/75 px-2 py-0.5 text-[10px] text-zinc-300">
-            {activeIndex + 1}/{safeImages.length}
+            {normalizedIndex + 1}/{safeImages.length}
           </span>
         </>
       )}
     </div>
   );
 }
+
+
+

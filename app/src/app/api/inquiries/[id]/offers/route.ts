@@ -105,7 +105,7 @@ export async function POST(
       sellerId: true,
       productId: true,
       seller: { select: { userId: true } },
-      product: { select: { title: true, currency: true } },
+      product: { select: { title: true, currency: true, type: true } },
     },
   });
 
@@ -116,6 +116,13 @@ export async function POST(
   const isAdmin = session.user.role === "ADMIN";
   if (!canAccessInquiry(inquiry, session.user.id, isAdmin)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (inquiry.product.type !== "LOCAL") {
+    return NextResponse.json(
+      { error: "Offers are available only for local products." },
+      { status: 403 }
+    );
   }
 
   const now = new Date();
@@ -169,6 +176,8 @@ export async function POST(
 
   return NextResponse.json(created, { status: 201 });
 }
+
+
 
 
 

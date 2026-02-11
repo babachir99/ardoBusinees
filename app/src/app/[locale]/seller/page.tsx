@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
@@ -86,7 +86,6 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   const [
     totalProducts,
     activeProducts,
-    inactiveProducts,
     pendingOrders,
     revenueTotal,
     revenueRange,
@@ -102,7 +101,6 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   ] = await Promise.all([
     prisma.product.count({ where: { sellerId: seller.id } }),
     prisma.product.count({ where: { sellerId: seller.id, isActive: true } }),
-    prisma.product.count({ where: { sellerId: seller.id, isActive: false } }),
     prisma.order.count({ where: { sellerId: seller.id, status: "PENDING" } }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
@@ -776,3 +774,5 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
     </div>
   );
 }
+
+

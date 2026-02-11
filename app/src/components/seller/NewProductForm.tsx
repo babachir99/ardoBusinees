@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -89,25 +89,11 @@ function inferAttributeFields(category?: CategoryOption): AttributeField[] {
 
   const currentSlug = category.slug.toLowerCase();
   const currentName = category.name.toLowerCase();
-  const parentSlug = (category.parent?.slug ?? "").toLowerCase();
-  const parentName = (category.parent?.name ?? "").toLowerCase();
-  const bag = `${currentSlug} ${currentName} ${parentSlug} ${parentName}`;
+  const rootSlug = (category.parent?.slug ?? category.slug).toLowerCase();
+  const rootName = (category.parent?.name ?? category.name).toLowerCase();
 
-  const isRealEstateRoot = currentSlug === "immobilier" || parentSlug === "immobilier";
-  const isRealEstateLeaf = [
-    "immo",
-    "immobilier",
-    "appartement",
-    "terrain",
-    "location",
-    "colocation",
-    "bureau",
-    "commerce",
-    "villa",
-    "studio",
-  ].some((keyword) => currentSlug.includes(keyword) || currentName.includes(keyword));
-
-  if (isRealEstateRoot || isRealEstateLeaf) {
+  const isRealEstateCategory = rootSlug === "immobilier" || currentSlug.startsWith("immobilier-");
+  if (isRealEstateCategory) {
     return [
       { key: "surface", label: "Surface", placeholder: "Ex: 120 m2" },
       { key: "rooms", label: "Pieces", placeholder: "Ex: 4" },
@@ -116,17 +102,7 @@ function inferAttributeFields(category?: CategoryOption): AttributeField[] {
     ];
   }
 
-  const isVehicleCategory = [
-    "voiture",
-    "vehicule",
-    "vehicle",
-    "cars",
-    "auto",
-    "moto",
-    "utilitaire",
-    "camion",
-  ].some((keyword) => bag.includes(keyword));
-
+  const isVehicleCategory = rootSlug === "vehicules" || currentSlug.startsWith("vehicules-");
   if (isVehicleCategory) {
     return [
       { key: "brand", label: "Marque", placeholder: "Ex: Toyota", required: true },
@@ -139,11 +115,13 @@ function inferAttributeFields(category?: CategoryOption): AttributeField[] {
   }
 
   const isFashionCategory =
-    bag.includes("vetement") ||
-    bag.includes("mode") ||
-    bag.includes("fashion") ||
-    bag.includes("chaussure");
-
+    rootSlug === "mode" ||
+    currentSlug.startsWith("mode-") ||
+    (rootSlug === "famille" &&
+      (currentSlug.includes("vetement") ||
+        currentSlug.includes("chaussure") ||
+        currentSlug.includes("bijoux") ||
+        currentSlug.includes("accessoires")));
   if (isFashionCategory) {
     return [
       { key: "brand", label: "Marque", placeholder: "Ex: Zara" },
@@ -154,13 +132,47 @@ function inferAttributeFields(category?: CategoryOption): AttributeField[] {
     ];
   }
 
+  const isElectronicsCategory =
+    rootSlug === "electronique" || currentSlug.startsWith("electronique-");
+  if (isElectronicsCategory) {
+    return [
+      { key: "brand", label: "Marque", placeholder: "Ex: Samsung" },
+      { key: "model", label: "Modele", placeholder: "Ex: Galaxy S24" },
+      { key: "condition", label: "Etat", placeholder: "Ex: Neuf" },
+      { key: "warranty", label: "Garantie", placeholder: "Ex: 12 mois" },
+    ];
+  }
+
+  if (rootSlug === "services" || currentSlug.startsWith("services-")) {
+    return [
+      { key: "serviceType", label: "Type de service", placeholder: "Ex: Livraison moto" },
+      { key: "availability", label: "Disponibilite", placeholder: "Ex: Lun-Sam 8h-20h" },
+      { key: "coverage", label: "Zone couverte", placeholder: "Ex: Dakar centre" },
+    ];
+  }
+
+  if (rootSlug === "maison-jardin" || currentSlug.startsWith("maison-")) {
+    return [
+      { key: "brand", label: "Marque", placeholder: "Ex: Tefal" },
+      { key: "material", label: "Matiere", placeholder: "Ex: Inox" },
+      { key: "condition", label: "Etat", placeholder: "Ex: Neuf" },
+    ];
+  }
+
+  if (rootSlug === "loisirs" || currentSlug.startsWith("loisirs-")) {
+    return [
+      { key: "condition", label: "Etat", placeholder: "Ex: Tres bon etat" },
+      { key: "brand", label: "Marque", placeholder: "Ex: Sony" },
+      { key: "edition", label: "Edition", placeholder: "Ex: Collector" },
+    ];
+  }
+
   return [
     { key: "brand", label: "Marque", placeholder: "Ex: Samsung" },
     { key: "condition", label: "Etat", placeholder: "Ex: Neuf" },
     { key: "warranty", label: "Garantie", placeholder: "Ex: 12 mois" },
   ];
 }
-
 export default function NewProductForm() {
   const t = useTranslations("SellerProduct");
 
@@ -309,7 +321,18 @@ export default function NewProductForm() {
 
     const scored = selectableCategories
       .map((category) => {
-        const bag = toSlug(`${category.parent?.name ?? ""} ${category.name} ${category.slug}`);
+        const bag = toSlug(
+          [
+            category.name,
+            category.slug,
+            category.parent?.name ?? "",
+            category.parent?.slug ?? "",
+            category.label ?? "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+
         let score = 0;
         for (const token of tokens) {
           if (bag.includes(token)) score += 2;
@@ -1509,6 +1532,11 @@ export default function NewProductForm() {
     </form>
   );
 }
+
+
+
+
+
 
 
 

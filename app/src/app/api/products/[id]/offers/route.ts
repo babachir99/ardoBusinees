@@ -27,11 +27,23 @@ export async function GET(
 
   const product = await prisma.product.findUnique({
     where: { id },
-    select: { id: true, sellerId: true, seller: { select: { userId: true } } },
+    select: {
+      id: true,
+      type: true,
+      sellerId: true,
+      seller: { select: { userId: true } },
+    },
   });
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  if (product.type !== "LOCAL") {
+    return NextResponse.json(
+      { error: "Offers are available only for local products." },
+      { status: 403 }
+    );
   }
 
   if (product.seller?.userId === session.user.id) {
@@ -120,6 +132,7 @@ export async function POST(
     select: {
       id: true,
       title: true,
+      type: true,
       currency: true,
       sellerId: true,
       seller: { select: { userId: true } },
@@ -128,6 +141,13 @@ export async function POST(
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  if (product.type !== "LOCAL") {
+    return NextResponse.json(
+      { error: "Offers are available only for local products." },
+      { status: 403 }
+    );
   }
 
   if (product.seller?.userId === session.user.id) {
@@ -190,3 +210,7 @@ export async function POST(
 
   return NextResponse.json(result, { status: 201 });
 }
+
+
+
+
