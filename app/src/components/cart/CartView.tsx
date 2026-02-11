@@ -1,14 +1,161 @@
-﻿"use client";
+"use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
 
+type RecommendedProduct = {
+  id: string;
+  title: string;
+  slug: string;
+  priceCents: number;
+  discountPercent?: number | null;
+  currency: string;
+  seller?: { displayName: string; slug: string } | null;
+  images: { url: string }[];
+};
+
+type RecommendationsResponse = {
+  similar?: RecommendedProduct[];
+  complementary?: RecommendedProduct[];
+};
+
+function ProductSuggestionGrid({
+  title,
+  subtitle,
+  products,
+  locale,
+}: {
+  title: string;
+  subtitle: string;
+  products: RecommendedProduct[];
+  locale: string;
+}) {
+  if (products.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+      <p className="text-xs text-zinc-400">{title}</p>
+      <p className="mt-1 text-[11px] text-zinc-500">{subtitle}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {products.map((product) => {
+          const discountedPrice =
+            product.discountPercent && product.discountPercent > 0
+              ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
+              : product.priceCents;
+
+          return (
+            <Link
+              key={product.id}
+              href={`/shop/${product.slug}`}
+              className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+            >
+              <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                {product.images?.[0]?.url ? (
+                  <img
+                    src={product.images[0].url}
+                    alt={product.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                    Image
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
+              <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm font-semibold text-emerald-200">
+                  {formatMoney(discountedPrice, product.currency, locale)}
+                </span>
+                {product.discountPercent && product.discountPercent > 0 && (
+                  <span className="text-[11px] text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function CartView() {
   const t = useTranslations("Cart");
   const locale = useLocale();
   const { items, updateQuantity, removeItem, clear, subtotalCents } = useCart();
+
+  const [similarProducts, setSimilarProducts] = useState<RecommendedProduct[]>([]);
+  const [complementaryProducts, setComplementaryProducts] = useState<RecommendedProduct[]>([]);
+
+  const sourceProductIds = useMemo(
+    () => Array.from(new Set(items.map((item) => item.id))).slice(0, 18),
+    [items]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRecommendations = async () => {
+      if (sourceProductIds.length === 0) {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          productIds: sourceProductIds.join(","),
+          take: "6",
+        });
+        const response = await fetch(`/api/products/recommendations?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setSimilarProducts([]);
+            setComplementaryProducts([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as
+          | RecommendationsResponse
+          | RecommendedProduct[];
+
+        if (!cancelled) {
+          if (Array.isArray(payload)) {
+            setSimilarProducts(payload);
+            setComplementaryProducts([]);
+          } else {
+            setSimilarProducts(Array.isArray(payload.similar) ? payload.similar : []);
+            setComplementaryProducts(
+              Array.isArray(payload.complementary) ? payload.complementary : []
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+      }
+    };
+
+    void loadRecommendations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceProductIds]);
 
   const feesCents = Math.round(subtotalCents * 0.04);
   const totalCents = subtotalCents + feesCents;
@@ -117,6 +264,21 @@ export default function CartView() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-8 grid gap-4">
+          <ProductSuggestionGrid
+            title={t("recommendedSimilarTitle")}
+            subtitle={t("recommendedSimilarSubtitle")}
+            products={similarProducts}
+            locale={locale}
+          />
+          <ProductSuggestionGrid
+            title={t("recommendedComplementaryTitle")}
+            subtitle={t("recommendedComplementarySubtitle")}
+            products={complementaryProducts}
+            locale={locale}
+          />
         </div>
       </section>
 

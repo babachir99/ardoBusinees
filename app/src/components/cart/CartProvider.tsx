@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   createContext,
@@ -52,7 +52,8 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
-const STORAGE_KEY = "ardo_cart";
+const BASE_STORAGE_KEY = "ardo_cart";
+const GUEST_STORAGE_KEY = `${BASE_STORAGE_KEY}::guest`;
 
 function toSafeMaxQuantity(value: unknown): number | undefined {
   const max = Number(value);
@@ -108,23 +109,89 @@ function parseStored(value: string | null): CartItem[] {
   }
 }
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return parseStored(window.localStorage.getItem(STORAGE_KEY));
-    } catch {
-      return [];
+function storageKeyForUserId(userId?: string) {
+  if (!userId) return GUEST_STORAGE_KEY;
+  return `${BASE_STORAGE_KEY}::user::${userId}`;
+}
+
+function readCartForKey(key: string): CartItem[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const scopedValue = window.localStorage.getItem(key);
+    if (scopedValue) {
+      return parseStored(scopedValue);
     }
-  });
+
+    // One-time migration from old global cart key to guest scope.
+    if (key === GUEST_STORAGE_KEY) {
+      const legacyValue = window.localStorage.getItem(BASE_STORAGE_KEY);
+      if (legacyValue) {
+        window.localStorage.setItem(GUEST_STORAGE_KEY, legacyValue);
+        window.localStorage.removeItem(BASE_STORAGE_KEY);
+        return parseStored(legacyValue);
+      }
+    }
+  } catch {
+    // Ignore read errors (storage disabled)
+  }
+
+  return [];
+}
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [storageKey, setStorageKey] = useState<string>(GUEST_STORAGE_KEY);
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  const resolveStorageScope = useCallback(async () => {
+    let nextKey = GUEST_STORAGE_KEY;
+
+    try {
+      const response = await fetch("/api/profile", { cache: "no-store" });
+      if (response.ok) {
+        const profile = (await response.json()) as { id?: string } | null;
+        nextKey = storageKeyForUserId(profile?.id);
+      }
+    } catch {
+      nextKey = GUEST_STORAGE_KEY;
+    }
+
+    setStorageKey((current) => (current === nextKey ? current : nextKey));
+  }, []);
+
+  useEffect(() => {
+    void resolveStorageScope();
+
+    const handleFocus = () => {
+      void resolveStorageScope();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void resolveStorageScope();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [resolveStorageScope]);
+
+  useEffect(() => {
+    setItems(readCartForKey(storageKey));
+  }, [storageKey]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem(storageKey, JSON.stringify(items));
     } catch {
       // Ignore write errors (storage disabled)
     }
-  }, [items]);
+  }, [items, storageKey]);
 
   const addItem = useCallback((item: AddItemInput, quantity = 1) => {
     const requestedQty = Math.max(1, Math.floor(quantity));
@@ -208,6 +275,3 @@ export function useCart() {
   }
   return ctx;
 }
-
-
-

@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 
 type OrderEvent = {
@@ -18,7 +19,23 @@ type OrderItem = {
   unitPriceCents: number;
   optionColor?: string | null;
   optionSize?: string | null;
-  product?: { id: string; title: string; slug: string } | null;
+  product?: { id: string; title: string; slug: string; images?: { url: string }[] } | null;
+};
+
+type RecommendedProduct = {
+  id: string;
+  title: string;
+  slug: string;
+  priceCents: number;
+  discountPercent?: number | null;
+  currency: string;
+  seller?: { displayName: string; slug: string } | null;
+  images: { url: string }[];
+};
+
+type RecommendationsResponse = {
+  similar?: RecommendedProduct[];
+  complementary?: RecommendedProduct[];
 };
 
 type Order = {
@@ -50,6 +67,69 @@ const statusOptions = [
   "REFUNDED",
 ];
 
+function RecommendedGrid({
+  title,
+  subtitle,
+  products,
+  locale,
+}: {
+  title: string;
+  subtitle: string;
+  products: RecommendedProduct[];
+  locale: string;
+}) {
+  if (products.length === 0) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+      <p className="text-xs text-zinc-400">{title}</p>
+      <p className="mt-1 text-[11px] text-zinc-500">{subtitle}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {products.map((product) => {
+          const discountedPrice =
+            product.discountPercent && product.discountPercent > 0
+              ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
+              : product.priceCents;
+
+          return (
+            <Link
+              key={product.id}
+              href={`/shop/${product.slug}`}
+              className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+            >
+              <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                {product.images?.[0]?.url ? (
+                  <img
+                    src={product.images[0].url}
+                    alt={product.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                    Image
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
+              <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm font-semibold text-emerald-200">
+                  {formatMoney(discountedPrice, product.currency, locale)}
+                </span>
+                {product.discountPercent && product.discountPercent > 0 && (
+                  <span className="text-[11px] text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminOrderDetail({ orderId }: { orderId: string }) {
   const t = useTranslations("AdminOrders");
   const locale = useLocale();
@@ -58,6 +138,15 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState<RecommendedProduct[]>([]);
+  const [complementaryProducts, setComplementaryProducts] = useState<RecommendedProduct[]>([]);
+
+  const sourceProductIds = useMemo(() => {
+    if (!order) return [] as string[];
+    return Array.from(
+      new Set(order.items.map((item) => item.product?.id).filter((id): id is string => Boolean(id)))
+    ).slice(0, 18);
+  }, [order]);
 
   const loadOrder = async () => {
     setLoading(true);
@@ -78,8 +167,65 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
   };
 
   useEffect(() => {
-    loadOrder();
+    void loadOrder();
   }, [orderId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRecommendations = async () => {
+      if (sourceProductIds.length === 0) {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          productIds: sourceProductIds.join(","),
+          take: "6",
+        });
+        const response = await fetch(`/api/products/recommendations?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setSimilarProducts([]);
+            setComplementaryProducts([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as RecommendationsResponse | RecommendedProduct[];
+
+        if (!cancelled) {
+          if (Array.isArray(payload)) {
+            setSimilarProducts(payload);
+            setComplementaryProducts([]);
+          } else {
+            setSimilarProducts(Array.isArray(payload.similar) ? payload.similar : []);
+            setComplementaryProducts(
+              Array.isArray(payload.complementary) ? payload.complementary : []
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+      }
+    };
+
+    void loadRecommendations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceProductIds]);
 
   const addEvent = async (status: string, note: string, proofUrl: string) => {
     setSaving(true);
@@ -157,7 +303,9 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
         </div>
         <button
           type="button"
-          onClick={loadOrder}
+          onClick={() => {
+            void loadOrder();
+          }}
           className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
         >
           {t("refresh")}
@@ -170,7 +318,9 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
           <p className="text-xs text-zinc-400">{t("labels.order")}</p>
           <p className="mt-1 text-sm text-white">{order.id}</p>
-          <p className="mt-2">{t("labels.date")} {new Date(order.createdAt).toLocaleString(locale)}</p>
+          <p className="mt-2">
+            {t("labels.date")} {new Date(order.createdAt).toLocaleString(locale)}
+          </p>
           <p className="mt-2">{t(`status.${order.status.toLowerCase()}`)}</p>
           <p className="mt-1">{t(`payment.${order.paymentStatus.toLowerCase()}`)}</p>
           <p className="mt-1">{order.paymentMethod ?? t("labels.noMethod")}</p>
@@ -204,9 +354,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
                 <div className="min-w-0">
                   <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
                   {optionParts.length > 0 && (
-                    <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {optionParts.join(" · ")}
-                    </p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">{optionParts.join(" - ")}</p>
                   )}
                 </div>
                 <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
@@ -230,6 +378,20 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
           <span>{formatMoney(order.totalCents, order.currency, locale)}</span>
         </div>
       </div>
+
+      <RecommendedGrid
+        title={t("detail.recommendedSimilarTitle")}
+        subtitle={t("detail.recommendedSimilarSubtitle")}
+        products={similarProducts}
+        locale={locale}
+      />
+
+      <RecommendedGrid
+        title={t("detail.recommendedComplementaryTitle")}
+        subtitle={t("detail.recommendedComplementarySubtitle")}
+        products={complementaryProducts}
+        locale={locale}
+      />
 
       <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
         <p className="text-xs text-zinc-400">{t("labels.newEvent")}</p>
@@ -264,7 +426,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  uploadProof(file);
+                  void uploadProof(file);
                   e.target.value = "";
                 }
               }}
@@ -273,16 +435,10 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
           <button
             type="button"
             onClick={() => {
-              const status = (
-                document.getElementById("status-detail") as HTMLSelectElement
-              )?.value;
-              const note = (
-                document.getElementById("note-detail") as HTMLInputElement
-              )?.value;
-              const proofUrl = (
-                document.getElementById("proof-detail") as HTMLInputElement
-              )?.value;
-              addEvent(status, note, proofUrl);
+              const status = (document.getElementById("status-detail") as HTMLSelectElement)?.value;
+              const note = (document.getElementById("note-detail") as HTMLInputElement)?.value;
+              const proofUrl = (document.getElementById("proof-detail") as HTMLInputElement)?.value;
+              void addEvent(status, note, proofUrl);
             }}
             disabled={saving}
             className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60 md:col-span-4"
@@ -308,6 +464,5 @@ export default function AdminOrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
-
 
 

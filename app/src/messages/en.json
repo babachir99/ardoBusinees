@@ -172,7 +172,11 @@
       "fees": "Estimated fees",
       "total": "Total",
       "cta": "Proceed to checkout"
-    }
+    },
+    "recommendedSimilarTitle": "Similar products",
+    "recommendedSimilarSubtitle": "From the same categories as your cart",
+    "recommendedComplementaryTitle": "Pairs well with",
+    "recommendedComplementarySubtitle": "Complementary items for your order"
   },
   "Orders": {
     "kicker": "Orders",
@@ -271,7 +275,11 @@
         "saving": "Publishing...",
         "success": "Thanks, your review was saved.",
         "error": "Unable to save your review."
-      }
+      },
+      "recommendedSimilarTitle": "Similar products",
+      "recommendedSimilarSubtitle": "Based on your latest purchases",
+      "recommendedComplementaryTitle": "Pairs well with",
+      "recommendedComplementarySubtitle": "Useful complements for ordered products"
     },
     "empty": "No orders found for this email.",
     "errors": {
@@ -599,7 +607,11 @@
         "subtitle": "See items, customer info, and tracking.",
         "back": "Back",
         "customer": "Customer",
-        "noPhone": "No phone"
+        "noPhone": "No phone",
+        "recommendedSimilarTitle": "Similar products",
+        "recommendedSimilarSubtitle": "From the same categories",
+        "recommendedComplementaryTitle": "Pairs well with",
+        "recommendedComplementarySubtitle": "Complementary items"
       },
       "status": {
         "pending": "Pending",
@@ -908,7 +920,11 @@
       "title": "Order details",
       "subtitle": "View items, customer info, and tracking.",
       "customer": "Customer",
-      "noPhone": "No phone"
+      "noPhone": "No phone",
+      "recommendedSimilarTitle": "Similar products",
+      "recommendedSimilarSubtitle": "From the same categories",
+      "recommendedComplementaryTitle": "Pairs well with",
+      "recommendedComplementarySubtitle": "Complementary items"
     },
     "errors": {
       "load": "Unable to load orders.",
@@ -1294,5 +1310,6 @@
     }
   }
 }
+
 
 

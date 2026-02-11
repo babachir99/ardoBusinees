@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
@@ -27,7 +27,23 @@ type OrderItem = {
   unitPriceCents: number;
   optionColor?: string | null;
   optionSize?: string | null;
-  product?: { id: string; title: string; slug: string } | null;
+  product?: { id: string; title: string; slug: string; images?: { url: string }[] } | null;
+};
+
+type RecommendedProduct = {
+  id: string;
+  title: string;
+  slug: string;
+  priceCents: number;
+  discountPercent?: number | null;
+  currency: string;
+  seller?: { displayName: string; slug: string } | null;
+  images: { url: string }[];
+};
+
+type RecommendationsResponse = {
+  similar?: RecommendedProduct[];
+  complementary?: RecommendedProduct[];
 };
 
 type Order = {
@@ -60,6 +76,69 @@ const statusOptions = [
   "REFUNDED",
 ];
 
+function RecommendedGrid({
+  title,
+  subtitle,
+  products,
+  locale,
+}: {
+  title: string;
+  subtitle: string;
+  products: RecommendedProduct[];
+  locale: string;
+}) {
+  if (products.length === 0) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+      <p className="text-xs text-zinc-400">{title}</p>
+      <p className="mt-1 text-[11px] text-zinc-500">{subtitle}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {products.map((product) => {
+          const discountedPrice =
+            product.discountPercent && product.discountPercent > 0
+              ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
+              : product.priceCents;
+
+          return (
+            <Link
+              key={product.id}
+              href={`/shop/${product.slug}`}
+              className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+            >
+              <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                {product.images?.[0]?.url ? (
+                  <img
+                    src={product.images[0].url}
+                    alt={product.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                    Image
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
+              <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm font-semibold text-emerald-200">
+                  {formatMoney(discountedPrice, product.currency, locale)}
+                </span>
+                {product.discountPercent && product.discountPercent > 0 && (
+                  <span className="text-[11px] text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function SellerOrderDetail({ orderId }: { orderId: string }) {
   const t = useTranslations("SellerSpace");
   const locale = useLocale();
@@ -73,6 +152,15 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
   const [noteDraft, setNoteDraft] = useState("");
   const [proofDraft, setProofDraft] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
+  const [similarProducts, setSimilarProducts] = useState<RecommendedProduct[]>([]);
+  const [complementaryProducts, setComplementaryProducts] = useState<RecommendedProduct[]>([]);
+
+  const sourceProductIds = useMemo(() => {
+    if (!order) return [] as string[];
+    return Array.from(
+      new Set(order.items.map((item) => item.product?.id).filter((id): id is string => Boolean(id)))
+    ).slice(0, 18);
+  }, [order]);
 
   const loadOrder = async () => {
     setLoading(true);
@@ -94,8 +182,65 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
   };
 
   useEffect(() => {
-    loadOrder();
+    void loadOrder();
   }, [orderId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRecommendations = async () => {
+      if (sourceProductIds.length === 0) {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          productIds: sourceProductIds.join(","),
+          take: "6",
+        });
+        const response = await fetch(`/api/products/recommendations?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setSimilarProducts([]);
+            setComplementaryProducts([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as RecommendationsResponse | RecommendedProduct[];
+
+        if (!cancelled) {
+          if (Array.isArray(payload)) {
+            setSimilarProducts(payload);
+            setComplementaryProducts([]);
+          } else {
+            setSimilarProducts(Array.isArray(payload.similar) ? payload.similar : []);
+            setComplementaryProducts(
+              Array.isArray(payload.complementary) ? payload.complementary : []
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSimilarProducts([]);
+          setComplementaryProducts([]);
+        }
+      }
+    };
+
+    void loadRecommendations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceProductIds]);
 
   const addEvent = async () => {
     if (!order) return;
@@ -205,7 +350,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           </Link>
           <button
             type="button"
-            onClick={loadOrder}
+            onClick={() => {
+              void loadOrder();
+            }}
             className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
           >
             {t("orders.refresh")}
@@ -251,13 +398,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
             return (
               <li key={item.id} className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate">
-                    {item.product?.title ?? t("orders.labels.unknownProduct")}
-                  </p>
+                  <p className="truncate">{item.product?.title ?? t("orders.labels.unknownProduct")}</p>
                   {optionParts.length > 0 && (
-                    <p className="mt-0.5 text-[11px] text-zinc-500">
-                      {optionParts.join(" · ")}
-                    </p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">{optionParts.join(" - ")}</p>
                   )}
                 </div>
                 <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
@@ -266,6 +409,20 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           })}
         </ul>
       </div>
+
+      <RecommendedGrid
+        title={t("orders.detail.recommendedSimilarTitle")}
+        subtitle={t("orders.detail.recommendedSimilarSubtitle")}
+        products={similarProducts}
+        locale={locale}
+      />
+
+      <RecommendedGrid
+        title={t("orders.detail.recommendedComplementaryTitle")}
+        subtitle={t("orders.detail.recommendedComplementarySubtitle")}
+        products={complementaryProducts}
+        locale={locale}
+      />
 
       <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
         <div className="flex items-center justify-between">
@@ -317,7 +474,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
-                  uploadProof(file);
+                  void uploadProof(file);
                   e.target.value = "";
                 }
               }}
@@ -325,7 +482,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           </label>
           <button
             type="button"
-            onClick={addEvent}
+            onClick={() => {
+              void addEvent();
+            }}
             disabled={saving}
             className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60 md:col-span-5"
           >
@@ -340,8 +499,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           {order.events.map((event) => (
             <div key={event.id} className="flex flex-wrap items-center justify-between gap-3">
               <span>
-                {t(`orders.status.${event.status.toLowerCase()}`)} -{" "}
-                {new Date(event.createdAt).toLocaleString(locale)}
+                {t(`orders.status.${event.status.toLowerCase()}`)} - {new Date(event.createdAt).toLocaleString(locale)}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {event.note && <span>{event.note}</span>}
@@ -368,25 +526,18 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
             order.messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.senderRole === "SELLER" ? "justify-end" : "justify-start"
-                }`}
+                className={`flex ${message.senderRole === "SELLER" ? "justify-end" : "justify-start"}`}
               >
                 <div className="max-w-[70%] rounded-2xl border border-white/10 bg-zinc-950/70 px-3 py-2 text-[11px] text-zinc-200">
                   <p className="text-[10px] text-zinc-500">
-                    {t(
-                      `orders.sender.${(message.senderRole ?? "SYSTEM").toLowerCase()}`
-                    )}{" "}
-                    - {new Date(message.createdAt).toLocaleString(locale)}
+                    {t(`orders.sender.${(message.senderRole ?? "SYSTEM").toLowerCase()}`)} - {new Date(message.createdAt).toLocaleString(locale)}
                   </p>
                   <p className="mt-1">{message.body}</p>
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-[11px] text-zinc-500">
-              {t("orders.labels.noMessages")}
-            </p>
+            <p className="text-[11px] text-zinc-500">{t("orders.labels.noMessages")}</p>
           )}
         </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -398,7 +549,9 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
           />
           <button
             type="button"
-            onClick={sendMessage}
+            onClick={() => {
+              void sendMessage();
+            }}
             disabled={sending}
             className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60"
           >
@@ -409,5 +562,4 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
-
 

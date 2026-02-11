@@ -172,7 +172,11 @@
       "fees": "Frais estimes",
       "total": "Total",
       "cta": "Aller au paiement"
-    }
+    },
+    "recommendedSimilarTitle": "Produits similaires",
+    "recommendedSimilarSubtitle": "Dans les memes categories que ton panier",
+    "recommendedComplementaryTitle": "Peut aller avec",
+    "recommendedComplementarySubtitle": "Articles complementaires pour ta commande"
   },
   "Orders": {
     "kicker": "Commandes",
@@ -271,7 +275,11 @@
         "saving": "Publication...",
         "success": "Merci, ton avis a ete enregistre.",
         "error": "Impossible d'enregistrer l'avis."
-      }
+      },
+      "recommendedSimilarTitle": "Produits similaires",
+      "recommendedSimilarSubtitle": "Base sur tes derniers achats",
+      "recommendedComplementaryTitle": "Peut aller avec",
+      "recommendedComplementarySubtitle": "Complements pertinents pour les produits commandes"
     },
     "empty": "Aucune commande trouvee pour cet email.",
     "errors": {
@@ -599,7 +607,11 @@
         "subtitle": "Voir les articles, le client et le suivi.",
         "back": "Retour",
         "customer": "Client",
-        "noPhone": "Aucun telephone"
+        "noPhone": "Aucun telephone",
+        "recommendedSimilarTitle": "Produits similaires",
+        "recommendedSimilarSubtitle": "Dans les memes categories",
+        "recommendedComplementaryTitle": "Peut aller avec",
+        "recommendedComplementarySubtitle": "Articles complementaires"
       },
       "status": {
         "pending": "En attente",
@@ -914,7 +926,11 @@
       "title": "Details commande",
       "subtitle": "Voir les articles, le client et le suivi.",
       "customer": "Client",
-      "noPhone": "Aucun telephone"
+      "noPhone": "Aucun telephone",
+      "recommendedSimilarTitle": "Produits similaires",
+      "recommendedSimilarSubtitle": "Dans les memes categories",
+      "recommendedComplementaryTitle": "Peut aller avec",
+      "recommendedComplementarySubtitle": "Articles complementaires"
     },
     "errors": {
       "load": "Impossible de charger les commandes.",
@@ -1300,5 +1316,9 @@
     }
   }
 }
+
+
+
+
 
 
