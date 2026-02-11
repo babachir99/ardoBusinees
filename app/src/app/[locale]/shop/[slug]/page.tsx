@@ -1,7 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import CartBadge from "@/components/cart/CartBadge";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { getTranslations } from "next-intl/server";
 import Footer from "@/components/layout/Footer";
@@ -11,7 +10,7 @@ import { slugify } from "@/lib/slug";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
-import { getInboxUnreadCount } from "@/lib/inboxCount";
+import UserHeaderActions from "@/components/layout/UserHeaderActions";
 
 type RelatedProductCard = {
   id: string;
@@ -107,7 +106,6 @@ export default async function ProductPage({
   const openChatDefault =
     resolvedSearchParams?.chat === "1" || resolvedSearchParams?.chat === "true";
   const session = await getServerSession(authOptions);
-  const inboxCount = session?.user?.id ? await getInboxUnreadCount(session.user.id) : 0;
   const t = await getTranslations("Product");
   const normalizedSlug = slugify(slug);
   const slugCandidates =
@@ -433,57 +431,7 @@ export default async function ProductPage({
             className="h-[115px] w-auto md:h-[135px]"
           />
         </Link>
-        <div className="flex items-center gap-3">
-          {session?.user?.role === "ADMIN" && (
-            <Link
-              href="/admin"
-              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
-            >
-              Admin
-            </Link>
-          )}
-          {session && (
-            <Link
-              href="/messages"
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50"
-              aria-label={locale === "fr" ? "Messagerie" : "Messages"}
-              title={locale === "fr" ? "Messagerie" : "Messages"}
-            >
-              <span aria-hidden="true">{"\u{1F4AC}"}</span>
-              {inboxCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
-                  {inboxCount > 99 ? "99+" : inboxCount}
-                </span>
-              )}
-            </Link>
-          )}
-          <Link
-            href={session ? "/profile" : "/login"}
-            className="flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
-          >
-            {session?.user?.image ? (
-              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? "Profil"}
-                  className="h-full w-full object-cover"
-                />
-              </span>
-            ) : session?.user?.name ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
-                {session.user.name.slice(0, 1).toUpperCase()}
-              </span>
-            ) : null}
-            {session ? "Profil" : "Se connecter / S'inscrire"}
-          </Link>
-          <Link
-            href="/cart"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("cart")}
-            <CartBadge />
-          </Link>
-        </div>
+        <UserHeaderActions locale={locale} className="flex items-center gap-3" />
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-12 md:flex-row">

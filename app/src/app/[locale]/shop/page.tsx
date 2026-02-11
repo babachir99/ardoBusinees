@@ -5,8 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import UserHeaderActions from "@/components/layout/UserHeaderActions";
 
 type ShopFilters = {
   type?: string;
@@ -25,7 +24,6 @@ export default async function ShopPage({
     searchParams,
     params,
   ]);
-  const session = await getServerSession(authOptions);
   const t = await getTranslations("Shop");
 
   const normalizedType = type?.toUpperCase();
@@ -220,41 +218,7 @@ export default async function ShopPage({
             {t("filters.dropship")}
           </Link>
         </div>
-        <div className="flex items-center gap-3">
-          {session?.user?.role === "ADMIN" && (
-            <Link
-              href="/admin"
-              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
-            >
-              Admin
-            </Link>
-          )}
-          <Link
-            href={session ? "/profile" : "/login"}
-            className="flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
-          >
-            {session?.user?.image ? (
-              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? "Profil"}
-                  className="h-full w-full object-cover"
-                />
-              </span>
-            ) : session?.user?.name ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950/20 text-[10px] font-semibold text-white">
-                {session.user.name.slice(0, 1).toUpperCase()}
-              </span>
-            ) : null}
-            {session ? "Profil" : "Se connecter / S'inscrire"}
-          </Link>
-          <Link
-            href="/cart"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("cart")}
-          </Link>
-        </div>
+        <UserHeaderActions locale={locale} className="flex items-center gap-3" />
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">

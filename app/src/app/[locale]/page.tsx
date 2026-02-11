@@ -1,16 +1,12 @@
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import SearchBar from "@/components/search/SearchBar";
+import UserHeaderActions from "@/components/layout/UserHeaderActions";
 import ProductCardCarousel from "@/components/shop/ProductCardCarousel";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import SignOutIconButton from "@/components/auth/SignOutIconButton";
-import { getInboxUnreadCount } from "@/lib/inboxCount";
-import CartHeaderButton from "@/components/cart/CartHeaderButton";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -31,14 +27,7 @@ export default async function HomePage({
     params,
     searchParams,
   ]);
-  const session = await getServerSession(authOptions);
   const query = q?.trim();
-  const inboxCount = session?.user?.id
-    ? await getInboxUnreadCount(session.user.id)
-    : 0;
-  const profileInitial = (session?.user?.name?.trim() || session?.user?.email?.trim() || "?")
-    .slice(0, 1)
-    .toUpperCase();
 
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
@@ -179,75 +168,11 @@ export default async function HomePage({
             ]}
           />
         </div>
-        <div className="flex items-center gap-2 text-sm xl:shrink-0">
-          {session?.user?.role === "ADMIN" && (
-            <Link
-              href="/admin"
-              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
-            >
-              Admin
-            </Link>
-          )}
-          <Link
-            href="/seller"
-            className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-white/50 hover:text-white"
-          >
-            Vendre
-          </Link>
-          {session && (
-            <Link
-              href="/messages"
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50"
-              aria-label="Messagerie"
-              title="Messagerie"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
-              >
-                <path d="M7 10h10M7 14h6" strokeLinecap="round" strokeLinejoin="round" />
-                <path
-                  d="M21 11.5c0 5-4 8.5-9 8.5-1.5 0-3-.3-4.2-.9L3 20l1.1-3.8C3.4 14.8 3 13.2 3 11.5 3 6.5 7 3 12 3s9 3.5 9 8.5Z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {inboxCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
-                  {inboxCount > 99 ? "99+" : inboxCount}
-                </span>
-              )}
-            </Link>
-          )}
-          <CartHeaderButton label={locale === "fr" ? "Panier" : "Cart"} />
-          {session ? (
-            <Link
-              href="/profile"
-              className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-400 text-xs font-semibold text-zinc-950"
-              aria-label={locale === "fr" ? "Profil" : "Profile"}
-              title={locale === "fr" ? "Profil" : "Profile"}
-            >
-              {session.user.image ? (
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? "Profil"}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span>{profileInitial}</span>
-              )}
-            </Link>
-          ) : (
-            <Link
-              href="/login"
-              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
-            >
-              Se connecter / S'inscrire
-            </Link>
-          )}
-          {session && <SignOutIconButton />}
-        </div>
+        <UserHeaderActions
+          locale={locale}
+          showSellerLink
+          className="flex items-center gap-2 text-sm xl:shrink-0"
+        />
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 px-6 pb-24 md:grid-cols-[190px_1fr] lg:grid-cols-[190px_1fr]">
@@ -417,24 +342,3 @@ export default async function HomePage({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

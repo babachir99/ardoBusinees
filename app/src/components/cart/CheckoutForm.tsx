@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -20,6 +20,12 @@ type ProfilePayload = {
   email?: string | null;
   name?: string | null;
   phone?: string | null;
+};
+
+type CheckoutOrdersResponse = {
+  id?: string;
+  orderIds?: string[];
+  orders?: Array<{ id: string }>;
 };
 
 export default function CheckoutForm() {
@@ -216,18 +222,34 @@ export default function CheckoutForm() {
         throw new Error(data?.error || "Order failed");
       }
 
-      const order = (await res.json()) as { id: string };
+      const orderResponse = (await res.json()) as CheckoutOrdersResponse;
+
+      const orderIds = Array.from(
+        new Set(
+          [
+            orderResponse.id,
+            ...(Array.isArray(orderResponse.orderIds) ? orderResponse.orderIds : []),
+            ...((orderResponse.orders ?? []).map((order) => order.id)),
+          ].filter((value): value is string => Boolean(value))
+        )
+      );
+
+      if (orderIds.length === 0) {
+        throw new Error("Order failed");
+      }
 
       if (shouldRunMockPayment) {
-        const paymentRes = await fetch("/api/payments/mock", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: order.id, forceSuccess: true }),
-        });
+        for (const orderId of orderIds) {
+          const paymentRes = await fetch("/api/payments/mock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId, forceSuccess: true }),
+          });
 
-        if (!paymentRes.ok) {
-          const data = await paymentRes.json().catch(() => null);
-          throw new Error(data?.error || "Payment failed");
+          if (!paymentRes.ok) {
+            const data = await paymentRes.json().catch(() => null);
+            throw new Error(data?.error || `Payment failed for order ${orderId}`);
+          }
         }
       }
 
@@ -424,3 +446,8 @@ export default function CheckoutForm() {
     </div>
   );
 }
+
+
+
+
+

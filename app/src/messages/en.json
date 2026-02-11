@@ -526,7 +526,7 @@
       },
       "errors": {
         "fileType": "Unsupported format.",
-        "fileSize": "Image too large (max 2MB).",
+        "fileSize": "Image too large (max 4MB).",
         "dimensions": "Image too small (min 800x800).",
         "maxFiles": "Maximum 5 images."
       },
@@ -1039,7 +1039,7 @@
       "uploading": "Uploading...",
       "errors": {
         "fileType": "Please upload an image.",
-        "fileSize": "Image too large (max 2MB)."
+        "fileSize": "Image too large (max 4MB)."
       }
     },
     "forgot": {
@@ -1195,7 +1195,7 @@
       "load": "Unable to load profile.",
       "save": "Unable to save profile.",
       "fileType": "Please upload an image.",
-      "fileSize": "Image too large (max 2MB)."
+      "fileSize": "Image too large (max 4MB)."
     }
   },
   "Activity": {
@@ -1294,4 +1294,5 @@
     }
   }
 }
+
 

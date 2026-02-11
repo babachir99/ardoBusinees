@@ -526,7 +526,7 @@
       },
       "errors": {
         "fileType": "Format non supporte.",
-        "fileSize": "Image trop lourde (max 2MB).",
+        "fileSize": "Image trop lourde (max 4MB).",
         "dimensions": "Image trop petite (min 800x800).",
         "maxFiles": "Maximum 5 images."
       },
@@ -1045,7 +1045,7 @@
       "uploading": "Upload...",
       "errors": {
         "fileType": "Merci d'uploader une image.",
-        "fileSize": "Image trop lourde (max 2MB)."
+        "fileSize": "Image trop lourde (max 4MB)."
       }
     },
     "forgot": {
@@ -1201,7 +1201,7 @@
       "load": "Impossible de charger le profil.",
       "save": "Impossible d'enregistrer le profil.",
       "fileType": "Merci d'uploader une image.",
-      "fileSize": "Image trop lourde (max 2MB)."
+      "fileSize": "Image trop lourde (max 4MB)."
     }
   },
   "Activity": {
@@ -1300,4 +1300,5 @@
     }
   }
 }
+
 

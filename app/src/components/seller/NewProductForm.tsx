@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -223,7 +223,7 @@ export default function NewProductForm() {
   const addInputRef = useRef<HTMLInputElement | null>(null);
 
   const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-  const maxFileSize = 2 * 1024 * 1024;
+  const maxFileSize = 4 * 1024 * 1024;
   const maxFiles = 5;
   const titleMax = 200;
 
@@ -669,13 +669,6 @@ export default function NewProductForm() {
         })
       );
     }
-
-    const bitmap = await createImageBitmap(file);
-    if (bitmap.width < 800 || bitmap.height < 800) {
-      bitmap.close();
-      throw new Error(t("errors.dimensions", { min: "800x800" }));
-    }
-    bitmap.close();
   };
 
   const compressImage = async (file: File) => {
@@ -838,7 +831,7 @@ export default function NewProductForm() {
           await validateImage(file);
           const processed = file.size > maxFileSize ? await compressImage(file) : file;
 
-          if (processed.size > maxFileSize) throw new Error(t("errors.fileSize", { max: "2MB" }));
+          if (processed.size > maxFileSize) throw new Error(t("errors.fileSize", { max: "4MB" }));
 
           const uploadedUrl = await uploadFile(processed);
           imageUrls.push(uploadedUrl);
@@ -1532,6 +1525,8 @@ export default function NewProductForm() {
     </form>
   );
 }
+
+
 
 
 

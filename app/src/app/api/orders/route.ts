@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
@@ -12,6 +12,25 @@ const allowedPaymentMethods = new Set([
   "CARD",
   "CASH",
 ]);
+
+type CheckoutItemInput = {
+  productId?: string;
+  quantity?: number;
+  type?: ProductType;
+  optionColor?: string;
+  optionSize?: string;
+  offerId?: string;
+};
+
+type MappedItem = {
+  sellerId: string;
+  productId: string;
+  quantity: number;
+  unitPriceCents: number;
+  type: ProductType;
+  optionColor?: string;
+  optionSize?: string;
+};
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -124,7 +143,7 @@ export async function POST(request: NextRequest) {
   const paymentMethod = body.paymentMethod
     ? String(body.paymentMethod).toUpperCase()
     : undefined;
-  const items = Array.isArray(body.items) ? body.items : [];
+  const items = Array.isArray(body.items) ? (body.items as CheckoutItemInput[]) : [];
 
   if (!userId && !body.email) {
     return NextResponse.json(
@@ -141,8 +160,9 @@ export async function POST(request: NextRequest) {
   }
 
   const productIds = items
-    .map((item: { productId?: string }) => String(item.productId ?? ""))
+    .map((item) => String(item.productId ?? ""))
     .filter(Boolean);
+
   if (productIds.length === 0) {
     return NextResponse.json(
       { error: "Each item needs productId" },
@@ -161,6 +181,7 @@ export async function POST(request: NextRequest) {
       stockQuantity: true,
     },
   });
+
   const productMap = new Map(products.map((product) => [product.id, product]));
   const uniqueSellerIds = Array.from(
     new Set(products.map((product) => product.sellerId).filter(Boolean))
@@ -173,24 +194,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (uniqueSellerIds.length > 1) {
-    return NextResponse.json(
-      { error: "All items in a single checkout must belong to one seller." },
-      { status: 400 }
-    );
-  }
+  if (requestedSellerId) {
+    if (uniqueSellerIds.length > 1) {
+      return NextResponse.json(
+        { error: "sellerId cannot be used with multi-seller checkout." },
+        { status: 400 }
+      );
+    }
 
-  const inferredSellerId = uniqueSellerIds[0];
-  if (requestedSellerId && requestedSellerId !== inferredSellerId) {
-    return NextResponse.json(
-      { error: "sellerId does not match selected products." },
-      { status: 400 }
-    );
+    if (requestedSellerId !== uniqueSellerIds[0]) {
+      return NextResponse.json(
+        { error: "sellerId does not match selected products." },
+        { status: 400 }
+      );
+    }
   }
-  const sellerId = requestedSellerId ?? inferredSellerId;
 
   const offerIds = items
-    .map((item: { offerId?: string }) => String(item.offerId ?? "").trim())
+    .map((item) => String(item.offerId ?? "").trim())
     .filter(Boolean);
 
   const offers = offerIds.length
@@ -206,6 +227,7 @@ export async function POST(request: NextRequest) {
         },
       })
     : [];
+
   const offerMap = new Map(offers.map((offer) => [offer.id, offer]));
 
   if (!userId) {
@@ -223,25 +245,20 @@ export async function POST(request: NextRequest) {
   }
 
   let subtotalCents = 0;
-  const mappedItems: Array<{
-    productId: string;
-    quantity: number;
-    unitPriceCents: number;
-    type: ProductType;
-    optionColor?: string;
-    optionSize?: string;
-  }> = [];
+  const mappedItems: MappedItem[] = [];
 
   for (const item of items) {
     const quantity = Number(item.quantity ?? 1);
     const productId = String(item.productId ?? "");
     const product = productMap.get(productId);
+
     if (!product) {
       return NextResponse.json(
         { error: `Product ${productId} not found` },
         { status: 400 }
       );
     }
+
     const type = product.type;
 
     if (!allowedTypes.has(type)) {
@@ -302,6 +319,7 @@ export async function POST(request: NextRequest) {
     const unitPriceCents = matchedOffer
       ? matchedOffer.amountCents
       : getDiscountedPrice(product.priceCents, product.discountPercent);
+
     subtotalCents += quantity * unitPriceCents;
 
     const optionColor = item.optionColor
@@ -312,6 +330,7 @@ export async function POST(request: NextRequest) {
       : undefined;
 
     mappedItems.push({
+      sellerId: product.sellerId,
       productId,
       quantity,
       unitPriceCents,
@@ -321,10 +340,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (
-    paymentMethod === "CASH" &&
-    mappedItems.some((item) => item.type !== "LOCAL")
-  ) {
+  if (paymentMethod === "CASH" && mappedItems.some((item) => item.type !== "LOCAL")) {
     return NextResponse.json(
       { error: "Cash is only available for local products." },
       { status: 400 }
@@ -333,7 +349,6 @@ export async function POST(request: NextRequest) {
 
   const shippingCents = Number(body.shippingCents ?? 0);
   const feesCents = Number(body.feesCents ?? 0);
-  const totalCents = subtotalCents + shippingCents + feesCents;
 
   if (paymentMethod && !allowedPaymentMethods.has(paymentMethod)) {
     return NextResponse.json(
@@ -365,7 +380,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const order = await prisma.$transaction(async (tx) => {
+    const orders = await prisma.$transaction(async (tx) => {
+      const groupedBySeller = new Map<string, { sellerId: string; subtotalCents: number; items: MappedItem[] }>();
+
+      for (const item of mappedItems) {
+        const lineSubtotal = item.quantity * item.unitPriceCents;
+        const group = groupedBySeller.get(item.sellerId);
+
+        if (!group) {
+          groupedBySeller.set(item.sellerId, {
+            sellerId: item.sellerId,
+            subtotalCents: lineSubtotal,
+            items: [item],
+          });
+        } else {
+          group.subtotalCents += lineSubtotal;
+          group.items.push(item);
+        }
+      }
+
+      const orderGroups = Array.from(groupedBySeller.values());
+
       for (const [productId, quantity] of localRequestedByProduct.entries()) {
         const updateResult = await tx.product.updateMany({
           where: {
@@ -383,47 +418,100 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const createdOrder = await tx.order.create({
-        data: {
-          userId,
-          sellerId,
-          buyerName: body.name ?? undefined,
-          buyerEmail: body.email ?? undefined,
-          buyerPhone: body.phone ?? undefined,
-          shippingAddress: body.shippingAddress ?? undefined,
-          shippingCity: body.shippingCity ?? undefined,
-          paymentMethod: typedPaymentMethod ?? undefined,
-          subtotalCents,
-          shippingCents,
-          feesCents,
-          totalCents,
-          currency,
-          items: { create: mappedItems },
-          events: {
-            create: [
-              {
-                status: "PENDING",
-                note: "Order placed",
-              },
-            ],
-          },
-        },
-        include: { items: true },
-      });
+      let allocatedFees = 0;
+      let allocatedShipping = 0;
 
-      await tx.activityLog.create({
-        data: {
+      const createdOrders: Array<{
+        id: string;
+        sellerId: string | null;
+        subtotalCents: number;
+        shippingCents: number;
+        feesCents: number;
+        totalCents: number;
+        currency: string;
+      }> = [];
+
+      for (let index = 0; index < orderGroups.length; index += 1) {
+        const group = orderGroups[index];
+        const isLast = index === orderGroups.length - 1;
+
+        const groupFees = isLast
+          ? feesCents - allocatedFees
+          : Math.floor((feesCents * group.subtotalCents) / Math.max(subtotalCents, 1));
+
+        const groupShipping = isLast
+          ? shippingCents - allocatedShipping
+          : Math.floor((shippingCents * group.subtotalCents) / Math.max(subtotalCents, 1));
+
+        allocatedFees += groupFees;
+        allocatedShipping += groupShipping;
+
+        const groupTotal = group.subtotalCents + groupShipping + groupFees;
+
+        const createdOrder = await tx.order.create({
+          data: {
+            userId,
+            sellerId: group.sellerId,
+            buyerName: body.name ?? undefined,
+            buyerEmail: body.email ?? undefined,
+            buyerPhone: body.phone ?? undefined,
+            shippingAddress: body.shippingAddress ?? undefined,
+            shippingCity: body.shippingCity ?? undefined,
+            paymentMethod: typedPaymentMethod ?? undefined,
+            subtotalCents: group.subtotalCents,
+            shippingCents: groupShipping,
+            feesCents: groupFees,
+            totalCents: groupTotal,
+            currency,
+            items: {
+              create: group.items.map(({ sellerId: _sellerId, ...orderItem }) => orderItem),
+            },
+            events: {
+              create: [
+                {
+                  status: "PENDING",
+                  note: "Order placed",
+                },
+              ],
+            },
+          },
+        });
+
+        createdOrders.push({
+          id: createdOrder.id,
+          sellerId: createdOrder.sellerId,
+          subtotalCents: createdOrder.subtotalCents,
+          shippingCents: createdOrder.shippingCents,
+          feesCents: createdOrder.feesCents,
+          totalCents: createdOrder.totalCents,
+          currency: createdOrder.currency,
+        });
+      }
+
+      await tx.activityLog.createMany({
+        data: createdOrders.map((order) => ({
           userId,
           action: "ORDER_CREATED",
           entityType: "Order",
-          entityId: createdOrder.id,
-        },
+          entityId: order.id,
+          metadata: { sellerId: order.sellerId, totalCents: order.totalCents },
+        })),
       });
 
-      return createdOrder;
+      return createdOrders;
     });
 
-    return NextResponse.json(order, { status: 201 });
+    const primaryOrder = orders[0];
+
+    return NextResponse.json(
+      {
+        id: primaryOrder.id,
+        orderIds: orders.map((order) => order.id),
+        orders,
+        multiSeller: orders.length > 1,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("OUT_OF_STOCK:")) {
       return NextResponse.json(

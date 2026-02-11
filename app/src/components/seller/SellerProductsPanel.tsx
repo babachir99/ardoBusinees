@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -67,7 +67,7 @@ export default function SellerProductsPanel() {
     "image/webp",
     "image/gif",
   ];
-  const maxFileSize = 2 * 1024 * 1024;
+  const maxFileSize = 4 * 1024 * 1024;
   const maxFiles = 5;
 
   const load = async () => {
@@ -234,12 +234,6 @@ export default function SellerProductsPanel() {
     if (!allowedTypes.includes(file.type)) {
       throw new Error(t("products.errors.fileType"));
     }
-    const bitmap = await createImageBitmap(file);
-    if (bitmap.width < 800 || bitmap.height < 800) {
-      bitmap.close();
-      throw new Error(t("products.errors.dimensions"));
-    }
-    bitmap.close();
   };
 
   const compressImage = async (file: File) => {
@@ -831,3 +825,5 @@ export default function SellerProductsPanel() {
     </div>
   );
 }
+
+
