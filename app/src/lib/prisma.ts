@@ -1,4 +1,4 @@
-﻿import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -22,7 +22,9 @@ function hasRequiredDelegates(client: PrismaClient) {
     "productInquiry" in runtimeClient &&
     "productInquiryMessage" in runtimeClient &&
     "productOffer" in runtimeClient &&
-    "userAddress" in runtimeClient
+    "userAddress" in runtimeClient &&
+    "userCart" in runtimeClient &&
+    "userCartItem" in runtimeClient
   );
 }
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   createContext,
@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -51,6 +52,10 @@ type CartContextValue = {
   subtotalCents: number;
 };
 
+type CartScope =
+  | { mode: "guest"; storageKey: string }
+  | { mode: "user"; userId: string; storageKey: string };
+
 const CartContext = createContext<CartContextValue | null>(null);
 const BASE_STORAGE_KEY = "ardo_cart";
 const GUEST_STORAGE_KEY = `${BASE_STORAGE_KEY}::guest`;
@@ -61,49 +66,62 @@ function toSafeMaxQuantity(value: unknown): number | undefined {
   return Math.floor(max);
 }
 
+function normalizeCartItems(value: unknown): CartItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(Boolean)
+    .map((item) => {
+      const id = String((item as Record<string, unknown>).id ?? "").trim();
+      if (!id) return null;
+
+      const offerIdRaw = (item as Record<string, unknown>).offerId;
+      const optionColorRaw = (item as Record<string, unknown>).optionColor;
+      const optionSizeRaw = (item as Record<string, unknown>).optionSize;
+
+      const offerId = offerIdRaw ? String(offerIdRaw) : undefined;
+      const optionColor = optionColorRaw ? String(optionColorRaw) : undefined;
+      const optionSize = optionSizeRaw ? String(optionSizeRaw) : undefined;
+
+      const maxQuantity = toSafeMaxQuantity((item as Record<string, unknown>).maxQuantity);
+      const quantityRaw = Number((item as Record<string, unknown>).quantity);
+      let quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1;
+      if (maxQuantity) quantity = Math.min(quantity, maxQuantity);
+
+      const lineIdRaw = (item as Record<string, unknown>).lineId;
+
+      return {
+        id,
+        slug: String((item as Record<string, unknown>).slug ?? ""),
+        title: String((item as Record<string, unknown>).title ?? ""),
+        priceCents: Number((item as Record<string, unknown>).priceCents ?? 0),
+        currency: String((item as Record<string, unknown>).currency ?? "XOF"),
+        type:
+          (item as Record<string, unknown>).type === "PREORDER" ||
+          (item as Record<string, unknown>).type === "DROPSHIP" ||
+          (item as Record<string, unknown>).type === "LOCAL"
+            ? ((item as Record<string, unknown>).type as "PREORDER" | "DROPSHIP" | "LOCAL")
+            : "LOCAL",
+        quantity,
+        sellerName: (item as Record<string, unknown>).sellerName
+          ? String((item as Record<string, unknown>).sellerName)
+          : undefined,
+        offerId,
+        optionColor,
+        optionSize,
+        maxQuantity,
+        lineId: lineIdRaw
+          ? String(lineIdRaw)
+          : makeLineId({ id, offerId, optionColor, optionSize }),
+      } satisfies CartItem;
+    })
+    .filter(Boolean) as CartItem[];
+}
+
 function parseStored(value: string | null): CartItem[] {
   if (!value) return [];
   try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter(Boolean)
-      .map((item) => {
-        const id = String(item.id ?? "");
-        if (!id) return null;
-
-        const maxQuantity = toSafeMaxQuantity(item.maxQuantity);
-        const quantityRaw = Number(item.quantity);
-        let quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1;
-        if (maxQuantity) quantity = Math.min(quantity, maxQuantity);
-
-        const optionColor = item.optionColor ? String(item.optionColor) : undefined;
-        const optionSize = item.optionSize ? String(item.optionSize) : undefined;
-        const offerId = item.offerId ? String(item.offerId) : undefined;
-
-        return {
-          id,
-          slug: String(item.slug ?? ""),
-          title: String(item.title ?? ""),
-          priceCents: Number(item.priceCents ?? 0),
-          currency: String(item.currency ?? "XOF"),
-          type:
-            item.type === "PREORDER" || item.type === "DROPSHIP" || item.type === "LOCAL"
-              ? item.type
-              : "LOCAL",
-          sellerName: item.sellerName ? String(item.sellerName) : undefined,
-          offerId,
-          optionColor,
-          optionSize,
-          maxQuantity,
-          quantity,
-          lineId: item.lineId
-            ? String(item.lineId)
-            : makeLineId({ id, offerId, optionColor, optionSize }),
-        } satisfies CartItem;
-      })
-      .filter(Boolean) as CartItem[];
+    return normalizeCartItems(JSON.parse(value));
   } catch {
     return [];
   }
@@ -123,7 +141,6 @@ function readCartForKey(key: string): CartItem[] {
       return parseStored(scopedValue);
     }
 
-    // One-time migration from old global cart key to guest scope.
     if (key === GUEST_STORAGE_KEY) {
       const legacyValue = window.localStorage.getItem(BASE_STORAGE_KEY);
       if (legacyValue) {
@@ -133,42 +150,106 @@ function readCartForKey(key: string): CartItem[] {
       }
     }
   } catch {
-    // Ignore read errors (storage disabled)
+    return [];
   }
 
   return [];
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [storageKey, setStorageKey] = useState<string>(GUEST_STORAGE_KEY);
+  const [scope, setScope] = useState<CartScope>({
+    mode: "guest",
+    storageKey: GUEST_STORAGE_KEY,
+  });
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const resolveStorageScope = useCallback(async () => {
-    let nextKey = GUEST_STORAGE_KEY;
+  const scopeRef = useRef<CartScope>(scope);
+  const previousScopeRef = useRef<CartScope | null>(null);
+
+  useEffect(() => {
+    scopeRef.current = scope;
+  }, [scope]);
+
+  const fetchUserCart = useCallback(async () => {
+    const response = await fetch("/api/cart", { cache: "no-store" });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { items?: unknown };
+    return normalizeCartItems(payload.items);
+  }, []);
+
+  const mergeGuestCartIntoUser = useCallback(async () => {
+    const guestItems = readCartForKey(GUEST_STORAGE_KEY);
+    if (guestItems.length === 0) return;
+
+    await fetch("/api/cart/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: guestItems.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          offerId: item.offerId,
+          optionColor: item.optionColor,
+          optionSize: item.optionSize,
+        })),
+      }),
+    });
+
+    try {
+      window.localStorage.removeItem(GUEST_STORAGE_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const resolveScope = useCallback(async () => {
+    let nextScope: CartScope = {
+      mode: "guest",
+      storageKey: GUEST_STORAGE_KEY,
+    };
 
     try {
       const response = await fetch("/api/profile", { cache: "no-store" });
       if (response.ok) {
-        const profile = (await response.json()) as { id?: string } | null;
-        nextKey = storageKeyForUserId(profile?.id);
+        const payload = (await response.json()) as { id?: string } | null;
+        if (payload?.id) {
+          nextScope = {
+            mode: "user",
+            userId: payload.id,
+            storageKey: storageKeyForUserId(payload.id),
+          };
+        }
       }
     } catch {
-      nextKey = GUEST_STORAGE_KEY;
+      nextScope = {
+        mode: "guest",
+        storageKey: GUEST_STORAGE_KEY,
+      };
     }
 
-    setStorageKey((current) => (current === nextKey ? current : nextKey));
+    setScope((current) => {
+      if (
+        current.mode === nextScope.mode &&
+        current.storageKey === nextScope.storageKey &&
+        (current.mode !== "user" || current.userId === (nextScope as { userId?: string }).userId)
+      ) {
+        return current;
+      }
+      return nextScope;
+    });
   }, []);
 
   useEffect(() => {
-    void resolveStorageScope();
+    void resolveScope();
 
     const handleFocus = () => {
-      void resolveStorageScope();
+      void resolveScope();
     };
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        void resolveStorageScope();
+        void resolveScope();
       }
     };
 
@@ -179,81 +260,191 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [resolveStorageScope]);
+  }, [resolveScope]);
 
   useEffect(() => {
-    setItems(readCartForKey(storageKey));
-  }, [storageKey]);
+    let cancelled = false;
+    const previousScope = previousScopeRef.current;
+    previousScopeRef.current = scope;
+
+    const hydrateCart = async () => {
+      if (scope.mode === "guest") {
+        if (!cancelled) {
+          setItems(readCartForKey(scope.storageKey));
+        }
+        return;
+      }
+
+      if (previousScope?.mode === "guest") {
+        await mergeGuestCartIntoUser();
+      }
+
+      const remoteItems = await fetchUserCart();
+      if (cancelled) return;
+
+      if (remoteItems) {
+        setItems(remoteItems);
+      } else {
+        setItems(readCartForKey(scope.storageKey));
+      }
+    };
+
+    void hydrateCart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, fetchUserCart, mergeGuestCartIntoUser]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(items));
+      window.localStorage.setItem(scope.storageKey, JSON.stringify(items));
     } catch {
-      // Ignore write errors (storage disabled)
+      // ignore storage errors
     }
-  }, [items, storageKey]);
+  }, [items, scope.storageKey]);
 
-  const addItem = useCallback((item: AddItemInput, quantity = 1) => {
-    const requestedQty = Math.max(1, Math.floor(quantity));
-    const incomingMax = toSafeMaxQuantity(item.maxQuantity);
-    const lineId = makeLineId({
-      id: item.id,
-      offerId: item.offerId,
-      optionColor: item.optionColor,
-      optionSize: item.optionSize,
-    });
-
-    setItems((current) => {
-      const existing = current.find((entry) => entry.lineId === lineId);
-      const effectiveMax =
-        existing?.maxQuantity && incomingMax
-          ? Math.min(existing.maxQuantity, incomingMax)
-          : existing?.maxQuantity ?? incomingMax;
-
-      if (!existing) {
-        const safeQty = effectiveMax ? Math.min(requestedQty, effectiveMax) : requestedQty;
-        return [...current, { ...item, quantity: safeQty, maxQuantity: effectiveMax, lineId }];
+  const syncUserCartResponse = useCallback(
+    async (response: Response) => {
+      if (!response.ok) {
+        if (response.status === 401) {
+          await resolveScope();
+        }
+        return;
       }
 
-      const nextQty = effectiveMax
-        ? Math.min(existing.quantity + requestedQty, effectiveMax)
-        : existing.quantity + requestedQty;
+      const payload = (await response.json()) as { items?: unknown };
+      setItems(normalizeCartItems(payload.items));
+    },
+    [resolveScope]
+  );
 
-      return current.map((entry) =>
-        entry.lineId === lineId
-          ? { ...entry, maxQuantity: effectiveMax, quantity: nextQty }
-          : entry
-      );
-    });
-  }, []);
+  const addItem = useCallback(
+    (item: AddItemInput, quantity = 1) => {
+      const requestedQty = Math.max(1, Math.floor(quantity));
+      const incomingMax = toSafeMaxQuantity(item.maxQuantity);
+      const lineId = makeLineId({
+        id: item.id,
+        offerId: item.offerId,
+        optionColor: item.optionColor,
+        optionSize: item.optionSize,
+      });
 
-  const removeItem = useCallback((lineId: string) => {
-    setItems((current) => current.filter((entry) => entry.lineId !== lineId));
-  }, []);
+      if (scopeRef.current.mode === "guest") {
+        setItems((current) => {
+          const existing = current.find((entry) => entry.lineId === lineId);
+          const effectiveMax =
+            existing?.maxQuantity && incomingMax
+              ? Math.min(existing.maxQuantity, incomingMax)
+              : existing?.maxQuantity ?? incomingMax;
 
-  const updateQuantity = useCallback((lineId: string, quantity: number) => {
-    setItems((current) => {
-      const entry = current.find((item) => item.lineId === lineId);
-      if (!entry) return current;
+          if (!existing) {
+            const safeQty = effectiveMax
+              ? Math.min(requestedQty, effectiveMax)
+              : requestedQty;
+            return [
+              ...current,
+              { ...item, quantity: safeQty, maxQuantity: effectiveMax, lineId },
+            ];
+          }
 
-      if (quantity <= 0) {
-        return current.filter((item) => item.lineId !== lineId);
+          const nextQty = effectiveMax
+            ? Math.min(existing.quantity + requestedQty, effectiveMax)
+            : existing.quantity + requestedQty;
+
+          return current.map((entry) =>
+            entry.lineId === lineId
+              ? { ...entry, maxQuantity: effectiveMax, quantity: nextQty }
+              : entry
+          );
+        });
+        return;
       }
 
-      let nextQty = Math.max(1, Math.floor(quantity));
-      if (entry.maxQuantity) {
-        nextQty = Math.min(nextQty, entry.maxQuantity);
+      void (async () => {
+        const response = await fetch("/api/cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productId: item.id,
+            quantity: requestedQty,
+            offerId: item.offerId,
+            optionColor: item.optionColor,
+            optionSize: item.optionSize,
+          }),
+        });
+
+        await syncUserCartResponse(response);
+      })();
+    },
+    [syncUserCartResponse]
+  );
+
+  const removeItem = useCallback(
+    (lineId: string) => {
+      if (scopeRef.current.mode === "guest") {
+        setItems((current) => current.filter((entry) => entry.lineId !== lineId));
+        return;
       }
 
-      return current.map((item) =>
-        item.lineId === lineId ? { ...item, quantity: nextQty } : item
-      );
-    });
-  }, []);
+      void (async () => {
+        const response = await fetch(`/api/cart/${encodeURIComponent(lineId)}`, {
+          method: "DELETE",
+        });
+        await syncUserCartResponse(response);
+      })();
+    },
+    [syncUserCartResponse]
+  );
+
+  const updateQuantity = useCallback(
+    (lineId: string, quantity: number) => {
+      if (scopeRef.current.mode === "guest") {
+        setItems((current) => {
+          const entry = current.find((item) => item.lineId === lineId);
+          if (!entry) return current;
+
+          if (quantity <= 0) {
+            return current.filter((item) => item.lineId !== lineId);
+          }
+
+          let nextQty = Math.max(1, Math.floor(quantity));
+          if (entry.maxQuantity) {
+            nextQty = Math.min(nextQty, entry.maxQuantity);
+          }
+
+          return current.map((item) =>
+            item.lineId === lineId ? { ...item, quantity: nextQty } : item
+          );
+        });
+        return;
+      }
+
+      void (async () => {
+        const method = quantity <= 0 ? "DELETE" : "PATCH";
+        const response = await fetch(`/api/cart/${encodeURIComponent(lineId)}`, {
+          method,
+          headers: method === "PATCH" ? { "Content-Type": "application/json" } : undefined,
+          body: method === "PATCH" ? JSON.stringify({ quantity }) : undefined,
+        });
+
+        await syncUserCartResponse(response);
+      })();
+    },
+    [syncUserCartResponse]
+  );
 
   const clear = useCallback(() => {
-    setItems([]);
-  }, []);
+    if (scopeRef.current.mode === "guest") {
+      setItems([]);
+      return;
+    }
+
+    void (async () => {
+      const response = await fetch("/api/cart", { method: "DELETE" });
+      await syncUserCartResponse(response);
+    })();
+  }, [syncUserCartResponse]);
 
   const value = useMemo(() => {
     const count = items.reduce((sum, item) => sum + item.quantity, 0);

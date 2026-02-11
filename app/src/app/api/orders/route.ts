@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
@@ -501,6 +501,12 @@ export async function POST(request: NextRequest) {
       return createdOrders;
     });
 
+    await prisma.userCartItem.deleteMany({
+      where: {
+        cart: { userId },
+      },
+    });
+
     const primaryOrder = orders[0];
 
     return NextResponse.json(
@@ -522,3 +528,5 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 }
+
+
