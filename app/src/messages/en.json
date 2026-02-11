@@ -5,8 +5,8 @@
       "stores": "Stores",
       "services": "Services",
       "sellers": "Sellers",
-      "contact": "Contact",
-      "cart": "Cart"
+      "cart": "Cart",
+      "contact": "Contact"
     },
     "hero": {
       "kicker": "Hybrid marketplace",
@@ -247,6 +247,10 @@
       "back": "Back",
       "refresh": "Refresh",
       "contact": "Contact",
+      "seller": "Seller and store",
+      "unknownSeller": "Unknown seller",
+      "store": "Store",
+      "reviewCta": "Leave a review",
       "noPhone": "No phone",
       "noMessages": "No messages yet.",
       "messagePlaceholder": "Write a message...",
@@ -269,7 +273,6 @@
     "title": "Checkout",
     "subtitle": "Complete your order in a few steps.",
     "form": {
-      "contact": "Contact",
       "name": "Full name",
       "email": "Email",
       "phone": "Phone",
@@ -277,7 +280,8 @@
       "shipping": "Shipping",
       "address": "Address",
       "city": "City",
-      "cashNote": "Cash payment is only available for local products."
+      "cashNote": "Cash payment is only available for local products.",
+      "contact": "Contact"
     },
     "paymentMethods": {
       "wave": "Wave",

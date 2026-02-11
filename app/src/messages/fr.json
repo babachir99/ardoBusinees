@@ -5,8 +5,8 @@
       "stores": "Sous-boutiques",
       "services": "Services",
       "sellers": "Vendeurs",
-      "contact": "Contact",
-      "cart": "Panier"
+      "cart": "Panier",
+      "contact": "Contact"
     },
     "hero": {
       "kicker": "Marketplace hybride",
@@ -247,6 +247,10 @@
       "back": "Retour",
       "refresh": "Rafraichir",
       "contact": "Contact",
+      "seller": "Vendeur et boutique",
+      "unknownSeller": "Vendeur inconnu",
+      "store": "Boutique",
+      "reviewCta": "Donner mon avis",
       "noPhone": "Aucun telephone",
       "noMessages": "Aucun message pour le moment.",
       "messagePlaceholder": "Ecrire un message...",
@@ -269,7 +273,6 @@
     "title": "Paiement",
     "subtitle": "Finalise ta commande en quelques etapes.",
     "form": {
-      "contact": "Contact",
       "name": "Nom complet",
       "email": "Email",
       "phone": "Telephone",
@@ -277,7 +280,8 @@
       "shipping": "Livraison",
       "address": "Adresse",
       "city": "Ville",
-      "cashNote": "Le paiement en especes est reserve aux produits locaux."
+      "cashNote": "Le paiement en especes est reserve aux produits locaux.",
+      "contact": "Contact"
     },
     "paymentMethods": {
       "wave": "Wave",

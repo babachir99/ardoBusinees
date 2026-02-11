@@ -45,6 +45,7 @@ type Order = {
   buyerPhone?: string | null;
   shippingAddress?: string | null;
   shippingCity?: string | null;
+  seller?: { id: string; displayName: string; slug: string } | null;
   subtotalCents: number;
   feesCents: number;
   totalCents: number;
@@ -127,6 +128,8 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
     );
   }
 
+  const canReviewOrder = order.paymentStatus === "PAID" || order.status === "DELIVERED";
+
   return (
     <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -153,7 +156,7 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
 
       {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
           <p className="text-xs text-zinc-400">{t("labels.order")}</p>
           <p className="mt-1 text-sm text-white">{order.id}</p>
@@ -162,6 +165,7 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
           <p className="mt-1">{t(`payment.${order.paymentStatus.toLowerCase()}`)}</p>
           <p className="mt-1">{order.paymentMethod ?? "-"}</p>
         </div>
+
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
           <p className="text-xs text-zinc-400">{t("detail.contact")}</p>
           <p className="mt-1">{order.buyerName || t("labels.noEmail")}</p>
@@ -170,6 +174,24 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
           <p className="mt-3 text-xs text-zinc-400">{t("labels.shipping")}</p>
           <p className="mt-1">{order.shippingAddress || t("labels.shippingEmpty")}</p>
           {order.shippingCity && <p className="mt-1">{order.shippingCity}</p>}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
+          <p className="text-xs text-zinc-400">{t("detail.seller")}</p>
+          <p className="mt-1 text-sm text-white">
+            {order.seller?.displayName || t("detail.unknownSeller")}
+          </p>
+          <p className="mt-3 text-xs text-zinc-400">{t("detail.store")}</p>
+          {order.seller?.slug ? (
+            <Link
+              href={`/stores/${order.seller.slug}`}
+              className="mt-1 inline-flex rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-emerald-300/60"
+            >
+              {order.seller.slug}
+            </Link>
+          ) : (
+            <p className="mt-1 text-zinc-400">-</p>
+          )}
         </div>
       </div>
 
@@ -204,8 +226,16 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
                     <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
                     {optionParts.length > 0 && (
                       <p className="mt-0.5 text-[11px] text-zinc-500">
-                        {optionParts.join(" · ")}
+                        {optionParts.join(" - ")}
                       </p>
+                    )}
+                    {canReviewOrder && item.product?.slug && (
+                      <a
+                        href={`/${locale}/shop/${item.product.slug}#reviews`}
+                        className="mt-1 inline-flex text-[11px] text-emerald-300 underline underline-offset-2"
+                      >
+                        {t("detail.reviewCta")}
+                      </a>
                     )}
                   </div>
                 </div>
