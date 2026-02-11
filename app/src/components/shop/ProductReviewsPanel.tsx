@@ -33,7 +33,7 @@ function Stars({ value }: { value: number }) {
     <span className="inline-flex items-center gap-0.5 text-amber-300" aria-label={`${value}/5`}>
       {[1, 2, 3, 4, 5].map((step) => (
         <span key={step} className={step <= value ? "opacity-100" : "opacity-25"}>
-          ★
+          {"\u2605"}
         </span>
       ))}
     </span>
@@ -103,7 +103,7 @@ export default function ProductReviewsPanel({
   };
 
   return (
-    <section className="mx-auto mb-16 w-full max-w-6xl px-6 fade-up">
+    <section id="reviews" className="mx-auto mb-16 w-full max-w-6xl px-6 fade-up">
       <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -264,3 +264,4 @@ export default function ProductReviewsPanel({
     </section>
   );
 }
+

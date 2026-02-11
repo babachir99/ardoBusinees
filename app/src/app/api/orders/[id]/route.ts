@@ -11,10 +11,12 @@ export async function GET(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "Order id is required" }, { status: 400 });
   }
+
   const order = await prisma.order.findUnique({
     where: { id },
     include: {
@@ -42,7 +44,15 @@ export async function GET(
         },
       },
       user: { select: { id: true, email: true, name: true } },
-      seller: { select: { id: true, displayName: true, slug: true } },
+      seller: {
+        select: {
+          id: true,
+          displayName: true,
+          slug: true,
+          rating: true,
+          user: { select: { image: true, name: true } },
+        },
+      },
       payment: true,
     },
   });
@@ -65,5 +75,85 @@ export async function GET(
     }
   }
 
-  return NextResponse.json(order);
+  const orderedProductIds = Array.from(
+    new Set(order.items.map((item) => item.productId).filter(Boolean))
+  );
+
+  const sellerStatsPromise = order.sellerId
+    ? Promise.all([
+        prisma.product.count({
+          where: { sellerId: order.sellerId, isActive: true },
+        }),
+        prisma.order.count({
+          where: { sellerId: order.sellerId, paymentStatus: "PAID" },
+        }),
+        prisma.productReview.aggregate({
+          where: { sellerId: order.sellerId, sellerRating: { not: null } },
+          _avg: { sellerRating: true },
+          _count: { _all: true },
+        }),
+      ]).then(([activeProducts, paidOrders, ratingStats]) => ({
+        activeProducts,
+        paidOrders,
+        ratingAverage: ratingStats._avg.sellerRating ?? order.seller?.rating ?? 0,
+        ratingCount: ratingStats._count._all,
+      }))
+    : Promise.resolve(null);
+
+  const recommendedProductsPromise = (async () => {
+    if (orderedProductIds.length === 0) {
+      return [];
+    }
+
+    const categoryRows = await prisma.productCategory.findMany({
+      where: { productId: { in: orderedProductIds } },
+      select: { categoryId: true },
+    });
+
+    const categoryIds = Array.from(new Set(categoryRows.map((entry) => entry.categoryId)));
+    const orFilters: Array<Record<string, unknown>> = [];
+
+    if (order.sellerId) {
+      orFilters.push({ sellerId: order.sellerId });
+    }
+
+    if (categoryIds.length > 0) {
+      orFilters.push({
+        categories: {
+          some: {
+            categoryId: { in: categoryIds },
+          },
+        },
+      });
+    }
+
+    if (orFilters.length === 0) {
+      return [];
+    }
+
+    return prisma.product.findMany({
+      where: {
+        isActive: true,
+        id: { notIn: orderedProductIds },
+        OR: orFilters,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
+        seller: { select: { displayName: true, slug: true } },
+      },
+      take: 6,
+    });
+  })();
+
+  const [sellerStats, recommendedProducts] = await Promise.all([
+    sellerStatsPromise,
+    recommendedProductsPromise,
+  ]);
+
+  return NextResponse.json({
+    ...order,
+    sellerStats,
+    recommendedProducts,
+  });
 }

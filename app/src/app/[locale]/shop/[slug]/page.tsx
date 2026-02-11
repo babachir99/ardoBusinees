@@ -148,7 +148,13 @@ export default async function ProductPage({
   const demandWindowStart = new Date();
   demandWindowStart.setDate(demandWindowStart.getDate() - 14);
 
-  const [recentSalesCount, totalSalesCount, favoritesCount, sellerSalesCount] =
+  const [
+    recentSalesCount,
+    totalSalesCount,
+    favoritesCount,
+    sellerSalesCount,
+    sellerRatingStats,
+  ] =
     await Promise.all([
       prisma.orderItem.count({
         where: {
@@ -165,6 +171,11 @@ export default async function ProductPage({
       prisma.favorite.count({ where: { productId: product.id } }),
       prisma.order.count({
         where: { sellerId: product.sellerId, paymentStatus: "PAID" },
+      }),
+      prisma.productReview.aggregate({
+        where: { sellerId: product.sellerId, sellerRating: { not: null } },
+        _avg: { sellerRating: true },
+        _count: { _all: true },
       }),
     ]);
 
@@ -275,7 +286,12 @@ export default async function ProductPage({
   const boosted =
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > new Date());
-  const sellerScore = product.seller?.rating ?? 5;
+  const sellerRatingAverage = sellerRatingStats._avg.sellerRating;
+  const sellerScore =
+    typeof sellerRatingAverage === "number"
+      ? sellerRatingAverage
+      : product.seller?.rating ?? 5;
+  const sellerRatingCount = sellerRatingStats._count._all;
   const reviewDelegate = prisma.productReview;
 
   const [reviewStats, latestReviews, paidOrderItem] = await Promise.all([
@@ -567,7 +583,13 @@ export default async function ProductPage({
               <span className="inline-flex items-center gap-1 text-emerald-200">
                 <span className="tracking-[0.06em] text-amber-300">{getStars(sellerScore)}</span>
                 <span>{sellerScore.toFixed(1)}</span>
-                <span className="text-xs text-zinc-500">({sellerSalesCount})</span>
+                <span className="text-xs text-zinc-500">
+                  (
+                  {sellerRatingCount > 0
+                    ? `${sellerRatingCount} ${locale === "fr" ? "avis" : "reviews"}`
+                    : `${sellerSalesCount} ${locale === "fr" ? "ventes" : "sales"}`}
+                  )
+                </span>
               </span>
             </div>
 
@@ -656,6 +678,3 @@ export default async function ProductPage({
     </div>
   );
 }
-
-
-

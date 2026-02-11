@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
+import InlineReviewForm from "@/components/orders/InlineReviewForm";
 
 type OrderEvent = {
   id: string;
@@ -35,6 +36,17 @@ type OrderItem = {
   } | null;
 };
 
+type RecommendedProduct = {
+  id: string;
+  title: string;
+  slug: string;
+  priceCents: number;
+  currency: string;
+  discountPercent?: number | null;
+  images: { url: string }[];
+  seller?: { displayName: string; slug: string } | null;
+};
+
 type Order = {
   id: string;
   status: string;
@@ -45,7 +57,20 @@ type Order = {
   buyerPhone?: string | null;
   shippingAddress?: string | null;
   shippingCity?: string | null;
-  seller?: { id: string; displayName: string; slug: string } | null;
+  seller?: {
+    id: string;
+    displayName: string;
+    slug: string;
+    rating?: number | null;
+    user?: { image?: string | null; name?: string | null } | null;
+  } | null;
+  sellerStats?: {
+    activeProducts: number;
+    paidOrders: number;
+    ratingAverage: number;
+    ratingCount: number;
+  } | null;
+  recommendedProducts?: RecommendedProduct[];
   subtotalCents: number;
   feesCents: number;
   totalCents: number;
@@ -129,6 +154,11 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
   }
 
   const canReviewOrder = order.paymentStatus === "PAID" || order.status === "DELIVERED";
+  const sellerIdentity =
+    order.seller?.displayName || order.seller?.user?.name || t("detail.unknownSeller");
+  const sellerInitial = sellerIdentity.slice(0, 1).toUpperCase();
+  const sellerRatingValue = order.sellerStats?.ratingAverage ?? order.seller?.rating ?? 0;
+  const sellerRatingCount = order.sellerStats?.ratingCount ?? 0;
 
   return (
     <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
@@ -178,9 +208,29 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
 
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
           <p className="text-xs text-zinc-400">{t("detail.seller")}</p>
-          <p className="mt-1 text-sm text-white">
-            {order.seller?.displayName || t("detail.unknownSeller")}
-          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-zinc-900">
+              {order.seller?.user?.image ? (
+                <img
+                  src={order.seller.user.image}
+                  alt={sellerIdentity}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-zinc-200">
+                  {sellerInitial}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{sellerIdentity}</p>
+              <p className="text-[11px] text-zinc-400">
+                {sellerRatingValue.toFixed(1)} / 5
+                {sellerRatingCount > 0 ? ` (${sellerRatingCount})` : ""}
+              </p>
+            </div>
+          </div>
+
           <p className="mt-3 text-xs text-zinc-400">{t("detail.store")}</p>
           {order.seller?.slug ? (
             <Link
@@ -192,59 +242,124 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
           ) : (
             <p className="mt-1 text-zinc-400">-</p>
           )}
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-zinc-400">
+            <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-2">
+              <p>{t("detail.sellerProducts")}</p>
+              <p className="mt-1 font-semibold text-zinc-100">
+                {order.sellerStats?.activeProducts ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-2">
+              <p>{t("detail.sellerPaidOrders")}</p>
+              <p className="mt-1 font-semibold text-zinc-100">
+                {order.sellerStats?.paidOrders ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-2">
+              <p>{t("detail.sellerReviews")}</p>
+              <p className="mt-1 font-semibold text-zinc-100">{sellerRatingCount}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
         <p className="text-xs text-zinc-400">{t("labels.products")}</p>
-        <ul className="mt-3 grid gap-2">
+        <ul className="mt-3 grid gap-3">
           {order.items.map((item) => {
             const optionParts = [
-              item.optionColor
-                ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
-                : null,
-              item.optionSize
-                ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
-                : null,
+              item.optionColor ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}` : null,
+              item.optionSize ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}` : null,
             ].filter(Boolean);
 
             return (
-              <li key={item.id} className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/70">
-                    {item.product?.images?.[0]?.url ? (
-                      <img
-                        src={item.product.images[0].url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full" />
-                    )}
+              <li key={item.id} className="rounded-xl border border-white/10 bg-zinc-900/50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/70">
+                      {item.product?.images?.[0]?.url ? (
+                        <img
+                          src={item.product.images[0].url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
+                      {optionParts.length > 0 && (
+                        <p className="mt-0.5 text-[11px] text-zinc-500">{optionParts.join(" - ")}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate">{item.product?.title ?? t("labels.unknown")}</p>
-                    {optionParts.length > 0 && (
-                      <p className="mt-0.5 text-[11px] text-zinc-500">
-                        {optionParts.join(" - ")}
-                      </p>
-                    )}
-                    {canReviewOrder && item.product?.slug && (
-                      <a
-                        href={`/${locale}/shop/${item.product.slug}#reviews`}
-                        className="mt-1 inline-flex text-[11px] text-emerald-300 underline underline-offset-2"
-                      >
-                        {t("detail.reviewCta")}
-                      </a>
-                    )}
-                  </div>
+                  <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
                 </div>
-                <span className="shrink-0 text-zinc-400">x{item.quantity}</span>
+
+                {canReviewOrder && item.product?.id && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-[11px] text-emerald-300 underline underline-offset-2">
+                      {t("detail.reviewCta")}
+                    </summary>
+                    <InlineReviewForm productId={item.product.id} />
+                  </details>
+                )}
               </li>
             );
           })}
         </ul>
       </div>
+
+      {order.recommendedProducts && order.recommendedProducts.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+          <p className="text-xs text-zinc-400">{t("detail.recommendedTitle")}</p>
+          <p className="mt-1 text-[11px] text-zinc-500">{t("detail.recommendedSubtitle")}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {order.recommendedProducts.map((product) => {
+              const discountedPrice =
+                product.discountPercent && product.discountPercent > 0
+                  ? Math.round(product.priceCents * (100 - product.discountPercent) / 100)
+                  : product.priceCents;
+
+              return (
+                <Link
+                  key={product.id}
+                  href={`/shop/${product.slug}`}
+                  className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+                >
+                  <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                    {product.images?.[0]?.url ? (
+                      <img
+                        src={product.images[0].url}
+                        alt={product.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                        Image
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm font-semibold text-emerald-200">
+                      {formatMoney(discountedPrice, product.currency, locale)}
+                    </span>
+                    {product.discountPercent && product.discountPercent > 0 && (
+                      <span className="text-[11px] text-zinc-500 line-through">
+                        {formatMoney(product.priceCents, product.currency, locale)}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300">
         <div className="flex items-center justify-between">
@@ -297,16 +412,12 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
             order.messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.senderRole === "CUSTOMER" ? "justify-end" : "justify-start"
-                }`}
+                className={`flex ${message.senderRole === "CUSTOMER" ? "justify-end" : "justify-start"}`}
               >
                 <div className="max-w-[70%] rounded-2xl border border-white/10 bg-zinc-950/70 px-3 py-2 text-[11px] text-zinc-200">
                   <p className="text-[10px] text-zinc-500">
-                    {t(
-                      `sender.${(message.senderRole ?? "SYSTEM").toLowerCase()}`
-                    )}{" "}
-                    - {new Date(message.createdAt).toLocaleString(locale)}
+                    {t(`sender.${(message.senderRole ?? "SYSTEM").toLowerCase()}`)} -{" "}
+                    {new Date(message.createdAt).toLocaleString(locale)}
                   </p>
                   <p className="mt-1">{message.body}</p>
                 </div>
@@ -321,7 +432,7 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
             className="flex-1 rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-2 text-xs text-white"
             placeholder={t("detail.messagePlaceholder")}
             value={messageDraft}
-            onChange={(e) => setMessageDraft(e.target.value)}
+            onChange={(event) => setMessageDraft(event.target.value)}
           />
           <button
             type="button"

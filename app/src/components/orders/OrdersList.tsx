@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
@@ -160,11 +160,11 @@ export default function OrdersList() {
                       <span>{t("labels.items", { count: order.items.length })}</span>
                       <span>{formatMoney(order.totalCents, order.currency, locale)}</span>
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
                       <span>{new Date(order.createdAt).toLocaleDateString(locale)}</span>
                       <Link
                         href={`/orders/${order.id}`}
-                        className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-emerald-300/60"
+                        className="inline-flex whitespace-nowrap rounded-full border border-emerald-300/50 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-200 transition hover:border-emerald-200 hover:bg-emerald-400/20"
                       >
                         {t("labels.view")}
                       </Link>
@@ -179,3 +179,4 @@ export default function OrdersList() {
     </div>
   );
 }
+

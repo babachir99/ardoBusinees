@@ -251,11 +251,27 @@
       "unknownSeller": "Vendeur inconnu",
       "store": "Boutique",
       "reviewCta": "Donner mon avis",
+      "sellerProducts": "Produits actifs",
+      "sellerPaidOrders": "Commandes payees",
+      "sellerReviews": "Avis vendeurs",
+      "recommendedTitle": "Tu pourrais aussi aimer",
+      "recommendedSubtitle": "Suggestions basees sur cette commande",
       "noPhone": "Aucun telephone",
       "noMessages": "Aucun message pour le moment.",
       "messagePlaceholder": "Ecrire un message...",
       "send": "Envoyer",
-      "sending": "Envoi..."
+      "sending": "Envoi...",
+      "reviewForm": {
+        "title": "Donner un avis",
+        "productRating": "Note produit",
+        "sellerRating": "Note vendeur",
+        "titlePlaceholder": "Titre de ton avis",
+        "commentPlaceholder": "Partage ton experience...",
+        "submit": "Publier l'avis",
+        "saving": "Publication...",
+        "success": "Merci, ton avis a ete enregistre.",
+        "error": "Impossible d'enregistrer l'avis."
+      }
     },
     "empty": "Aucune commande trouvee pour cet email.",
     "errors": {
@@ -1284,3 +1300,4 @@
     }
   }
 }
+

@@ -251,11 +251,27 @@
       "unknownSeller": "Unknown seller",
       "store": "Store",
       "reviewCta": "Leave a review",
+      "sellerProducts": "Active products",
+      "sellerPaidOrders": "Paid orders",
+      "sellerReviews": "Seller reviews",
+      "recommendedTitle": "You may also like",
+      "recommendedSubtitle": "Suggestions based on this order",
       "noPhone": "No phone",
       "noMessages": "No messages yet.",
       "messagePlaceholder": "Write a message...",
       "send": "Send",
-      "sending": "Sending..."
+      "sending": "Sending...",
+      "reviewForm": {
+        "title": "Leave a review",
+        "productRating": "Product rating",
+        "sellerRating": "Seller rating",
+        "titlePlaceholder": "Review title",
+        "commentPlaceholder": "Share your experience...",
+        "submit": "Publish review",
+        "saving": "Publishing...",
+        "success": "Thanks, your review was saved.",
+        "error": "Unable to save your review."
+      }
     },
     "empty": "No orders found for this email.",
     "errors": {
@@ -1278,3 +1294,4 @@
     }
   }
 }
+
