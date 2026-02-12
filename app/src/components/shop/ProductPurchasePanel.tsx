@@ -185,7 +185,9 @@ export default function ProductPurchasePanel({
   const whatsappLabel = "WhatsApp";
   const twitterLabel = "X / Twitter";
   const shareLeadText =
-    locale === "fr" ? "Regarde cette annonce sur JONTAADO" : "Check out this listing on JONTAADO";
+    locale === "fr"
+      ? "Nouvelle pépite dispo sur JONTAADO! Regarde ça 👇"
+      : "New gem available on JONTAADO! Check this out 👇";
 
   const nextImage = () => {
     if (safeImages.length <= 1) return;
@@ -657,4 +659,7 @@ export default function ProductPurchasePanel({
     </>
   );
 }
+
+
+
 
