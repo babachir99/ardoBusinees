@@ -1,4 +1,4 @@
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -480,6 +480,9 @@ export default async function ProductPage({
             images={product.images}
             addLabel={t("cta.add")}
             addedLabel={t("cta.added")}
+            shareLabel={t("cta.share")}
+            copiedLabel={t("cta.copied")}
+            shareErrorLabel={t("cta.shareError")}
             showColorOptions={showColorOptions}
             showSizeOptions={showSizeOptions}
             colorOptions={explicitColorOptions}
@@ -632,4 +635,5 @@ export default async function ProductPage({
     </div>
   );
 }
+
 

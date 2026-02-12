@@ -121,7 +121,10 @@
     "cta": {
       "add": "Add to cart",
       "added": "Added",
-      "wishlist": "Save"
+      "wishlist": "Save",
+      "share": "Share",
+      "copied": "Link copied",
+      "shareError": "Unable to share"
     },
     "aside": {
       "title": "Smart tracking",
@@ -1319,6 +1322,7 @@
     }
   }
 }
+
 
 
 

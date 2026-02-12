@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 
@@ -22,6 +22,9 @@ type ProductPurchasePanelProps = {
   images: ProductImage[];
   addLabel: string;
   addedLabel: string;
+  shareLabel: string;
+  copiedLabel: string;
+  shareErrorLabel: string;
   showColorOptions: boolean;
   showSizeOptions: boolean;
   colorOptions?: string[];
@@ -41,6 +44,9 @@ export default function ProductPurchasePanel({
   images,
   addLabel,
   addedLabel,
+  shareLabel,
+  copiedLabel,
+  shareErrorLabel,
   showColorOptions,
   showSizeOptions,
   colorOptions,
@@ -51,6 +57,9 @@ export default function ProductPurchasePanel({
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "error">("idle");
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedColorOptions = useMemo(() => {
     const normalized = (colorOptions ?? [])
@@ -129,12 +138,54 @@ export default function ProductPurchasePanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isLightboxOpen, safeImages.length]);
 
+  useEffect(() => {
+    if (shareFeedback === "idle") return;
+    const timer = window.setTimeout(() => setShareFeedback("idle"), 2200);
+    return () => window.clearTimeout(timer);
+  }, [shareFeedback]);
+
+  useEffect(() => {
+    if (!isShareMenuOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      if (!shareMenuRef.current) return;
+      if (!shareMenuRef.current.contains(event.target as Node)) {
+        setIsShareMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsShareMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isShareMenuOpen]);
+
   const normalizedIndex = safeImages.length > 0 ? activeIndex % safeImages.length : 0;
   const currentImage = hasImages ? safeImages[normalizedIndex] : null;
   const favoriteAddLabel = locale === "fr" ? "Ajouter aux favoris" : "Add to favorites";
   const favoriteRemoveLabel = locale === "fr" ? "Retirer des favoris" : "Remove from favorites";
   const soldOutLabel = locale === "fr" ? "Epuise" : "Sold out";
   const checkingLabel = locale === "fr" ? "Verification..." : "Checking...";
+  const shareTitle = locale === "fr" ? "Partager l'annonce" : "Share listing";
+  const shareSubtitle =
+    locale === "fr" ? "Copiez ou partagez cette annonce en un clic." : "Copy or share this listing in one click.";
+  const closeLabel = locale === "fr" ? "Fermer" : "Close";
+  const copyLinkLabel = locale === "fr" ? "Copier le lien" : "Copy link";
+  const emailLabel = locale === "fr" ? "E-mail" : "E-mail";
+  const facebookLabel = "Facebook";
+  const whatsappLabel = "WhatsApp";
+  const twitterLabel = "X / Twitter";
+  const shareLeadText =
+    locale === "fr" ? "Regarde cette annonce sur JONTAADO" : "Check out this listing on JONTAADO";
 
   const nextImage = () => {
     if (safeImages.length <= 1) return;
@@ -162,6 +213,70 @@ export default function ProductPurchasePanel({
     }
 
     setTouchStartX(null);
+  };
+
+  const closeShareMenu = () => setIsShareMenuOpen(false);
+
+  const handleShareToggle = () => {
+    setIsShareMenuOpen((open) => !open);
+  };
+
+  const buildShareMessage = (url: string) => `${shareLeadText}: ${title} - ${url}`;
+
+  const copyCurrentLink = async () => {
+    try {
+      const url = window.location.href;
+      const message = buildShareMessage(url);
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(message);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = message;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+
+      setShareFeedback("copied");
+      closeShareMenu();
+    } catch {
+      setShareFeedback("error");
+    }
+  };
+
+  const shareByEmail = () => {
+    const url = window.location.href;
+    const subject = encodeURIComponent(title);
+    const body = encodeURIComponent(buildShareMessage(url));
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    closeShareMenu();
+  };
+
+  const openShareWindow = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+    closeShareMenu();
+  };
+
+  const shareOnFacebook = () => {
+    const url = encodeURIComponent(window.location.href);
+    const quote = encodeURIComponent(`${shareLeadText}: ${title}`);
+    openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${quote}`);
+  };
+
+  const shareOnWhatsapp = () => {
+    const text = encodeURIComponent(buildShareMessage(window.location.href));
+    openShareWindow(`https://wa.me/?text=${text}`);
+  };
+
+  const shareOnTwitter = () => {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent(`${shareLeadText}: ${title}`);
+    openShareWindow(`https://twitter.com/intent/tweet?url=${url}&text=${text}`);
   };
 
   return (
@@ -348,6 +463,98 @@ export default function ProductPurchasePanel({
                 removeLabel={favoriteRemoveLabel}
                 className="w-full whitespace-nowrap rounded-xl border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-100"
               />
+
+              <div className="relative" ref={shareMenuRef}>
+                <button
+                  type="button"
+                  onClick={handleShareToggle}
+                  className="w-full whitespace-nowrap rounded-xl border border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm font-medium text-zinc-100 transition hover:border-emerald-300/60"
+                >
+                  {shareLabel}
+                </button>
+
+                {isShareMenuOpen && (
+                  <div className="absolute right-0 top-[calc(100%+0.45rem)] z-40 w-64 rounded-2xl border border-white/15 bg-zinc-950/95 p-3 shadow-2xl">
+                    <div className="mb-2 flex items-center justify-between border-b border-white/10 pb-2">
+                      <p className="text-sm font-semibold text-white">{shareTitle}</p>
+                      <button
+                        type="button"
+                        onClick={closeShareMenu}
+                        className="rounded-full border border-white/20 px-2 py-0.5 text-xs text-zinc-300 hover:border-white/40"
+                        aria-label={closeLabel}
+                      >
+                        x
+                      </button>
+                    </div>
+                    <p className="mb-3 text-xs text-zinc-400">{shareSubtitle}</p>
+
+                    <div className="grid gap-1.5">
+                      <button
+                        type="button"
+                        onClick={copyCurrentLink}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-zinc-300">
+                          <path d="M9 15 6 18a4 4 0 1 1-6-6l3-3" />
+                          <path d="m15 9 3-3a4 4 0 1 1 6 6l-3 3" />
+                          <path d="m8 16 8-8" />
+                        </svg>
+                        {copyLinkLabel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={shareByEmail}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-zinc-300">
+                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                          <path d="m4 7 8 6 8-6" />
+                        </svg>
+                        {emailLabel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={shareOnFacebook}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-zinc-300">
+                          <path d="M15 8h3V4h-3a5 5 0 0 0-5 5v3H7v4h3v4h4v-4h3l1-4h-4V9a1 1 0 0 1 1-1Z" />
+                        </svg>
+                        {facebookLabel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={shareOnWhatsapp}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-zinc-300">
+                          <path d="M20 12a8 8 0 0 1-11.7 7l-4.3 1 1-4.2A8 8 0 1 1 20 12Z" />
+                          <path d="M9.6 9.8c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .5.4l.6 1.5c.1.3 0 .4-.2.6l-.4.4c-.1.1-.2.2-.1.4.2.5.6 1 1 1.4.5.4 1 .8 1.6 1 .2.1.3 0 .4-.1l.4-.5c.2-.2.4-.3.7-.2l1.4.6c.3.1.4.3.4.5v.5c0 .2 0 .4-.5.6-.5.2-1.1.2-1.8-.1a8.5 8.5 0 0 1-4.7-4.6c-.3-.7-.3-1.3-.1-1.8Z" />
+                        </svg>
+                        {whatsappLabel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={shareOnTwitter}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-zinc-300">
+                          <path d="M4 4 20 20" />
+                          <path d="M20 4 4 20" />
+                        </svg>
+                        {twitterLabel}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {shareFeedback === "copied" && (
+                  <p className="mt-1 text-[11px] text-emerald-300">{copiedLabel}</p>
+                )}
+                {shareFeedback === "error" && (
+                  <p className="mt-1 text-[11px] text-rose-300">{shareErrorLabel}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -450,3 +657,4 @@ export default function ProductPurchasePanel({
     </>
   );
 }
+

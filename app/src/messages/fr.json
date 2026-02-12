@@ -121,7 +121,10 @@
     "cta": {
       "add": "Ajouter au panier",
       "added": "Ajoute",
-      "wishlist": "Sauvegarder"
+      "wishlist": "Sauvegarder",
+      "share": "Partager",
+      "copied": "Lien copie",
+      "shareError": "Partage indisponible"
     },
     "aside": {
       "title": "Suivi intelligent",
@@ -1325,6 +1328,7 @@
     }
   }
 }
+
 
 
 
