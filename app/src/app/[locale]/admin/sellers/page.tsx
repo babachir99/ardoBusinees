@@ -1,4 +1,4 @@
-import AdminSellersBoard from "@/components/admin/AdminSellersBoard";
+﻿import AdminSellersBoard from "@/components/admin/AdminSellersBoard";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -31,6 +31,20 @@ export default async function AdminSellersPage() {
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-10">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin"
+            className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/50"
+          >
+            Dashboard admin
+          </Link>
+          <Link
+            href="/admin/payouts"
+            className="rounded-full border border-emerald-300/40 px-3 py-1.5 text-xs text-emerald-200 hover:border-emerald-300/70"
+          >
+            Payouts
+          </Link>
+        </div>
         <AdminSellersBoard />
       </main>
       <Footer />

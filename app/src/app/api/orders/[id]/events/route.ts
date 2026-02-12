@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -44,6 +44,9 @@ export async function POST(
       status: true,
       paymentMethod: true,
       paymentStatus: true,
+      totalCents: true,
+      feesCents: true,
+      currency: true,
       items: {
         select: {
           productId: true,
@@ -85,6 +88,12 @@ export async function POST(
     nextPaymentStatus = "PAID";
   }
 
+  const resultingPaymentStatus = nextPaymentStatus ?? order.paymentStatus;
+  const shouldReleasePayout =
+    typedStatus === "DELIVERED" && resultingPaymentStatus === "PAID" && Boolean(order.sellerId);
+  const shouldFailPendingPayout =
+    (typedStatus === "CANCELED" || typedStatus === "REFUNDED") && Boolean(order.sellerId);
+
   const localItemsByProduct = new Map<string, number>();
   if (shouldRestock) {
     for (const item of order.items) {
@@ -114,6 +123,43 @@ export async function POST(
       },
     });
 
+    if (nextPaymentStatus) {
+      if (nextPaymentStatus === "PAID" && order.paymentMethod === "CASH") {
+        const existingPayment = await tx.payment.findUnique({
+          where: { orderId: order.id },
+        });
+
+        if (existingPayment) {
+          if (existingPayment.status !== "PAID") {
+            await tx.payment.update({
+              where: { orderId: order.id },
+              data: {
+                status: "PAID",
+                method: order.paymentMethod ?? undefined,
+              },
+            });
+          }
+        } else {
+          await tx.payment.create({
+            data: {
+              orderId: order.id,
+              provider: "cash_on_delivery",
+              amountCents: order.totalCents,
+              currency: order.currency,
+              status: "PAID",
+              method: order.paymentMethod ?? undefined,
+              splitMeta: { mode: "delivery" },
+            },
+          });
+        }
+      } else {
+        await tx.payment.updateMany({
+          where: { orderId: order.id },
+          data: { status: nextPaymentStatus },
+        });
+      }
+    }
+
     if (localItemsByProduct.size > 0) {
       for (const [productId, quantity] of localItemsByProduct.entries()) {
         await tx.product.update({
@@ -125,6 +171,50 @@ export async function POST(
           },
         });
       }
+    }
+
+    if (shouldReleasePayout && order.sellerId) {
+      const payoutAmount = Math.max(order.totalCents - order.feesCents, 0);
+      const existingPayout = await tx.payout.findFirst({
+        where: {
+          orderId: order.id,
+          sellerId: order.sellerId,
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      if (!existingPayout) {
+        await tx.payout.create({
+          data: {
+            sellerId: order.sellerId,
+            orderId: order.id,
+            amountCents: payoutAmount,
+            currency: order.currency,
+            status: "PAID",
+          },
+        });
+      } else if (existingPayout.status !== "PAID") {
+        await tx.payout.update({
+          where: { id: existingPayout.id },
+          data: { status: "PAID" },
+        });
+      }
+    }
+
+    if (shouldFailPendingPayout && order.sellerId) {
+      await tx.payout.updateMany({
+        where: {
+          orderId: order.id,
+          sellerId: order.sellerId,
+          status: "PENDING",
+        },
+        data: {
+          status: "FAILED",
+        },
+      });
     }
 
     return createdEvent;
@@ -140,6 +230,7 @@ export async function POST(
         status: typedStatus,
         paymentStatus: nextPaymentStatus,
         restocked: shouldRestock,
+        payoutReleased: shouldReleasePayout,
       },
     },
   });
