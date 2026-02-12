@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -12,6 +12,7 @@ import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
 
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 type RelatedProductCard = {
   id: string;
   title: string;
@@ -360,7 +361,12 @@ export default async function ProductPage({
       href={`/shop/${item.slug}`}
       className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition hover:border-emerald-300/60"
     >
-      <div className="h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+      <div className="relative h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+        <FavoriteButton
+          productId={item.id}
+          variant="icon"
+          className="absolute left-3 top-3 z-20"
+        />
         {item.images[0]?.url ? (
           <img
             src={item.images[0].url}
@@ -626,3 +632,4 @@ export default async function ProductPage({
     </div>
   );
 }
+

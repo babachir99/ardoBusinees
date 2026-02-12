@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 import InlineReviewForm from "@/components/orders/InlineReviewForm";
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 
 type OrderEvent = {
   id: string;
@@ -114,9 +115,14 @@ function RecommendedGrid({
             <Link
               key={product.id}
               href={`/shop/${product.slug}`}
-              className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+              className="group rounded-2xl border border-white/10 bg-zinc-900/70 p-3 transition hover:border-emerald-300/60"
             >
-              <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+              <div className="relative h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                <FavoriteButton
+                  productId={product.id}
+                  variant="icon"
+                  className="absolute left-2 top-2 z-20"
+                />
                 {product.images?.[0]?.url ? (
                   <img
                     src={product.images[0].url}
@@ -550,3 +556,5 @@ export default function OrderDetail({ orderId }: { orderId: string }) {
     </div>
   );
 }
+
+

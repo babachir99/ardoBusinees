@@ -176,7 +176,16 @@
     "recommendedSimilarTitle": "Produits similaires",
     "recommendedSimilarSubtitle": "Dans les memes categories que ton panier",
     "recommendedComplementaryTitle": "Peut aller avec",
-    "recommendedComplementarySubtitle": "Articles complementaires pour ta commande"
+    "recommendedComplementarySubtitle": "Articles complementaires pour ta commande",
+    "removeLine": "Retirer",
+    "favoritesBox": {
+      "title": "Favoris a ajouter",
+      "subtitle": "Retrouve rapidement tes produits sauvegardes.",
+      "viewAll": "Voir tout",
+      "soldOut": "Epuise",
+      "addToCart": "Ajouter au panier",
+      "remove": "Retirer"
+    }
   },
   "Orders": {
     "kicker": "Commandes",
@@ -1316,6 +1325,8 @@
     }
   }
 }
+
+
 
 
 

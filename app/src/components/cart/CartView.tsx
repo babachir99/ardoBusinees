@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 
 type RecommendedProduct = {
   id: string;
@@ -20,6 +21,23 @@ type RecommendedProduct = {
 type RecommendationsResponse = {
   similar?: RecommendedProduct[];
   complementary?: RecommendedProduct[];
+};
+
+type FavoriteItem = {
+  id: string;
+  productId: string;
+  product: {
+    id: string;
+    title: string;
+    slug: string;
+    priceCents: number;
+    discountPercent?: number | null;
+    currency: string;
+    type: "PREORDER" | "DROPSHIP" | "LOCAL";
+    stockQuantity?: number | null;
+    seller?: { displayName?: string | null } | null;
+    images: { url: string; alt?: string | null }[];
+  };
 };
 
 function ProductSuggestionGrid({
@@ -50,9 +68,14 @@ function ProductSuggestionGrid({
             <Link
               key={product.id}
               href={`/shop/${product.slug}`}
-              className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 transition hover:border-emerald-300/60"
+              className="group rounded-2xl border border-white/10 bg-zinc-900/70 p-3 transition hover:border-emerald-300/60"
             >
-              <div className="h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+              <div className="relative h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                <FavoriteButton
+                  productId={product.id}
+                  variant="icon"
+                  className="absolute left-2 top-2 z-20"
+                />
                 {product.images?.[0]?.url ? (
                   <img
                     src={product.images[0].url}
@@ -88,10 +111,13 @@ function ProductSuggestionGrid({
 export default function CartView() {
   const t = useTranslations("Cart");
   const locale = useLocale();
-  const { items, updateQuantity, removeItem, clear, subtotalCents } = useCart();
+  const { items, addItem, updateQuantity, removeItem, clear, subtotalCents } = useCart();
+  const isFr = locale === "fr";
 
   const [similarProducts, setSimilarProducts] = useState<RecommendedProduct[]>([]);
   const [complementaryProducts, setComplementaryProducts] = useState<RecommendedProduct[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(true);
 
   const sourceProductIds = useMemo(
     () => Array.from(new Set(items.map((item) => item.id))).slice(0, 18),
@@ -157,20 +183,177 @@ export default function CartView() {
     };
   }, [sourceProductIds]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFavorites = async () => {
+      setFavoritesLoading(true);
+      try {
+        const response = await fetch("/api/favorites", { cache: "no-store" });
+        if (!response.ok) {
+          if (!cancelled) {
+            setFavorites([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as FavoriteItem[];
+        if (!cancelled) {
+          setFavorites(Array.isArray(payload) ? payload.slice(0, 6) : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setFavorites([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setFavoritesLoading(false);
+        }
+      }
+    };
+
+    void loadFavorites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const removeFavorite = async (productId: string) => {
+    try {
+      const response = await fetch(`/api/favorites?productId=${productId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok || response.status === 404) {
+        setFavorites((current) => current.filter((item) => item.productId !== productId));
+      }
+    } catch {
+      // no-op
+    }
+  };
+
+  const addFavoriteToCart = (favorite: FavoriteItem) => {
+    const product = favorite.product;
+    const localStock = Number(product.stockQuantity ?? 0);
+    const maxQuantity = product.type === "LOCAL" && localStock > 0 ? localStock : undefined;
+
+    addItem({
+      id: product.id,
+      slug: product.slug,
+      title: product.title,
+      priceCents: product.priceCents,
+      currency: product.currency,
+      type: product.type,
+      sellerName: product.seller?.displayName ?? undefined,
+      maxQuantity,
+    });
+  };
+
   const feesCents = Math.round(subtotalCents * 0.04);
   const totalCents = subtotalCents + feesCents;
 
   if (items.length === 0) {
     return (
-      <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-10 text-center">
-        <h1 className="text-2xl font-semibold">{t("emptyTitle")}</h1>
-        <p className="mt-3 text-sm text-zinc-300">{t("emptyDesc")}</p>
-        <Link
-          href="/shop"
-          className="mt-6 inline-flex rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
-        >
-          {t("continue")}
-        </Link>
+      <div className="grid gap-6">
+        <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-10 text-center">
+          <h1 className="text-2xl font-semibold">{t("emptyTitle")}</h1>
+          <p className="mt-3 text-sm text-zinc-300">{t("emptyDesc")}</p>
+          <Link
+            href="/shop"
+            className="mt-6 inline-flex rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
+          >
+            {t("continue")}
+          </Link>
+        </div>
+
+        {!favoritesLoading && favorites.length > 0 && (
+          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-zinc-300">{t("favoritesBox.title")}</p>
+                <p className="mt-1 text-[11px] text-zinc-500">{t("favoritesBox.subtitle")}</p>
+              </div>
+              <Link
+                href="/favorites"
+                className="shrink-0 rounded-full border border-white/20 px-3 py-1 text-[11px] text-zinc-200 transition hover:border-white/40"
+              >
+                {t("favoritesBox.viewAll")}
+              </Link>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {favorites.map((favorite) => {
+                const product = favorite.product;
+                const discountedPrice =
+                  product.discountPercent && product.discountPercent > 0
+                    ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
+                    : product.priceCents;
+                const isSoldOut =
+                  product.type === "LOCAL" && Number(product.stockQuantity ?? 0) <= 0;
+
+                return (
+                  <div
+                    key={favorite.id}
+                    className="rounded-xl border border-white/10 bg-zinc-950/60 p-3"
+                  >
+                    <Link href={`/shop/${product.slug}`} className="group block">
+                      <div className="h-24 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                        {product.images?.[0]?.url ? (
+                          <img
+                            src={product.images[0].url}
+                            alt={product.images[0].alt ?? product.title}
+                            className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                            Image
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">
+                        {product.title}
+                      </p>
+                    </Link>
+
+                    <p className="mt-1 text-[11px] text-zinc-400">
+                      {product.seller?.displayName ?? "-"}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-emerald-200">
+                      {formatMoney(discountedPrice, product.currency, locale)}
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => addFavoriteToCart(favorite)}
+                        disabled={isSoldOut}
+                        title={
+                          isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")
+                        }
+                        aria-label={
+                          isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")
+                        }
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 text-sm text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSoldOut ? "!" : "\u{1F6D2}"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFavorite(favorite.productId)}
+                        title={t("favoritesBox.remove")}
+                        aria-label={t("favoritesBox.remove")}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-sm text-zinc-200 transition hover:border-white/40"
+                      >
+                        X
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -207,7 +390,7 @@ export default function CartView() {
                     {item.type === "PREORDER"
                       ? t("labels.preorder")
                       : item.type === "LOCAL"
-                      ? locale === "fr"
+                      ? isFr
                         ? "Local"
                         : "Local"
                       : t("labels.dropship")}
@@ -215,15 +398,13 @@ export default function CartView() {
                   {(item.optionColor || item.optionSize || item.maxQuantity) && (
                     <p className="mt-1 text-xs text-zinc-500">
                       {item.optionColor
-                        ? `${locale === "fr" ? "Couleur" : "Color"}: ${item.optionColor}`
+                        ? `${isFr ? "Couleur" : "Color"}: ${item.optionColor}`
                         : ""}
                       {item.optionColor && item.optionSize ? " - " : ""}
-                      {item.optionSize
-                        ? `${locale === "fr" ? "Taille" : "Size"}: ${item.optionSize}`
-                        : ""}
+                      {item.optionSize ? `${isFr ? "Taille" : "Size"}: ${item.optionSize}` : ""}
                       {item.maxQuantity
                         ? `${item.optionColor || item.optionSize ? " - " : ""}${
-                            locale === "fr" ? "Stock max" : "Max stock"
+                            isFr ? "Stock max" : "Max stock"
                           }: ${item.maxQuantity}`
                         : ""}
                     </p>
@@ -258,7 +439,7 @@ export default function CartView() {
                     onClick={() => removeItem(item.lineId)}
                     className="text-xs text-zinc-400 underline decoration-white/20"
                   >
-                    {t("remove")}
+                    {t("removeLine")}
                   </button>
                 </div>
               </div>
@@ -279,6 +460,96 @@ export default function CartView() {
             products={complementaryProducts}
             locale={locale}
           />
+
+          {!favoritesLoading && favorites.length > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-zinc-300">
+                    {t("favoritesBox.title")}
+                  </p>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    {t("favoritesBox.subtitle")}
+                  </p>
+                </div>
+                <Link
+                  href="/favorites"
+                  className="shrink-0 rounded-full border border-white/20 px-3 py-1 text-[11px] text-zinc-200 transition hover:border-white/40"
+                >
+                  {t("favoritesBox.viewAll")}
+                </Link>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {favorites.map((favorite) => {
+                  const product = favorite.product;
+                  const discountedPrice =
+                    product.discountPercent && product.discountPercent > 0
+                      ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
+                      : product.priceCents;
+                  const isSoldOut =
+                    product.type === "LOCAL" && Number(product.stockQuantity ?? 0) <= 0;
+
+                  return (
+                    <div
+                      key={favorite.id}
+                      className="rounded-xl border border-white/10 bg-zinc-900/60 p-3"
+                    >
+                      <Link href={`/shop/${product.slug}`} className="group block">
+                        <div className="h-24 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
+                          {product.images?.[0]?.url ? (
+                            <img
+                              src={product.images[0].url}
+                              alt={product.images[0].alt ?? product.title}
+                              className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                              Image
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">
+                          {product.title}
+                        </p>
+                      </Link>
+                      <p className="mt-1 text-[11px] text-zinc-400">
+                        {product.seller?.displayName ?? "-"}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-emerald-200">
+                          {formatMoney(discountedPrice, product.currency, locale)}
+                        </span>
+                        {product.discountPercent && product.discountPercent > 0 && (
+                          <span className="text-[11px] text-zinc-500 line-through">
+                            {formatMoney(product.priceCents, product.currency, locale)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 grid gap-2">
+                        <button
+                          type="button"
+                          onClick={() => addFavoriteToCart(favorite)}
+                          disabled={isSoldOut}
+                          className="rounded-full bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFavorite(favorite.productId)}
+                          className="rounded-full border border-white/20 px-3 py-2 text-xs text-zinc-200 transition hover:border-white/40"
+                        >
+                          {t("favoritesBox.remove")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -308,3 +579,9 @@ export default function CartView() {
     </div>
   );
 }
+
+
+
+
+
+

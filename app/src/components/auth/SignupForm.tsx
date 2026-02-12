@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
@@ -160,7 +160,7 @@ export default function SignupForm() {
       <div className="mt-4">
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: "/profile" })}
+          onClick={() => signIn("google", { callbackUrl: "/" })}
           className="w-full rounded-full border border-white/15 px-6 py-3 text-xs font-semibold text-white transition hover:border-white/30"
         >
           {t("signup.google")}
@@ -169,3 +169,4 @@ export default function SignupForm() {
     </form>
   );
 }
+

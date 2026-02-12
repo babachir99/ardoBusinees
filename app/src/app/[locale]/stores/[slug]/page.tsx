@@ -1,10 +1,11 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 export default async function StorePage({
   params,
 }: {
@@ -36,6 +37,9 @@ export default async function StorePage({
   const products = await prisma.product.findMany({
     where: { storeId: store.id, isActive: true },
     orderBy: { createdAt: "desc" },
+    include: {
+      images: { orderBy: { position: "asc" }, take: 1 },
+    },
   });
 
   const now = new Date();
@@ -104,19 +108,35 @@ export default async function StorePage({
                   : "border-white/10 hover:border-emerald-300/60"
               }`}
             >
+              <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                <FavoriteButton
+                  productId={product.id}
+                  variant="icon"
+                  className="absolute left-3 top-3 z-20"
+                />
+                {product.images[0]?.url ? (
+                  <img
+                    src={product.images[0].url}
+                    alt={product.images[0].alt ?? product.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+                    {locale === "fr" ? "Image a venir" : "Image coming soon"}
+                  </div>
+                )}
+                {boosted && (
+                  <span className="absolute right-3 top-3 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
+                    {locale === "fr" ? "Booste" : "Boosted"}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
                   {product.type}
                 </span>
-                <span className="text-xs text-zinc-400">
-                  {t("view")}
-                </span>
+                <span className="text-xs text-zinc-400">{t("view")}</span>
               </div>
-              {boosted && (
-                <span className="mt-3 inline-flex rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
-                  {locale === "fr" ? "Booste" : "Boosted"}
-                </span>
-              )}
               <h3 className="mt-4 text-xl font-semibold">{product.title}</h3>
               {product.discountPercent ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -155,3 +175,4 @@ export default async function StorePage({
     </div>
   );
 }
+

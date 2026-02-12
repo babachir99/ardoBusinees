@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
@@ -7,6 +7,9 @@ import Footer from "@/components/layout/Footer";
 import SearchBar from "@/components/search/SearchBar";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
 import ProductCardCarousel from "@/components/shop/ProductCardCarousel";
+import FavoriteButton from "@/components/favorites/FavoriteButton";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -29,6 +32,51 @@ export default async function HomePage({
   ]);
   const query = q?.trim();
 
+  const session = await getServerSession(authOptions);
+  const operatorProfile = session?.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          name: true,
+          role: true,
+          sellerProfile: { select: { id: true } },
+          kycSubmissions: {
+            where: {
+              status: "APPROVED",
+              targetRole: { in: ["SELLER", "TRANSPORTER", "COURIER"] },
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      })
+    : null;
+
+  const hasOperatorProfile =
+    Boolean(operatorProfile?.sellerProfile) ||
+    Boolean(operatorProfile?.kycSubmissions?.length) ||
+    operatorProfile?.role === "SELLER" ||
+    operatorProfile?.role === "COURIER" ||
+    operatorProfile?.role === "TRANSPORTER";
+
+  const firstName = operatorProfile?.name?.trim().split(/\s+/)[0] ?? "";
+  const operatorGreeting =
+    locale === "fr"
+      ? `Ravis de vous retrouver${firstName ? `, ${firstName}` : ""}`
+      : `Welcome back${firstName ? `, ${firstName}` : ""}`;
+  const operatorCta =
+    locale === "fr" ? "Aller a votre espace" : "Go to your workspace";
+  const startOperatorCta =
+    locale === "fr"
+      ? "Ouvrez votre espace vendeur / livreur / GP"
+      : "Open your seller / courier / GP space";
+  const loginToStartCta =
+    locale === "fr" ? "Se connecter pour commencer" : "Sign in to get started";
+
+  const operatorSpaceHref =
+    operatorProfile?.sellerProfile || operatorProfile?.role === "SELLER"
+      ? "/seller"
+      : "/profile";
   const orderBy: Prisma.ProductOrderByWithRelationInput =
     sort === "price_asc"
       ? { priceCents: "asc" }
@@ -247,7 +295,7 @@ export default async function HomePage({
         </aside>
 
         <section className="flex flex-col gap-8">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-3 card-glow fade-up">
+          <div className="-mt-4 rounded-3xl border border-white/10 bg-zinc-900/70 p-[2.2px] card-glow fade-up">
             <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
               {stores.map((store) => (
                 <Link
@@ -268,6 +316,41 @@ export default async function HomePage({
             </div>
           </div>
 
+          <div className="-mt-4 rounded-3xl border border-white/10 bg-zinc-900/70 p-[2.2px] card-glow fade-up">
+            {session ? (
+              hasOperatorProfile ? (
+                <Link
+                  href={operatorSpaceHref}
+                  className="group flex w-full items-center justify-between rounded-2xl border border-emerald-300/40 bg-emerald-400/10 px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/70 hover:shadow-[0_10px_24px_rgba(16,185,129,0.16)]"
+                >
+                  <span className="text-sm font-semibold text-white">{operatorGreeting}</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                  </span>
+                </Link>
+              ) : (
+                <Link
+                  href="/profile"
+                  className="group flex w-full items-center justify-between rounded-2xl border border-white/15 bg-zinc-950/50 px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/60 hover:shadow-[0_10px_24px_rgba(16,185,129,0.12)]"
+                >
+                  <span className="bg-gradient-to-r from-emerald-200 via-cyan-200 to-emerald-200 bg-[length:200%_100%] bg-[position:0%_50%] bg-clip-text text-sm font-semibold text-transparent transition-[background-position,letter-spacing] duration-500 group-hover:bg-[position:100%_50%] group-hover:tracking-[0.01em]">{startOperatorCta}</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                  </span>
+                </Link>
+              )
+            ) : (
+              <Link
+                href="/login"
+                className="group flex w-full items-center justify-between rounded-2xl border border-white/15 bg-zinc-950/50 px-3 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/60 hover:shadow-[0_10px_24px_rgba(16,185,129,0.12)]"
+              >
+                <span className="bg-gradient-to-r from-emerald-200 via-cyan-200 to-emerald-200 bg-[length:200%_100%] bg-[position:0%_50%] bg-clip-text text-sm font-semibold text-transparent transition-[background-position,letter-spacing] duration-500 group-hover:bg-[position:100%_50%] group-hover:tracking-[0.01em]">{startOperatorCta}</span>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                  {loginToStartCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                </span>
+              </Link>
+            )}
+          </div>
           <div className="fade-up">
             <h2 className="text-2xl font-semibold">
               {query ? `Resultats pour "${query}"` : "Produits disponibles"}
@@ -293,6 +376,11 @@ export default async function HomePage({
                 }`}
               >
                 <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                  <FavoriteButton
+                    productId={product.id}
+                    variant="icon"
+                    className="absolute left-3 top-3 z-20"
+                  />
                   <ProductCardCarousel
                     images={product.images}
                     title={product.title}
@@ -342,3 +430,4 @@ export default async function HomePage({
     </div>
   );
 }
+

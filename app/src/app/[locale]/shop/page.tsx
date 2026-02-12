@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +7,7 @@ import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
 
+import FavoriteButton from "@/components/favorites/FavoriteButton";
 type ShopFilters = {
   type?: string;
   category?: string;
@@ -464,6 +465,11 @@ export default async function ShopPage({
                     }`}
                   >
                     <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                      <FavoriteButton
+                        productId={product.id}
+                        variant="icon"
+                        className="absolute left-3 top-3 z-20"
+                      />
                       {product.images[0] ? (
                         <img
                           src={product.images[0].url}
@@ -553,3 +559,4 @@ export default async function ShopPage({
     </div>
   );
 }
+

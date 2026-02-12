@@ -176,7 +176,16 @@
     "recommendedSimilarTitle": "Similar products",
     "recommendedSimilarSubtitle": "From the same categories as your cart",
     "recommendedComplementaryTitle": "Pairs well with",
-    "recommendedComplementarySubtitle": "Complementary items for your order"
+    "recommendedComplementarySubtitle": "Complementary items for your order",
+    "removeLine": "Remove",
+    "favoritesBox": {
+      "title": "Favorites to add",
+      "subtitle": "Quick access to your saved products.",
+      "viewAll": "View all",
+      "soldOut": "Sold out",
+      "addToCart": "Add to cart",
+      "remove": "Remove"
+    }
   },
   "Orders": {
     "kicker": "Orders",
@@ -1310,6 +1319,8 @@
     }
   }
 }
+
+
 
 
 

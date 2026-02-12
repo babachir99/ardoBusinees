@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { useTranslations } from "next-intl";
 
 type FavoriteButtonProps = {
   productId: string;
   addLabel?: string;
   removeLabel?: string;
+  variant?: "default" | "icon";
   className?: string;
 };
 
@@ -14,6 +15,7 @@ export default function FavoriteButton({
   productId,
   addLabel,
   removeLabel,
+  variant = "default",
   className,
 }: FavoriteButtonProps) {
   const t = useTranslations("Favorites");
@@ -31,30 +33,51 @@ export default function FavoriteButton({
     load();
   }, [productId]);
 
-  const toggle = async () => {
+  const toggle = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
     setLoading(true);
     if (isFavorite) {
-      await fetch(`/api/favorites?productId=${productId}`, { method: "DELETE" });
-      setIsFavorite(false);
+      const res = await fetch(`/api/favorites?productId=${productId}`, {
+        method: "DELETE",
+      });
+      if (res.ok || res.status === 404) {
+        setIsFavorite(false);
+      }
     } else {
-      await fetch("/api/favorites", {
+      const res = await fetch("/api/favorites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId }),
       });
-      setIsFavorite(true);
+      if (res.ok) {
+        setIsFavorite(true);
+      }
     }
     setLoading(false);
   };
+
+  const buttonLabel = isFavorite ? removeLabel ?? t("remove") : addLabel ?? t("add");
+  const isIcon = variant === "icon";
 
   return (
     <button
       type="button"
       onClick={toggle}
       disabled={loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold transition hover:border-white/40 disabled:opacity-60 ${
-        className ?? ""
-      }`}
+      aria-label={buttonLabel}
+      aria-pressed={isFavorite}
+      title={buttonLabel}
+      className={`inline-flex items-center justify-center transition disabled:opacity-60 ${
+        isIcon
+          ? `h-9 w-9 rounded-full border ${
+              isFavorite
+                ? "border-rose-300/70 bg-rose-500/15 text-rose-300"
+                : "border-white/20 bg-zinc-950/75 text-zinc-200 hover:border-white/40"
+            }`
+          : "gap-2 rounded-xl border border-white/20 px-4 py-2.5 text-sm font-semibold hover:border-white/40"
+      } ${className ?? ""}`}
     >
       <svg
         aria-hidden="true"
@@ -68,7 +91,7 @@ export default function FavoriteButton({
           strokeLinejoin="round"
         />
       </svg>
-      <span>{isFavorite ? removeLabel ?? t("remove") : addLabel ?? t("add")}</span>
+      {!isIcon ? <span>{buttonLabel}</span> : null}
     </button>
   );
 }
