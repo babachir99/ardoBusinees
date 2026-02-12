@@ -240,8 +240,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+
   useEffect(() => {
-    void resolveScope();
+    const rafId = window.requestAnimationFrame(() => {
+      void resolveScope();
+    });
 
     const handleFocus = () => {
       void resolveScope();
@@ -257,6 +260,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
+      window.cancelAnimationFrame(rafId);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -466,3 +470,4 @@ export function useCart() {
   }
   return ctx;
 }
+

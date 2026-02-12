@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "verify": "npm run lint && npm run build",
     "seed": "prisma db seed",
     "postinstall": "prisma generate",
     "fix:product-slugs": "node scripts/fix-product-slugs.js"

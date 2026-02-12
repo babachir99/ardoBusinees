@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -239,17 +239,15 @@ export default function CheckoutForm() {
       }
 
       if (shouldRunMockPayment) {
-        for (const orderId of orderIds) {
-          const paymentRes = await fetch("/api/payments/mock", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderId, forceSuccess: true }),
-          });
+        const paymentRes = await fetch("/api/payments/mock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderIds, forceSuccess: true }),
+        });
 
-          if (!paymentRes.ok) {
-            const data = await paymentRes.json().catch(() => null);
-            throw new Error(data?.error || `Payment failed for order ${orderId}`);
-          }
+        if (!paymentRes.ok) {
+          const data = await paymentRes.json().catch(() => null);
+          throw new Error(data?.error || "Payment failed");
         }
       }
 
@@ -446,8 +444,3 @@ export default function CheckoutForm() {
     </div>
   );
 }
-
-
-
-
-
