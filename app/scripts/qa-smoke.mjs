@@ -497,7 +497,7 @@ async function main() {
       body: JSON.stringify(orderPayload),
     });
 
-    const orderCreatedOk = orderRes.ok && orderData;
+    const orderCreatedOk = Boolean(orderRes.ok && orderData);
     reporter.add("create_order", orderCreatedOk, `status=${orderRes.status}`);
 
     const orderIds = orderCreatedOk
