@@ -54,10 +54,11 @@ export default function CheckoutForm() {
   const feesCents = Math.round(subtotalCents * 0.04);
   const totalCents = subtotalCents + feesCents;
   const hasNonLocal = items.some((item) => item.type !== "LOCAL");
-  const forceTestPayment =
+  const mockPaymentsEnabled =
     process.env.NODE_ENV !== "production" ||
     process.env.NEXT_PUBLIC_FORCE_TEST_PAYMENTS === "1";
-  const shouldRunMockPayment = forceTestPayment || paymentMethod !== "CASH";
+  const isOnlinePayment = paymentMethod !== "CASH";
+  const shouldRunMockPayment = mockPaymentsEnabled && isOnlinePayment;
 
   const contactComplete =
     form.name.trim().length > 0 &&
@@ -186,6 +187,11 @@ export default function CheckoutForm() {
 
     if (items.length === 0) {
       setError(t("errors.empty"));
+      return;
+    }
+
+    if (isOnlinePayment && !mockPaymentsEnabled) {
+      setError(t("errors.onlinePaymentUnavailable"));
       return;
     }
 

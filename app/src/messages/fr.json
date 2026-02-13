@@ -337,7 +337,8 @@
     "errors": {
       "email": "Email requis pour finaliser la commande.",
       "empty": "Ton panier est vide.",
-      "generic": "Une erreur est survenue."
+      "generic": "Une erreur est survenue.",
+      "onlinePaymentUnavailable": "Le paiement en ligne est indisponible pour le moment."
     },
     "success": {
       "title": "Commande enregistree",

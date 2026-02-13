@@ -337,7 +337,8 @@
     "errors": {
       "email": "Email is required to place the order.",
       "empty": "Your cart is empty.",
-      "generic": "Something went wrong."
+      "generic": "Something went wrong.",
+      "onlinePaymentUnavailable": "Online payment is currently unavailable."
     },
     "success": {
       "title": "Order recorded",
