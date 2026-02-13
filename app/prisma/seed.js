@@ -50,6 +50,24 @@ async function main() {
     },
   });
 
+
+
+  const transporterUser = await prisma.user.upsert({
+    where: { email: "transporter@ardobusiness.com" },
+    update: {
+      role: "TRANSPORTER",
+      name: "Mamadou GP",
+      phone: "+221770001122",
+    },
+    create: {
+      email: "transporter@ardobusiness.com",
+      name: "Mamadou GP",
+      role: "TRANSPORTER",
+      phone: "+221770001122",
+      locale: "fr",
+    },
+  });
+
   const seller = await prisma.sellerProfile.upsert({
     where: { userId: sellerUser.id },
     update: {
@@ -489,7 +507,57 @@ async function main() {
     },
   });
 
-  return { admin, seller, customer, orderId: order.id };
+
+
+  const gpTrip = await prisma.gpTrip.upsert({
+    where: { id: "gp-trip-demo" },
+    update: {
+      transporterId: transporterUser.id,
+      storeId: gpStore.id,
+      originCity: "Paris",
+      originAddress: "Aeroport CDG",
+      destinationCity: "Dakar",
+      destinationAddress: "Aeroport Blaise Diagne",
+      airline: "Air Senegal",
+      flightNumber: "HC404",
+      flightDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      deliveryStartAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
+      deliveryEndAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      availableKg: 24,
+      pricePerKgCents: 3500,
+      maxPackages: 6,
+      acceptedPaymentMethods: ["WAVE", "ORANGE_MONEY"],
+      contactPhone: transporterUser.phone,
+      notes: "Depot et remise sur rendez-vous.",
+      status: "OPEN",
+      isActive: true,
+    },
+    create: {
+      id: "gp-trip-demo",
+      transporterId: transporterUser.id,
+      storeId: gpStore.id,
+      originCity: "Paris",
+      originAddress: "Aeroport CDG",
+      destinationCity: "Dakar",
+      destinationAddress: "Aeroport Blaise Diagne",
+      airline: "Air Senegal",
+      flightNumber: "HC404",
+      flightDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      deliveryStartAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
+      deliveryEndAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      availableKg: 24,
+      pricePerKgCents: 3500,
+      maxPackages: 6,
+      acceptedPaymentMethods: ["WAVE", "ORANGE_MONEY"],
+      contactPhone: transporterUser.phone,
+      notes: "Depot et remise sur rendez-vous.",
+      status: "OPEN",
+      isActive: true,
+    },
+  });
+
+
+  return { admin, seller, customer, transporterUser, gpTripId: gpTrip.id, orderId: order.id };
 }
 
 main()

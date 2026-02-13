@@ -98,6 +98,12 @@ enum KycRole {
   COURIER
 }
 
+enum GpTripStatus {
+  OPEN
+  CLOSED
+  CANCELED
+}
+
 enum InquiryStatus {
   OPEN
   CLOSED
@@ -140,6 +146,7 @@ model User {
   inquiryMessages ProductInquiryMessage[]
   offersMade      ProductOffer[]          @relation("OfferBuyer")
   productReviews  ProductReview[]         @relation("ProductReviewBuyer")
+  gpTrips         GpTrip[]
 }
 
 model UserAddress {
@@ -232,6 +239,7 @@ model Store {
 
   products   Product[]
   categories StoreCategory[]
+  gpTrips    GpTrip[]
 }
 
 model Category {
@@ -380,6 +388,39 @@ model Payout {
 
   @@index([sellerId])
   @@index([orderId])
+}
+
+model GpTrip {
+  id                     String          @id @default(cuid())
+  transporterId          String
+  storeId                String?
+  originCity             String
+  originAddress          String
+  destinationCity        String
+  destinationAddress     String
+  airline                String
+  flightNumber           String
+  flightDate             DateTime
+  deliveryStartAt        DateTime?
+  deliveryEndAt          DateTime?
+  availableKg            Int
+  pricePerKgCents        Int
+  maxPackages            Int?
+  acceptedPaymentMethods PaymentMethod[] @default([])
+  contactPhone           String?
+  notes                  String?
+  status                 GpTripStatus    @default(OPEN)
+  isActive               Boolean         @default(true)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  transporter User   @relation(fields: [transporterId], references: [id], onDelete: Cascade)
+  store       Store? @relation(fields: [storeId], references: [id])
+
+  @@index([transporterId])
+  @@index([storeId])
+  @@index([status])
+  @@index([flightDate])
 }
 
 model ServiceListing {
