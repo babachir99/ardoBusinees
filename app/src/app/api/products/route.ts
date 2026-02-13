@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import type { Prisma, ProductType } from "@prisma/client";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
@@ -28,7 +30,10 @@ function sanitizeAttributes(value: unknown): Prisma.JsonObject | undefined {
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
-    .map(([key, raw]) => [String(key).trim().slice(0, 64), String(raw ?? "").trim().slice(0, 256)] as const)
+    .map(
+      ([key, raw]) =>
+        [String(key).trim().slice(0, 64), String(raw ?? "").trim().slice(0, 256)] as const
+    )
     .filter(([key, val]) => key.length > 0 && val.length > 0)
     .slice(0, 24);
 
@@ -97,6 +102,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -111,7 +121,41 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const sellerId = String(body.sellerId ?? "");
+  let sellerId = String(body.sellerId ?? "").trim();
+
+  if (session.user.role === "ADMIN") {
+    if (!sellerId) {
+      return NextResponse.json({ error: "sellerId is required" }, { status: 400 });
+    }
+
+    const seller = await prisma.sellerProfile.findUnique({
+      where: { id: sellerId },
+      select: { id: true },
+    });
+
+    if (!seller) {
+      return NextResponse.json({ error: "Seller not found" }, { status: 404 });
+    }
+  } else {
+    const ownSeller = await prisma.sellerProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+
+    if (!ownSeller) {
+      return NextResponse.json({ error: "Seller profile not found" }, { status: 403 });
+    }
+
+    if (sellerId && sellerId !== ownSeller.id) {
+      return NextResponse.json(
+        { error: "You can only create products for your own seller profile" },
+        { status: 403 }
+      );
+    }
+
+    sellerId = ownSeller.id;
+  }
+
   const title = String(body.title ?? "").trim();
   const rawSlugInput = String(body.slug ?? body.title ?? "");
   const baseSlug = slugify(rawSlugInput);
@@ -131,9 +175,9 @@ export async function POST(request: NextRequest) {
     discountPercent = parsed > 0 ? Math.round(parsed) : null;
   }
 
-  if (!sellerId || !title || !Number.isFinite(priceCents)) {
+  if (!title || !Number.isFinite(priceCents)) {
     return NextResponse.json(
-      { error: "sellerId, title and priceCents are required" },
+      { error: "title and priceCents are required" },
       { status: 400 }
     );
   }
@@ -192,8 +236,7 @@ export async function POST(request: NextRequest) {
     if (incompatible.length > 0) {
       return NextResponse.json(
         {
-          error:
-            "Selected categories are not available for the selected store",
+          error: "Selected categories are not available for the selected store",
         },
         { status: 400 }
       );
@@ -251,6 +294,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(product, { status: 201 });
 }
-
-
-

@@ -137,9 +137,25 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const sessionUserId = session?.user?.id ?? null;
 
-  let userId = body.userId ? String(body.userId) : "";
+  let userId = body.userId ? String(body.userId).trim() : "";
   const requestedSellerId = body.sellerId ? String(body.sellerId) : undefined;
   const currency = body.currency ?? "XOF";
+
+  if (sessionUserId) {
+    if (userId && userId !== sessionUserId) {
+      return NextResponse.json(
+        { error: "You cannot create an order for another user." },
+        { status: 403 }
+      );
+    }
+
+    userId = sessionUserId;
+  } else if (userId) {
+    return NextResponse.json(
+      { error: "userId is only allowed for authenticated users." },
+      { status: 403 }
+    );
+  }
   const paymentMethod = body.paymentMethod
     ? String(body.paymentMethod).toUpperCase()
     : undefined;
@@ -528,5 +544,6 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 }
+
 
 
