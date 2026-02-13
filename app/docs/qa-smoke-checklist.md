@@ -5,6 +5,10 @@
 - Compte de test valide (ex: `bachir.ba.bb@gmail.com`)
 - Au moins un produit `LOCAL` actif avec stock > 0
 
+## Lancement automatique
+- Executer `npm run qa:smoke` (mode complet + cleanup auto)
+- Executer `npm run qa:smoke -- --readonly` (sans creation de commande)
+
 ## 1. Login / Session
 - Se connecter avec un compte connu
 - Ouvrir `GET /api/profile`
