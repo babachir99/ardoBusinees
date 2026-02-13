@@ -507,6 +507,9 @@
       "edit": "Edit",
       "activate": "Activate",
       "deactivate": "Deactivate",
+      "delete": "Delete",
+      "deleteConfirm": "Delete \"{title}\"? This action cannot be undone.",
+      "deleteSuccess": "Product deleted.",
       "save": "Save",
       "cancel": "Cancel",
       "search": "Search products",
@@ -549,7 +552,8 @@
         "fileType": "Unsupported format.",
         "fileSize": "Image too large (max 4MB).",
         "dimensions": "Image too small (min 800x800).",
-        "maxFiles": "Maximum 5 images."
+        "maxFiles": "Maximum 5 images.",
+        "delete": "Unable to delete this product."
       },
       "types": {
         "preorder": "Pre-order",
@@ -1004,11 +1008,17 @@
       "disable": "Disable",
       "boostApprove": "Approve boost",
       "boostReject": "Reject boost",
-      "boostClear": "Remove boost"
+      "boostClear": "Remove boost",
+      "delete": "Delete",
+      "deleteConfirm": "Delete \"{title}\"? This action cannot be undone."
+    },
+    "success": {
+      "delete": "Product deleted."
     },
     "errors": {
       "load": "Unable to load products.",
-      "save": "Unable to update product."
+      "save": "Unable to update product.",
+      "delete": "Unable to delete product."
     }
   },
   "AdminKyc": {
@@ -1323,6 +1333,11 @@
     }
   }
 }
+
+
+
+
+
 
 
 

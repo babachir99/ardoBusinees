@@ -507,6 +507,9 @@
       "edit": "Editer",
       "activate": "Activer",
       "deactivate": "Desactiver",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer \"{title}\" ? Cette action est irreversible.",
+      "deleteSuccess": "Produit supprime.",
       "save": "Enregistrer",
       "cancel": "Annuler",
       "search": "Rechercher un produit",
@@ -549,7 +552,8 @@
         "fileType": "Format non supporte.",
         "fileSize": "Image trop lourde (max 4MB).",
         "dimensions": "Image trop petite (min 800x800).",
-        "maxFiles": "Maximum 5 images."
+        "maxFiles": "Maximum 5 images.",
+        "delete": "Suppression impossible."
       },
       "types": {
         "preorder": "Precommande",
@@ -1010,11 +1014,17 @@
       "disable": "Desactiver",
       "boostApprove": "Approuver boost",
       "boostReject": "Refuser boost",
-      "boostClear": "Retirer boost"
+      "boostClear": "Retirer boost",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer \"{title}\" ? Cette action est irreversible."
+    },
+    "success": {
+      "delete": "Produit supprime."
     },
     "errors": {
       "load": "Impossible de charger les produits.",
-      "save": "Impossible de mettre a jour le produit."
+      "save": "Impossible de mettre a jour le produit.",
+      "delete": "Impossible de supprimer le produit."
     }
   },
   "AdminKyc": {
@@ -1329,6 +1339,14 @@
     }
   }
 }
+
+
+
+
+
+
+
+
 
 
 

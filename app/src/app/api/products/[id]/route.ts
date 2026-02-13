@@ -4,6 +4,10 @@ import { slugify } from "@/lib/slug";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
+import {
+  deleteProductSafely,
+  PRODUCT_DELETE_CONFLICT_MESSAGE,
+} from "@/lib/product-delete";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -247,6 +251,41 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.product.delete({ where: { id: id } });
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    select: { id: true, sellerId: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (session.user.role !== "ADMIN") {
+    const seller = await prisma.sellerProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { id: true },
+    });
+
+    if (!seller || seller.id !== existing.sellerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  const result = await deleteProductSafely(existing.id);
+
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: PRODUCT_DELETE_CONFLICT_MESSAGE },
+      { status: 409 }
+    );
+  }
+
   return NextResponse.json({ ok: true });
 }
+

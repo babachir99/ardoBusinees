@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -60,6 +60,7 @@ export default function SellerProductsPanel() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const allowedTypes = [
     "image/jpeg",
@@ -108,6 +109,12 @@ export default function SellerProductsPanel() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!successToast) return;
+    const timeout = window.setTimeout(() => setSuccessToast(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [successToast]);
+
   const updateProduct = async (
     id: string,
     payload: Record<string, unknown>
@@ -146,6 +153,35 @@ export default function SellerProductsPanel() {
 
   const toggleActive = (id: string, isActive: boolean) => {
     updateProduct(id, { isActive });
+  };
+  const removeProduct = async (product: Product) => {
+    const confirmed = window.confirm(
+      t("products.deleteConfirm", { title: product.title })
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setActionId(product.id);
+    setError(null);
+    setSuccessToast(null);
+    try {
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || t("products.errors.delete"));
+      }
+
+      await load();
+      setSuccessToast(t("products.deleteSuccess"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("products.errors.delete"));
+    } finally {
+      setActionId(null);
+    }
   };
 
   const openEdit = (product: Product) => {
@@ -348,6 +384,28 @@ export default function SellerProductsPanel() {
 
   return (
     <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+      {successToast && (
+        <div className="pointer-events-none fixed right-4 top-20 z-50 flex items-center gap-2 rounded-xl border border-emerald-300/35 bg-zinc-900/95 px-4 py-2 text-xs font-semibold text-emerald-200 shadow-[0_10px_30px_rgba(16,185,129,0.25)] backdrop-blur [animation:toastSlideIn_220ms_ease-out]">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/20">
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-3.5 w-3.5"
+              aria-hidden="true"
+            >
+              <path
+                d="M5 10.5L8.5 14L15 7"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          {successToast}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{t("products.title")}</h1>
@@ -427,8 +485,20 @@ export default function SellerProductsPanel() {
                     {t(`products.types.${product.type.toLowerCase()}`)}
                   </span>
                   {product.boostStatus === "APPROVED" && (
-                    <span className="absolute right-3 top-3 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
-                      {t("products.boosted")}
+                    <span
+                      className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
+                      title={t("products.boosted")}
+                      aria-label={t("products.boosted")}
+                    >
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
+                      </svg>
                     </span>
                   )}
                 </div>
@@ -496,6 +566,14 @@ export default function SellerProductsPanel() {
                   {product.isActive
                     ? t("products.deactivate")
                     : t("products.activate")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeProduct(product)}
+                  disabled={actionId === product.id}
+                  className="rounded-full border border-rose-300/40 px-3 py-1 text-rose-200 transition hover:border-rose-300/70 disabled:opacity-60"
+                >
+                  {t("products.delete")}
                 </button>
               </div>
               <div className="mt-4 grid gap-2 rounded-xl border border-white/10 bg-zinc-950/50 p-3 text-[11px] text-zinc-300">
@@ -825,5 +903,6 @@ export default function SellerProductsPanel() {
     </div>
   );
 }
+
 
 

@@ -387,8 +387,20 @@ export default async function HomePage({
                     locale={locale}
                   />
                   {boosted && (
-                    <span className="absolute right-4 top-4 rounded-full bg-emerald-400/20 px-3 py-1 text-[10px] text-emerald-200">
-                      {locale === "fr" ? "Booste" : "Boosted"}
+                    <span
+                      className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
+                      title={locale === "fr" ? "Produit booste" : "Boosted product"}
+                      aria-label={locale === "fr" ? "Produit booste" : "Boosted product"}
+                    >
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
+                      </svg>
                     </span>
                   )}
                 </div>

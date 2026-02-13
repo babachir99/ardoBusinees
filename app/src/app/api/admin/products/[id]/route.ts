@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  deleteProductSafely,
+  PRODUCT_DELETE_CONFLICT_MESSAGE,
+} from "@/lib/product-delete";
 
 export async function PATCH(
   request: NextRequest,
@@ -65,4 +69,35 @@ export async function PATCH(
   });
 
   return NextResponse.json(product);
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const result = await deleteProductSafely(existing.id);
+
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: PRODUCT_DELETE_CONFLICT_MESSAGE },
+      { status: 409 }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }
