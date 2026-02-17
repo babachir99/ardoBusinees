@@ -405,6 +405,7 @@ model GpTrip {
   deliveryEndAt          DateTime?
   availableKg            Int
   pricePerKgCents        Int
+  currency               String          @default("XOF")
   maxPackages            Int?
   acceptedPaymentMethods PaymentMethod[] @default([])
   contactPhone           String?

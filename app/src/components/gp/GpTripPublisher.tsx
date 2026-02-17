@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type PaymentMethod = "WAVE" | "ORANGE_MONEY" | "CARD" | "CASH";
+type TripCurrency = "XOF" | "EUR" | "USD";
 
 type GpTripPublisherProps = {
   locale: string;
@@ -17,13 +18,13 @@ type FormState = {
   originAddress: string;
   destinationCity: string;
   destinationAddress: string;
-  airline: string;
-  flightNumber: string;
-  flightDate: string;
+  departureDate: string;
+  arrivalDate: string;
   deliveryStartAt: string;
   deliveryEndAt: string;
   availableKg: string;
-  pricePerKgCents: string;
+  price: string;
+  currency: TripCurrency;
   maxPackages: string;
   contactPhone: string;
   notes: string;
@@ -37,19 +38,31 @@ const paymentOptions: Array<{ value: PaymentMethod; fr: string; en: string }> = 
   { value: "CASH", fr: "Especes", en: "Cash" },
 ];
 
+const currencyOptions: Array<{ value: TripCurrency; label: string; symbol: string }> = [
+  { value: "XOF", label: "XOF / FCFA", symbol: "FCFA" },
+  { value: "EUR", label: "EUR", symbol: "EUR" },
+  { value: "USD", label: "USD", symbol: "$" },
+];
+
+const currencySymbolMap: Record<TripCurrency, string> = {
+  XOF: "FCFA",
+  EUR: "EUR",
+  USD: "$",
+};
+
 function initialState(defaultContactPhone?: string | null): FormState {
   return {
     originCity: "",
     originAddress: "",
     destinationCity: "",
     destinationAddress: "",
-    airline: "",
-    flightNumber: "",
-    flightDate: "",
+    departureDate: "",
+    arrivalDate: "",
     deliveryStartAt: "",
     deliveryEndAt: "",
     availableKg: "",
-    pricePerKgCents: "",
+    price: "",
+    currency: "XOF",
     maxPackages: "",
     contactPhone: defaultContactPhone ?? "",
     notes: "",
@@ -74,8 +87,8 @@ export default function GpTripPublisher({
       title: locale === "fr" ? "Publier un trajet GP" : "Publish a GP trip",
       subtitle:
         locale === "fr"
-          ? "Complete les infos du vol, les kilos disponibles et tes conditions."
-          : "Fill flight details, available kilos and your transport conditions.",
+          ? "Renseigne le trajet, le depart et le tarif dans la devise de ton choix."
+          : "Set route, departure and pricing in your preferred currency.",
       forbidden:
         locale === "fr"
           ? "Activez le role Transporteur pour publier sur GP."
@@ -87,10 +100,18 @@ export default function GpTripPublisher({
         locale === "fr"
           ? "Veuillez remplir tous les champs obligatoires."
           : "Please fill in all required fields.",
+      invalidPrice:
+        locale === "fr"
+          ? "Le prix doit etre superieur a 0."
+          : "Price must be greater than 0.",
+      invalidDateOrder:
+        locale === "fr"
+          ? "La date d'arrivee doit etre superieure ou egale a la date de depart."
+          : "Arrival date must be after or equal to departure date.",
       serverError: locale === "fr" ? "Erreur lors de la publication" : "Failed to publish trip",
       groupRoute: locale === "fr" ? "1. Trajet" : "1. Route",
-      groupFlight: locale === "fr" ? "2. Vol" : "2. Flight",
-      groupCapacity: locale === "fr" ? "3. Capacite & tarif" : "3. Capacity & pricing",
+      groupTariff: locale === "fr" ? "2. Tarif" : "2. Pricing",
+      groupCapacity: locale === "fr" ? "3. Capacite" : "3. Capacity",
       groupContact: locale === "fr" ? "4. Livraison & contact" : "4. Delivery & contact",
       groupNotes: locale === "fr" ? "5. Notes" : "5. Notes",
     }),
@@ -128,20 +149,28 @@ export default function GpTripPublisher({
       return;
     }
 
-    // Fast client validation before request.
     if (
       !form.originCity ||
       !form.originAddress ||
       !form.destinationCity ||
       !form.destinationAddress ||
-      !form.airline ||
-      !form.flightNumber ||
-      !form.flightDate ||
+      !form.departureDate ||
       !form.availableKg ||
-      !form.pricePerKgCents ||
+      !form.price ||
       form.acceptedPaymentMethods.length === 0
     ) {
       setError(t.required);
+      return;
+    }
+
+    const parsedPrice = Number(form.price);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      setError(t.invalidPrice);
+      return;
+    }
+
+    if (form.arrivalDate && form.arrivalDate < form.departureDate) {
+      setError(t.invalidDateOrder);
       return;
     }
 
@@ -153,11 +182,13 @@ export default function GpTripPublisher({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          price: Math.trunc(parsedPrice),
           availableKg: Number(form.availableKg),
-          pricePerKgCents: Number(form.pricePerKgCents),
           maxPackages: form.maxPackages ? Number(form.maxPackages) : undefined,
           notes: form.notes || undefined,
           contactPhone: form.contactPhone || undefined,
+          departureDate: form.departureDate,
+          arrivalDate: form.arrivalDate || undefined,
           deliveryStartAt: form.deliveryStartAt || undefined,
           deliveryEndAt: form.deliveryEndAt || undefined,
         }),
@@ -181,6 +212,8 @@ export default function GpTripPublisher({
 
   const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20";
+
+  const currencySymbol = currencySymbolMap[form.currency];
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -228,43 +261,66 @@ export default function GpTripPublisher({
               className={inputClass}
             />
           </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-zinc-400">{locale === "fr" ? "Date de depart *" : "Departure date *"}</span>
+            <input
+              type="date"
+              value={form.departureDate}
+              onChange={(event) => updateField("departureDate", event.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs text-zinc-400">{locale === "fr" ? "Date d'arrivee" : "Arrival date"}</span>
+            <input
+              type="date"
+              value={form.arrivalDate}
+              onChange={(event) => updateField("arrivalDate", event.target.value)}
+              className={inputClass}
+            />
+          </label>
         </div>
       </section>
 
       <section className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.groupFlight}</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.groupTariff}</h3>
         <div className="grid gap-3 md:grid-cols-3">
-          <label className="space-y-1.5 md:col-span-1">
-            <span className="text-xs text-zinc-400">{locale === "fr" ? "Compagnie *" : "Airline *"}</span>
-            <input
-              value={form.airline}
-              onChange={(event) => updateField("airline", event.target.value)}
-              className={inputClass}
-            />
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="text-xs text-zinc-400">{locale === "fr" ? "Prix *" : "Price *"}</span>
+            <div className="relative">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={form.price}
+                onChange={(event) => updateField("price", event.target.value)}
+                className={`${inputClass} pr-16`}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-300">
+                {currencySymbol}
+              </span>
+            </div>
           </label>
-          <label className="space-y-1.5 md:col-span-1">
-            <span className="text-xs text-zinc-400">{locale === "fr" ? "Numero de vol *" : "Flight number *"}</span>
-            <input
-              value={form.flightNumber}
-              onChange={(event) => updateField("flightNumber", event.target.value)}
-              className={`${inputClass} uppercase`}
-            />
-          </label>
-          <label className="space-y-1.5 md:col-span-1">
-            <span className="text-xs text-zinc-400">{locale === "fr" ? "Date du vol *" : "Flight date *"}</span>
-            <input
-              type="datetime-local"
-              value={form.flightDate}
-              onChange={(event) => updateField("flightDate", event.target.value)}
+          <label className="space-y-1.5">
+            <span className="text-xs text-zinc-400">{locale === "fr" ? "Devise *" : "Currency *"}</span>
+            <select
+              value={form.currency}
+              onChange={(event) => updateField("currency", event.target.value)}
               className={inputClass}
-            />
+            >
+              {currencyOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} ({option.symbol})
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </section>
 
       <section className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.groupCapacity}</h3>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1.5">
             <span className="text-xs text-zinc-400">{locale === "fr" ? "Kilos disponibles *" : "Available kilos *"}</span>
             <input
@@ -272,16 +328,6 @@ export default function GpTripPublisher({
               min={1}
               value={form.availableKg}
               onChange={(event) => updateField("availableKg", event.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-xs text-zinc-400">{locale === "fr" ? "Prix par kg (FCFA) *" : "Price per kg (FCFA) *"}</span>
-            <input
-              type="number"
-              min={1}
-              value={form.pricePerKgCents}
-              onChange={(event) => updateField("pricePerKgCents", event.target.value)}
               className={inputClass}
             />
           </label>

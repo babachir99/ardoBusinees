@@ -1,0 +1,3 @@
+ALTER TABLE "GpTrip"
+ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'XOF';
+

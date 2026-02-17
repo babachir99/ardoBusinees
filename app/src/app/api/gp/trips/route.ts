@@ -6,6 +6,9 @@ import { GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const allowedStatuses = new Set<GpTripStatus>(Object.values(GpTripStatus));
+const allowedCurrencies = new Set(["XOF", "EUR", "USD"] as const);
+
+type TripCurrency = "XOF" | "EUR" | "USD";
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
@@ -39,6 +42,13 @@ function parsePositiveInt(value: unknown) {
   return rounded;
 }
 
+function parseCurrency(value: unknown): TripCurrency | null {
+  const raw = normalizeString(value).toUpperCase();
+  if (!raw) return null;
+  if (!allowedCurrencies.has(raw as TripCurrency)) return null;
+  return raw as TripCurrency;
+}
+
 async function getGpStoreId() {
   const store = await prisma.store.findUnique({
     where: { slug: "jontaado-gp" },
@@ -65,8 +75,17 @@ export async function GET(request: NextRequest) {
   const q = normalizeString(searchParams.get("q"));
   const transporterIdFilter = normalizeString(searchParams.get("transporterId"));
 
+  const departureDate = normalizeString(searchParams.get("departureDate"));
   const flightDateFrom = parseDate(searchParams.get("flightDateFrom"));
   const flightDateTo = parseDate(searchParams.get("flightDateTo"));
+
+  const currencyRaw = normalizeString(searchParams.get("currency")).toUpperCase();
+  const selectedCurrency = allowedCurrencies.has(currencyRaw as TripCurrency)
+    ? (currencyRaw as TripCurrency)
+    : null;
+
+  const minPrice = parsePositiveInt(searchParams.get("minPrice"));
+  const maxPrice = parsePositiveInt(searchParams.get("maxPrice"));
 
   const where: Record<string, unknown> = {};
 
@@ -104,11 +123,29 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  if (flightDateFrom || flightDateTo) {
+  if (departureDate) {
+    const start = new Date(`${departureDate}T00:00:00`);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      where.flightDate = { gte: start, lt: end };
+    }
+  } else if (flightDateFrom || flightDateTo) {
     where.flightDate = {
       ...(flightDateFrom ? { gte: flightDateFrom } : {}),
       ...(flightDateTo ? { lte: flightDateTo } : {}),
     };
+  }
+
+  if (selectedCurrency) {
+    where.currency = selectedCurrency;
+
+    if (minPrice || maxPrice) {
+      where.pricePerKgCents = {
+        ...(minPrice ? { gte: minPrice } : {}),
+        ...(maxPrice ? { lte: maxPrice } : {}),
+      };
+    }
   }
 
   const trips = await prisma.gpTrip.findMany({
@@ -184,13 +221,20 @@ export async function POST(request: NextRequest) {
   const originAddress = normalizeString(body.originAddress);
   const destinationCity = normalizeString(body.destinationCity);
   const destinationAddress = normalizeString(body.destinationAddress);
-  const airline = normalizeString(body.airline);
-  const flightNumber = normalizeString(body.flightNumber).toUpperCase();
-  const flightDate = parseDate(body.flightDate);
+
+  const departureDate = parseDate(body.departureDate ?? body.flightDate);
+  const arrivalDate = parseDate(body.arrivalDate);
+
+  const airline = normalizeString(body.airline) || "GP";
+  const flightNumber = normalizeString(body.flightNumber).toUpperCase() || "N/A";
+
   const deliveryStartAt = parseDate(body.deliveryStartAt);
   const deliveryEndAt = parseDate(body.deliveryEndAt);
+
   const availableKg = parsePositiveInt(body.availableKg);
-  const pricePerKgCents = parsePositiveInt(body.pricePerKgCents);
+  const pricePerKgCents = parsePositiveInt(body.price ?? body.pricePerKgCents);
+  const currency = parseCurrency(body.currency) ?? "XOF";
+
   const maxPackages = body.maxPackages === undefined || body.maxPackages === null
     ? null
     : parsePositiveInt(body.maxPackages);
@@ -204,17 +248,22 @@ export async function POST(request: NextRequest) {
     !originAddress ||
     !destinationCity ||
     !destinationAddress ||
-    !airline ||
-    !flightNumber ||
-    !flightDate ||
+    !departureDate ||
     !availableKg ||
     !pricePerKgCents
   ) {
     return NextResponse.json(
       {
         error:
-          "originCity, originAddress, destinationCity, destinationAddress, airline, flightNumber, flightDate, availableKg and pricePerKgCents are required",
+          "originCity, originAddress, destinationCity, destinationAddress, departureDate, availableKg and price are required",
       },
+      { status: 400 }
+    );
+  }
+
+  if (arrivalDate && arrivalDate < departureDate) {
+    return NextResponse.json(
+      { error: "arrivalDate must be after or equal to departureDate" },
       { status: 400 }
     );
   }
@@ -231,14 +280,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (pricePerKgCents > 1_000_000) {
-    return NextResponse.json({ error: "pricePerKgCents is too high" }, { status: 400 });
+    return NextResponse.json({ error: "price is too high" }, { status: 400 });
   }
 
   if (maxPackages !== null && maxPackages > 1000) {
     return NextResponse.json({ error: "maxPackages must be <= 1000" }, { status: 400 });
   }
 
-  if (deliveryStartAt && deliveryEndAt && deliveryEndAt < deliveryStartAt) {
+  const effectiveDeliveryEndAt = arrivalDate ?? deliveryEndAt;
+
+  if (deliveryStartAt && effectiveDeliveryEndAt && effectiveDeliveryEndAt < deliveryStartAt) {
     return NextResponse.json(
       { error: "deliveryEndAt must be after deliveryStartAt" },
       { status: 400 }
@@ -261,11 +312,12 @@ export async function POST(request: NextRequest) {
       destinationAddress,
       airline,
       flightNumber,
-      flightDate,
+      flightDate: departureDate,
       deliveryStartAt,
-      deliveryEndAt,
+      deliveryEndAt: effectiveDeliveryEndAt,
       availableKg,
       pricePerKgCents,
+      currency,
       maxPackages,
       acceptedPaymentMethods,
       contactPhone,

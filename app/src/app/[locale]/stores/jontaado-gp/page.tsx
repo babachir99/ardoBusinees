@@ -13,6 +13,14 @@ const paymentMethodMeta: Record<string, { fr: string; en: string; icon: string }
   CASH: { fr: "Especes", en: "Cash", icon: "CASH" },
 };
 
+const currencyLabelMap: Record<string, string> = {
+  XOF: "FCFA",
+  EUR: "€",
+  USD: "$",
+};
+
+const allowedCurrencies = new Set(["XOF", "EUR", "USD"]);
+
 function formatDateTime(locale: string, value: Date | null) {
   if (!value) return locale === "fr" ? "Non precise" : "Not set";
 
@@ -22,14 +30,32 @@ function formatDateTime(locale: string, value: Date | null) {
   }).format(value);
 }
 
+function formatDateOnly(locale: string, value: Date | null) {
+  if (!value) return locale === "fr" ? "Non precise" : "Not set";
+
+  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
+    dateStyle: "medium",
+  }).format(value);
+}
+
 export default async function GpPage({
   params,
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ from?: string; to?: string; date?: string; flight?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    departureDate?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    currency?: string;
+  }>;
 }) {
-  const [{ locale }, { from, to, date, flight }] = await Promise.all([params, searchParams]);
+  const [{ locale }, { from, to, departureDate, minPrice, maxPrice, currency }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const session = await getServerSession(authOptions);
 
   const [store, viewer] = await Promise.all([
@@ -65,8 +91,14 @@ export default async function GpPage({
 
   const normalizedFrom = from?.trim() ?? "";
   const normalizedTo = to?.trim() ?? "";
-  const normalizedDate = date?.trim() ?? "";
-  const normalizedFlight = flight?.trim() ?? "";
+  const normalizedDepartureDate = departureDate?.trim() ?? "";
+  const normalizedCurrencyRaw = currency?.trim().toUpperCase() ?? "ALL";
+  const selectedCurrency = allowedCurrencies.has(normalizedCurrencyRaw) ? normalizedCurrencyRaw : "ALL";
+
+  const parsedMinPrice = Number(minPrice ?? "");
+  const parsedMaxPrice = Number(maxPrice ?? "");
+  const hasMinPrice = Number.isFinite(parsedMinPrice) && parsedMinPrice > 0;
+  const hasMaxPrice = Number.isFinite(parsedMaxPrice) && parsedMaxPrice > 0;
 
   const where: Record<string, unknown> = {
     storeId: store.id,
@@ -82,19 +114,23 @@ export default async function GpPage({
     where.destinationCity = { contains: normalizedTo, mode: "insensitive" };
   }
 
-  if (normalizedFlight) {
-    where.OR = [
-      { airline: { contains: normalizedFlight, mode: "insensitive" } },
-      { flightNumber: { contains: normalizedFlight, mode: "insensitive" } },
-    ];
-  }
-
-  if (normalizedDate) {
-    const start = new Date(`${normalizedDate}T00:00:00`);
+  if (normalizedDepartureDate) {
+    const start = new Date(`${normalizedDepartureDate}T00:00:00`);
     if (!Number.isNaN(start.getTime())) {
       const end = new Date(start);
       end.setDate(end.getDate() + 1);
       where.flightDate = { gte: start, lt: end };
+    }
+  }
+
+  if (selectedCurrency !== "ALL") {
+    where.currency = selectedCurrency;
+
+    if (hasMinPrice || hasMaxPrice) {
+      where.pricePerKgCents = {
+        ...(hasMinPrice ? { gte: Math.trunc(parsedMinPrice) } : {}),
+        ...(hasMaxPrice ? { lte: Math.trunc(parsedMaxPrice) } : {}),
+      };
     }
   }
 
@@ -124,6 +160,10 @@ export default async function GpPage({
   ]);
 
   const canPublish = viewer?.role === "TRANSPORTER" || viewer?.role === "ADMIN";
+
+  const avgPriceValue =
+    trips.length > 0 ? Math.round(trips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / trips.length) : null;
+  const avgCurrencyLabel = selectedCurrency !== "ALL" ? currencyLabelMap[selectedCurrency] : null;
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -162,14 +202,10 @@ export default async function GpPage({
           </div>
           <div className="rounded-2xl border border-white/10 bg-zinc-900/70 px-4 py-3">
             <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">
-              {locale === "fr" ? "Prix moyen/kg" : "Average price/kg"}
+              {locale === "fr" ? "Prix moyen" : "Average price"}
             </p>
             <p className="mt-2 text-xl font-semibold text-violet-200">
-              {trips.length > 0
-                ? `${Math.round(
-                    trips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / trips.length
-                  )} FCFA`
-                : "-"}
+              {avgPriceValue !== null && avgCurrencyLabel ? `${avgPriceValue} ${avgCurrencyLabel}` : "-"}
             </p>
           </div>
         </section>
@@ -184,12 +220,12 @@ export default async function GpPage({
             </h1>
             <p className="max-w-3xl text-sm text-zinc-300 md:text-base">
               {locale === "fr"
-                ? "Cherchez un trajet disponible puis contactez un transporteur fiable selon la ville, la date et le vol."
-                : "Search available trips, then contact a reliable transporter by city, date and flight."}
+                ? "Cherchez un trajet disponible selon ville, date de depart et budget par devise."
+                : "Search available trips by cities, departure date and budget by currency."}
             </p>
           </div>
 
-          <form className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_0.9fr_0.9fr_auto]" method="GET">
+          <form className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_0.95fr_0.8fr_0.8fr_0.8fr_auto]" method="GET">
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
                 {locale === "fr" ? "Depart" : "Departure"}
@@ -214,25 +250,55 @@ export default async function GpPage({
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
-                {locale === "fr" ? "Date du vol" : "Flight date"}
+                {locale === "fr" ? "Date de depart" : "Departure date"}
               </span>
               <input
                 type="date"
-                name="date"
-                defaultValue={normalizedDate}
+                name="departureDate"
+                defaultValue={normalizedDepartureDate}
                 className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20"
               />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
-                {locale === "fr" ? "Compagnie / vol" : "Airline / flight"}
+                {locale === "fr" ? "Prix min" : "Min price"}
               </span>
               <input
-                name="flight"
-                defaultValue={normalizedFlight}
+                type="number"
+                min={0}
+                step={1}
+                name="minPrice"
+                defaultValue={minPrice ?? ""}
                 className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20"
-                placeholder="Ex: AF718"
               />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+                {locale === "fr" ? "Prix max" : "Max price"}
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                name="maxPrice"
+                defaultValue={maxPrice ?? ""}
+                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+                {locale === "fr" ? "Devise" : "Currency"}
+              </span>
+              <select
+                name="currency"
+                defaultValue={selectedCurrency}
+                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20"
+              >
+                <option value="ALL">{locale === "fr" ? "Toutes" : "All"}</option>
+                <option value="XOF">XOF / FCFA</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
             </label>
             <div className="flex items-end">
               <button
@@ -252,8 +318,8 @@ export default async function GpPage({
             </h2>
             <p className="mt-1 text-sm text-zinc-400">
               {locale === "fr"
-                ? "Renseigne ton vol, tes kilos disponibles et tes moyens de paiement."
-                : "Share your flight, available kilos and accepted payments."}
+                ? "Definis les dates et le tarif dans ta devise, sans conversion automatique."
+                : "Set dates and price in your chosen currency, without automatic conversion."}
             </p>
           </div>
           <GpTripPublishModal
@@ -275,94 +341,103 @@ export default async function GpPage({
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {trips.map((trip) => (
-            <article
-              key={trip.id}
-              className="group rounded-3xl border border-white/10 bg-zinc-900/70 p-5 transition hover:border-indigo-300/30 hover:bg-zinc-900/90"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-indigo-200">{trip.airline}</p>
-                  <p className="mt-1 text-base font-semibold text-white">
-                    {trip.originCity} {"->"} {trip.destinationCity}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {locale === "fr" ? "Vol" : "Flight"}: {trip.flightNumber}
-                  </p>
+          {trips.map((trip) => {
+            const tripCurrency = allowedCurrencies.has(trip.currency) ? trip.currency : "XOF";
+            const tripCurrencyLabel = currencyLabelMap[tripCurrency] ?? "FCFA";
+
+            return (
+              <article
+                key={trip.id}
+                className="group rounded-3xl border border-white/10 bg-zinc-900/70 p-5 transition hover:border-indigo-300/30 hover:bg-zinc-900/90"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="mt-1 text-base font-semibold text-white">
+                      {trip.originCity} {"->"} {trip.destinationCity}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {locale === "fr" ? "Depart" : "Departure"}: {formatDateOnly(locale, trip.flightDate)}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-cyan-300/15 px-3 py-1 text-xs font-medium text-cyan-100">
+                    {trip.availableKg} kg {locale === "fr" ? "dispo" : "available"}
+                  </span>
                 </div>
-                <span className="rounded-full bg-cyan-300/15 px-3 py-1 text-xs font-medium text-cyan-100">
-                  {trip.availableKg} kg {locale === "fr" ? "dispo" : "available"}
-                </span>
-              </div>
 
-              <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300">
-                <p>
-                  <span className="text-zinc-400">{locale === "fr" ? "Date vol:" : "Flight date:"}</span>{" "}
-                  {formatDateTime(locale, trip.flightDate)}
-                </p>
-                <p>
-                  <span className="text-zinc-400">{locale === "fr" ? "Depart:" : "Departure:"}</span>{" "}
-                  {trip.originAddress}
-                </p>
-                <p>
-                  <span className="text-zinc-400">{locale === "fr" ? "Arrivee:" : "Arrival:"}</span>{" "}
-                  {trip.destinationAddress}
-                </p>
-                {trip.deliveryStartAt && (
+                <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300">
                   <p>
-                    <span className="text-zinc-400">{locale === "fr" ? "Livraison:" : "Delivery:"}</span>{" "}
-                    {formatDateTime(locale, trip.deliveryStartAt)}
-                    {trip.deliveryEndAt ? ` -> ${formatDateTime(locale, trip.deliveryEndAt)}` : ""}
+                    <span className="text-zinc-400">{locale === "fr" ? "Date de depart:" : "Departure date:"}</span>{" "}
+                    {formatDateOnly(locale, trip.flightDate)}
                   </p>
-                )}
-              </div>
+                  <p>
+                    <span className="text-zinc-400">{locale === "fr" ? "Depart:" : "Departure:"}</span>{" "}
+                    {trip.originAddress}
+                  </p>
+                  <p>
+                    <span className="text-zinc-400">{locale === "fr" ? "Arrivee:" : "Arrival:"}</span>{" "}
+                    {trip.destinationAddress}
+                  </p>
+                  {trip.deliveryEndAt && (
+                    <p>
+                      <span className="text-zinc-400">{locale === "fr" ? "Date d'arrivee:" : "Arrival date:"}</span>{" "}
+                      {formatDateOnly(locale, trip.deliveryEndAt)}
+                    </p>
+                  )}
+                  {trip.deliveryStartAt && (
+                    <p>
+                      <span className="text-zinc-400">{locale === "fr" ? "Debut livraison:" : "Delivery start:"}</span>{" "}
+                      {formatDateTime(locale, trip.deliveryStartAt)}
+                    </p>
+                  )}
+                </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-sm text-zinc-300">
-                  {locale === "fr" ? "Tarif" : "Price"}{" "}
-                  <span className="text-base font-semibold text-emerald-200">
-                    {trip.pricePerKgCents} FCFA/kg
-                  </span>
-                </p>
-                {trip.maxPackages && (
-                  <span className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-zinc-300">
-                    {locale === "fr" ? "Max colis" : "Max parcels"}: {trip.maxPackages}
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {trip.acceptedPaymentMethods.map((method) => {
-                  const methodMeta = paymentMethodMeta[method] ?? {
-                    fr: method,
-                    en: method,
-                    icon: "?",
-                  };
-                  return (
-                    <span
-                      key={method}
-                      className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100"
-                    >
-                      <span className="text-[10px]">{methodMeta.icon}</span>
-                      {locale === "fr" ? methodMeta.fr : methodMeta.en}
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p className="text-sm text-zinc-300">
+                    {locale === "fr" ? "Tarif" : "Price"}{" "}
+                    <span className="text-base font-semibold text-emerald-200">
+                      {trip.pricePerKgCents} {tripCurrencyLabel}
                     </span>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 border-t border-white/10 pt-3 text-xs text-zinc-400">
-                <p>
-                  {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
-                </p>
-                {(trip.contactPhone || trip.transporter.phone) && (
-                  <p className="mt-1">
-                    {locale === "fr" ? "Contact" : "Contact"}: {trip.contactPhone ?? trip.transporter.phone}
                   </p>
-                )}
-                {trip.notes && <p className="mt-1">{trip.notes}</p>}
-              </div>
-            </article>
-          ))}
+                  {trip.maxPackages && (
+                    <span className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-zinc-300">
+                      {locale === "fr" ? "Max colis" : "Max parcels"}: {trip.maxPackages}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {trip.acceptedPaymentMethods.map((method) => {
+                    const methodMeta = paymentMethodMeta[method] ?? {
+                      fr: method,
+                      en: method,
+                      icon: "?",
+                    };
+                    return (
+                      <span
+                        key={method}
+                        className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100"
+                      >
+                        <span className="text-[10px]">{methodMeta.icon}</span>
+                        {locale === "fr" ? methodMeta.fr : methodMeta.en}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 border-t border-white/10 pt-3 text-xs text-zinc-400">
+                  <p>
+                    {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
+                  </p>
+                  {(trip.contactPhone || trip.transporter.phone) && (
+                    <p className="mt-1">
+                      {locale === "fr" ? "Contact" : "Contact"}: {trip.contactPhone ?? trip.transporter.phone}
+                    </p>
+                  )}
+                  {trip.notes && <p className="mt-1">{trip.notes}</p>}
+                </div>
+              </article>
+            );
+          })}
 
           {trips.length === 0 && (
             <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8 text-sm text-zinc-300 md:col-span-2 xl:col-span-3">
