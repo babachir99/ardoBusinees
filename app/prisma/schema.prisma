@@ -128,6 +128,8 @@ model User {
   locale        String    @default("fr")
   role          UserRole  @default(CUSTOMER)
   isActive      Boolean   @default(true)
+  transporterRating      Float    @default(5)
+  transporterReviewCount Int      @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -147,6 +149,8 @@ model User {
   offersMade      ProductOffer[]          @relation("OfferBuyer")
   productReviews  ProductReview[]         @relation("ProductReviewBuyer")
   gpTrips         GpTrip[]
+  transporterReviewsReceived TransporterReview[] @relation("TransporterReviewTransporter")
+  transporterReviewsGiven    TransporterReview[] @relation("TransporterReviewAuthor")
 }
 
 model UserAddress {
@@ -417,6 +421,7 @@ model GpTrip {
 
   transporter User   @relation(fields: [transporterId], references: [id], onDelete: Cascade)
   store       Store? @relation(fields: [storeId], references: [id])
+  reviews     TransporterReview[]
 
   @@index([transporterId])
   @@index([storeId])
@@ -547,6 +552,27 @@ model ProductReview {
   @@index([productId, createdAt])
   @@index([sellerId, createdAt])
   @@index([buyerId, createdAt])
+}
+
+model TransporterReview {
+  id            String   @id @default(cuid())
+  transporterId String
+  reviewerId    String
+  tripId        String
+  rating        Int
+  title         String?
+  comment       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transporter User   @relation("TransporterReviewTransporter", fields: [transporterId], references: [id], onDelete: Cascade)
+  reviewer    User   @relation("TransporterReviewAuthor", fields: [reviewerId], references: [id], onDelete: Cascade)
+  trip        GpTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, reviewerId])
+  @@index([transporterId, createdAt])
+  @@index([reviewerId, createdAt])
+  @@index([tripId, createdAt])
 }
 
 model Favorite {

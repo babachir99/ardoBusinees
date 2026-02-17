@@ -5,6 +5,7 @@ import Footer from "@/components/layout/Footer";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import GpTripPublishModal from "@/components/gp/GpTripPublishModal";
+import GpTripReviewForm from "@/components/gp/GpTripReviewForm";
 
 const paymentMethodMeta: Record<string, { fr: string; en: string; icon: string }> = {
   WAVE: { fr: "Wave", en: "Wave", icon: "W" },
@@ -144,6 +145,8 @@ export default async function GpPage({
             id: true,
             name: true,
             phone: true,
+            transporterRating: true,
+            transporterReviewCount: true,
           },
         },
       },
@@ -178,12 +181,22 @@ export default async function GpPage({
             priority
           />
         </Link>
-        <Link
-          href="/stores"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-        </Link>
+        <div className="flex items-center gap-2">
+          {canPublish && (
+            <Link
+              href="/transporter"
+              className="rounded-full border border-cyan-300/40 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/80"
+            >
+              {locale === "fr" ? "Mon dashboard GP" : "My GP dashboard"}
+            </Link>
+          )}
+          <Link
+            href="/stores"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
@@ -428,13 +441,29 @@ export default async function GpPage({
                   <p>
                     {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
                   </p>
+                  <p className="mt-1 text-[11px] text-amber-200">
+                    ? {trip.transporter.transporterRating.toFixed(1)} ({trip.transporter.transporterReviewCount})
+                  </p>
                   {(trip.contactPhone || trip.transporter.phone) && (
                     <p className="mt-1">
                       {locale === "fr" ? "Contact" : "Contact"}: {trip.contactPhone ?? trip.transporter.phone}
                     </p>
                   )}
-                  {trip.notes && <p className="mt-1">{trip.notes}</p>}
+                  <Link
+                    href={`/transporters/${trip.transporter.id}`}
+                    className="mt-2 inline-flex rounded-full border border-white/15 px-3 py-1 text-[11px] text-zinc-200 transition hover:border-cyan-300/60"
+                  >
+                    {locale === "fr" ? "Voir le profil transporteur" : "View transporter profile"}
+                  </Link>
+                  {trip.notes && <p className="mt-2">{trip.notes}</p>}
                 </div>
+
+                <GpTripReviewForm
+                  tripId={trip.id}
+                  locale={locale}
+                  isLoggedIn={Boolean(session?.user?.id)}
+                  isOwner={session?.user?.id === trip.transporterId}
+                />
               </article>
             );
           })}

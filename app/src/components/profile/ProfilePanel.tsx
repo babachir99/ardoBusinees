@@ -533,7 +533,7 @@ export default function ProfilePanel() {
               )}
               {profile.role === "TRANSPORTER" && (
                 <Link
-                  href="/stores/jontaado-gp"
+                  href="/transporter"
                   className="rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
                 >
                   {t("roles.goTransporter")}

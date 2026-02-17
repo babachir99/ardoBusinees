@@ -9,7 +9,9 @@ type TripCurrency = "XOF" | "EUR" | "USD";
 type GpTripPublisherProps = {
   locale: string;
   canPublish: boolean;
+  gpDisplayName?: string | null;
   defaultContactPhone?: string | null;
+  defaultPaymentMethods?: PaymentMethod[] | null;
   onPublished?: () => void;
 };
 
@@ -50,7 +52,15 @@ const currencySymbolMap: Record<TripCurrency, string> = {
   USD: "$",
 };
 
-function initialState(defaultContactPhone?: string | null): FormState {
+function initialState(
+  defaultContactPhone?: string | null,
+  defaultPaymentMethods?: PaymentMethod[] | null
+): FormState {
+  const allowedMethods = new Set<PaymentMethod>(["WAVE", "ORANGE_MONEY", "CARD", "CASH"]);
+  const cleanedPaymentMethods = (defaultPaymentMethods ?? []).filter(
+    (method): method is PaymentMethod => allowedMethods.has(method)
+  );
+
   return {
     originCity: "",
     originAddress: "",
@@ -66,18 +76,23 @@ function initialState(defaultContactPhone?: string | null): FormState {
     maxPackages: "",
     contactPhone: defaultContactPhone ?? "",
     notes: "",
-    acceptedPaymentMethods: ["WAVE", "ORANGE_MONEY"],
+    acceptedPaymentMethods:
+      cleanedPaymentMethods.length > 0 ? cleanedPaymentMethods : ["WAVE", "ORANGE_MONEY"],
   };
 }
 
 export default function GpTripPublisher({
   locale,
   canPublish,
+  gpDisplayName,
   defaultContactPhone,
+  defaultPaymentMethods,
   onPublished,
 }: GpTripPublisherProps) {
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(() => initialState(defaultContactPhone));
+  const [form, setForm] = useState<FormState>(() =>
+    initialState(defaultContactPhone, defaultPaymentMethods)
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -199,7 +214,7 @@ export default function GpTripPublisher({
         throw new Error(body?.error || t.serverError);
       }
 
-      setForm(initialState(defaultContactPhone));
+      setForm(initialState(defaultContactPhone, defaultPaymentMethods));
       setSuccess(t.success);
       router.refresh();
       onPublished?.();
@@ -218,7 +233,12 @@ export default function GpTripPublisher({
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">{t.title}</h2>
+        {gpDisplayName ? (
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+            {locale === "fr" ? `Salut ${gpDisplayName}` : `Hi ${gpDisplayName}`}
+          </p>
+        ) : null}
+        <h2 className="mt-1 text-lg font-semibold text-white">{t.title}</h2>
         <p className="mt-1 text-xs text-zinc-400">{t.subtitle}</p>
       </div>
 
