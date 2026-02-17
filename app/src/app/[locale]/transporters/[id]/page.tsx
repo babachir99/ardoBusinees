@@ -21,7 +21,7 @@ export default async function TransporterProfilePage({
   const { locale, id } = await params;
   const session = await getServerSession(authOptions);
 
-  const [transporter, reviewStats, recentReviews, activeTrips, totalTrips] = await Promise.all([
+  const [transporter, reviewStats, recentReviews, activeTrips, totalTrips, myBookings] = await Promise.all([
     prisma.user.findUnique({
       where: { id },
       select: {
@@ -73,6 +73,15 @@ export default async function TransporterProfilePage({
       },
     }),
     prisma.gpTrip.count({ where: { transporterId: id } }),
+    session?.user?.id
+      ? prisma.gpTripBooking.findMany({
+          where: {
+            customerId: session.user.id,
+            transporterId: id,
+          },
+          select: { tripId: true, status: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   if (!transporter || transporter.role !== "TRANSPORTER") {
@@ -96,6 +105,12 @@ export default async function TransporterProfilePage({
   const average = reviewStats._avg.rating ?? transporter.transporterRating;
   const count = reviewStats._count._all || transporter.transporterReviewCount;
   const isOwner = session?.user?.id === transporter.id;
+
+  const canReviewByTrip = new Set(
+    myBookings
+      .filter((booking) => booking.status === "DELIVERED" || booking.status === "COMPLETED")
+      .map((booking) => booking.tripId)
+  );
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -161,7 +176,7 @@ export default async function TransporterProfilePage({
               <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
                 {locale === "fr" ? "Notation" : "Rating"}
               </p>
-              <p className="mt-1 text-2xl font-semibold text-amber-200">? {average.toFixed(1)}</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-200">* {average.toFixed(1)}</p>
               <p className="text-[11px] text-zinc-400">
                 {count} {locale === "fr" ? "avis" : "reviews"}
               </p>
@@ -208,12 +223,23 @@ export default async function TransporterProfilePage({
                     <p className="mt-1 text-[11px] text-zinc-500">
                       {trip.originAddress} {"->"} {trip.destinationAddress}
                     </p>
-                    <GpTripReviewForm
-                      tripId={trip.id}
-                      locale={locale}
-                      isLoggedIn={Boolean(session?.user?.id)}
-                      isOwner={isOwner}
-                    />
+                    <details className="mt-3 rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                      <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-200">
+                        {locale === "fr" ? "Avis" : "Reviews"}
+                      </summary>
+                      <GpTripReviewForm
+                        tripId={trip.id}
+                        locale={locale}
+                        isLoggedIn={Boolean(session?.user?.id)}
+                        isOwner={isOwner}
+                        canReview={canReviewByTrip.has(trip.id)}
+                        lockedMessage={
+                          locale === "fr"
+                            ? "Tu pourras noter apres reception du colis."
+                            : "You can rate after package delivery."
+                        }
+                      />
+                    </details>
                   </article>
                 ))}
               </div>
@@ -237,7 +263,7 @@ export default async function TransporterProfilePage({
                     className="rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-amber-200">? {review.rating}/5</p>
+                      <p className="font-semibold text-amber-200">* {review.rating}/5</p>
                       <p className="text-[11px] text-zinc-500">
                         {new Date(review.createdAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
                       </p>

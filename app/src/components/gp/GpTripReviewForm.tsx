@@ -8,6 +8,8 @@ type GpTripReviewFormProps = {
   locale: string;
   isLoggedIn: boolean;
   isOwner: boolean;
+  canReview: boolean;
+  lockedMessage?: string;
 };
 
 export default function GpTripReviewForm({
@@ -15,6 +17,8 @@ export default function GpTripReviewForm({
   locale,
   isLoggedIn,
   isOwner,
+  canReview,
+  lockedMessage,
 }: GpTripReviewFormProps) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState(5);
@@ -72,18 +76,25 @@ export default function GpTripReviewForm({
       {!open ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] text-zinc-400">
-            {locale === "fr"
-              ? "Partage ton retour sur ce transporteur"
-              : "Share feedback about this transporter"}
+            {canReview
+              ? locale === "fr"
+                ? "Partage ton retour sur ce transporteur"
+                : "Share feedback about this transporter"
+              : lockedMessage ||
+                (locale === "fr"
+                  ? "Tu pourras noter apres reception du colis."
+                  : "You can rate after package delivery.")}
           </p>
           {isLoggedIn ? (
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="rounded-full border border-indigo-300/40 bg-indigo-300/10 px-3 py-1.5 text-[11px] font-semibold text-indigo-100 transition hover:border-indigo-300/70"
-            >
-              {cta}
-            </button>
+            canReview ? (
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="rounded-full border border-indigo-300/40 bg-indigo-300/10 px-3 py-1.5 text-[11px] font-semibold text-indigo-100 transition hover:border-indigo-300/70"
+              >
+                {cta}
+              </button>
+            ) : null
           ) : (
             <Link
               href="/login"

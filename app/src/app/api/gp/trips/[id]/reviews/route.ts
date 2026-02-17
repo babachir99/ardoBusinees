@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GpTripStatus, UserRole } from "@prisma/client";
 
 const MAX_TITLE = 80;
 const MAX_COMMENT = 1200;
@@ -51,9 +50,10 @@ export async function GET(
   const runtimePrisma = prisma as unknown as {
     transporterReview?: unknown;
     gpTrip?: unknown;
+    gpTripBooking?: unknown;
   };
 
-  if (!runtimePrisma.transporterReview || !runtimePrisma.gpTrip) {
+  if (!runtimePrisma.transporterReview || !runtimePrisma.gpTrip || !runtimePrisma.gpTripBooking) {
     return NextResponse.json(
       {
         error:
@@ -87,7 +87,7 @@ export async function GET(
     return NextResponse.json({ error: "Trip not found" }, { status: 404 });
   }
 
-  const [reviews, stats, myReview] = await Promise.all([
+  const [reviews, stats, myReview, myEligibleBooking] = await Promise.all([
     prisma.transporterReview.findMany({
       where: { tripId: id },
       orderBy: { createdAt: "desc" },
@@ -113,13 +113,22 @@ export async function GET(
           },
         })
       : Promise.resolve(null),
+    session?.user?.id
+      ? prisma.gpTripBooking.findFirst({
+          where: {
+            tripId: id,
+            customerId: session.user.id,
+            status: { in: ["DELIVERED", "COMPLETED"] },
+          },
+          select: { id: true, status: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const canReview =
     Boolean(session?.user?.id) &&
     session?.user?.id !== trip.transporterId &&
-    trip.isActive &&
-    trip.status === GpTripStatus.OPEN;
+    Boolean(myEligibleBooking);
 
   return NextResponse.json({
     tripId: trip.id,
@@ -129,6 +138,9 @@ export async function GET(
       count: stats._count._all,
     },
     canReview,
+    reviewLockedMessage: canReview
+      ? null
+      : "Tu pourras noter apres reception du colis.",
     myReview,
     reviews: reviews.map((review) => ({
       id: review.id,
@@ -155,9 +167,10 @@ export async function POST(
   const runtimePrisma = prisma as unknown as {
     transporterReview?: unknown;
     gpTrip?: unknown;
+    gpTripBooking?: unknown;
   };
 
-  if (!runtimePrisma.transporterReview || !runtimePrisma.gpTrip) {
+  if (!runtimePrisma.transporterReview || !runtimePrisma.gpTrip || !runtimePrisma.gpTripBooking) {
     return NextResponse.json(
       {
         error:
@@ -196,11 +209,20 @@ export async function POST(
     return NextResponse.json({ error: "Cannot review your own trip" }, { status: 403 });
   }
 
-  if (
-    session.user.role !== UserRole.ADMIN &&
-    (!trip.isActive || trip.status !== GpTripStatus.OPEN)
-  ) {
-    return NextResponse.json({ error: "Trip is not reviewable" }, { status: 403 });
+  const deliveredBooking = await prisma.gpTripBooking.findFirst({
+    where: {
+      tripId: id,
+      customerId: session.user.id,
+      status: { in: ["DELIVERED", "COMPLETED"] },
+    },
+    select: { id: true },
+  });
+
+  if (!deliveredBooking) {
+    return NextResponse.json(
+      { error: "Tu pourras noter apres reception du colis." },
+      { status: 403 }
+    );
   }
 
   const saved = await prisma.transporterReview.upsert({

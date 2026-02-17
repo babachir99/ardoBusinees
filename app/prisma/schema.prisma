@@ -104,6 +104,17 @@ enum GpTripStatus {
   CANCELED
 }
 
+enum GpBookingStatus {
+  DRAFT
+  PENDING
+  ACCEPTED
+  CONFIRMED
+  COMPLETED
+  DELIVERED
+  CANCELED
+  REJECTED
+}
+
 enum InquiryStatus {
   OPEN
   CLOSED
@@ -149,6 +160,8 @@ model User {
   offersMade      ProductOffer[]          @relation("OfferBuyer")
   productReviews  ProductReview[]         @relation("ProductReviewBuyer")
   gpTrips         GpTrip[]
+  gpBookingsAsCustomer    GpTripBooking[] @relation("GpBookingCustomer")
+  gpBookingsAsTransporter GpTripBooking[] @relation("GpBookingTransporter")
   transporterReviewsReceived TransporterReview[] @relation("TransporterReviewTransporter")
   transporterReviewsGiven    TransporterReview[] @relation("TransporterReviewAuthor")
 }
@@ -422,11 +435,36 @@ model GpTrip {
   transporter User   @relation(fields: [transporterId], references: [id], onDelete: Cascade)
   store       Store? @relation(fields: [storeId], references: [id])
   reviews     TransporterReview[]
+  bookings    GpTripBooking[]
 
   @@index([transporterId])
   @@index([storeId])
   @@index([status])
   @@index([flightDate])
+}
+
+model GpTripBooking {
+  id            String          @id @default(cuid())
+  tripId         String
+  customerId     String
+  transporterId  String
+  status         GpBookingStatus @default(PENDING)
+  requestedKg    Int
+  packageCount   Int            @default(1)
+  message        String?
+  confirmedAt    DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  trip         GpTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  customer     User   @relation("GpBookingCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  transporter  User   @relation("GpBookingTransporter", fields: [transporterId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, customerId])
+  @@index([customerId, status, createdAt])
+  @@index([transporterId, status, createdAt])
+  @@index([tripId, status, createdAt])
 }
 
 model ServiceListing {

@@ -5,39 +5,16 @@ import Footer from "@/components/layout/Footer";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import GpTripPublishModal from "@/components/gp/GpTripPublishModal";
-import GpTripReviewForm from "@/components/gp/GpTripReviewForm";
-
-const paymentMethodMeta: Record<string, { fr: string; en: string; icon: string }> = {
-  WAVE: { fr: "Wave", en: "Wave", icon: "W" },
-  ORANGE_MONEY: { fr: "Orange Money", en: "Orange Money", icon: "OM" },
-  CARD: { fr: "Carte", en: "Card", icon: "CARD" },
-  CASH: { fr: "Especes", en: "Cash", icon: "CASH" },
-};
+import GpTripCard from "@/components/gp/GpTripCard";
+import { resolveGpPublishAccess } from "@/components/gp/gpPublishAccess";
 
 const currencyLabelMap: Record<string, string> = {
   XOF: "FCFA",
-  EUR: "€",
+  EUR: "EUR",
   USD: "$",
 };
 
 const allowedCurrencies = new Set(["XOF", "EUR", "USD"]);
-
-function formatDateTime(locale: string, value: Date | null) {
-  if (!value) return locale === "fr" ? "Non precise" : "Not set";
-
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(value);
-}
-
-function formatDateOnly(locale: string, value: Date | null) {
-  if (!value) return locale === "fr" ? "Non precise" : "Not set";
-
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
-    dateStyle: "medium",
-  }).format(value);
-}
 
 export default async function GpPage({
   params,
@@ -67,7 +44,17 @@ export default async function GpPage({
     session?.user?.id
       ? prisma.user.findUnique({
           where: { id: session.user.id },
-          select: { id: true, phone: true, role: true },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            role: true,
+            gpTrips: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { contactPhone: true, acceptedPaymentMethods: true },
+            },
+          },
         })
       : null,
   ]);
@@ -135,7 +122,7 @@ export default async function GpPage({
     }
   }
 
-  const [trips, totalTrips, activeTransporters] = await Promise.all([
+  const [trips, totalTrips, activeTransporters, myBookings] = await Promise.all([
     prisma.gpTrip.findMany({
       where,
       orderBy: [{ flightDate: "asc" }, { createdAt: "desc" }],
@@ -160,9 +147,20 @@ export default async function GpPage({
       distinct: ["transporterId"],
       select: { transporterId: true },
     }),
+    session?.user?.id
+      ? prisma.gpTripBooking.findMany({
+          where: {
+            customerId: session.user.id,
+            trip: { storeId: store.id },
+          },
+          select: { tripId: true, status: true },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const canPublish = viewer?.role === "TRANSPORTER" || viewer?.role === "ADMIN";
+  const bookingStatusByTrip = new Map(myBookings.map((booking) => [booking.tripId, booking.status]));
+  const publishAccess = resolveGpPublishAccess(viewer, Boolean(session?.user?.id));
+  const canOpenTransporterDashboard = viewer?.role === "TRANSPORTER";
 
   const avgPriceValue =
     trips.length > 0 ? Math.round(trips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / trips.length) : null;
@@ -182,7 +180,7 @@ export default async function GpPage({
           />
         </Link>
         <div className="flex items-center gap-2">
-          {canPublish && (
+          {canOpenTransporterDashboard && (
             <Link
               href="/transporter"
               className="rounded-full border border-cyan-300/40 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/80"
@@ -337,8 +335,12 @@ export default async function GpPage({
           </div>
           <GpTripPublishModal
             locale={locale}
-            canPublish={Boolean(canPublish)}
-            defaultContactPhone={viewer?.phone}
+            isLoggedIn={publishAccess.isLoggedIn}
+            hasGpProfile={publishAccess.hasGpProfile}
+            gpDisplayName={publishAccess.displayName}
+            defaultContactPhone={publishAccess.defaultContactPhone}
+            defaultPaymentMethods={publishAccess.defaultPaymentMethods}
+            profileHref="/profile"
           />
         </section>
 
@@ -355,116 +357,17 @@ export default async function GpPage({
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {trips.map((trip) => {
-            const tripCurrency = allowedCurrencies.has(trip.currency) ? trip.currency : "XOF";
-            const tripCurrencyLabel = currencyLabelMap[tripCurrency] ?? "FCFA";
+            const bookingStatus = bookingStatusByTrip.get(trip.id) ?? null;
 
             return (
-              <article
+              <GpTripCard
                 key={trip.id}
-                className="group rounded-3xl border border-white/10 bg-zinc-900/70 p-5 transition hover:border-indigo-300/30 hover:bg-zinc-900/90"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="mt-1 text-base font-semibold text-white">
-                      {trip.originCity} {"->"} {trip.destinationCity}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      {locale === "fr" ? "Depart" : "Departure"}: {formatDateOnly(locale, trip.flightDate)}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-cyan-300/15 px-3 py-1 text-xs font-medium text-cyan-100">
-                    {trip.availableKg} kg {locale === "fr" ? "dispo" : "available"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300">
-                  <p>
-                    <span className="text-zinc-400">{locale === "fr" ? "Date de depart:" : "Departure date:"}</span>{" "}
-                    {formatDateOnly(locale, trip.flightDate)}
-                  </p>
-                  <p>
-                    <span className="text-zinc-400">{locale === "fr" ? "Depart:" : "Departure:"}</span>{" "}
-                    {trip.originAddress}
-                  </p>
-                  <p>
-                    <span className="text-zinc-400">{locale === "fr" ? "Arrivee:" : "Arrival:"}</span>{" "}
-                    {trip.destinationAddress}
-                  </p>
-                  {trip.deliveryEndAt && (
-                    <p>
-                      <span className="text-zinc-400">{locale === "fr" ? "Date d'arrivee:" : "Arrival date:"}</span>{" "}
-                      {formatDateOnly(locale, trip.deliveryEndAt)}
-                    </p>
-                  )}
-                  {trip.deliveryStartAt && (
-                    <p>
-                      <span className="text-zinc-400">{locale === "fr" ? "Debut livraison:" : "Delivery start:"}</span>{" "}
-                      {formatDateTime(locale, trip.deliveryStartAt)}
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-sm text-zinc-300">
-                    {locale === "fr" ? "Tarif" : "Price"}{" "}
-                    <span className="text-base font-semibold text-emerald-200">
-                      {trip.pricePerKgCents} {tripCurrencyLabel}
-                    </span>
-                  </p>
-                  {trip.maxPackages && (
-                    <span className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-zinc-300">
-                      {locale === "fr" ? "Max colis" : "Max parcels"}: {trip.maxPackages}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {trip.acceptedPaymentMethods.map((method) => {
-                    const methodMeta = paymentMethodMeta[method] ?? {
-                      fr: method,
-                      en: method,
-                      icon: "?",
-                    };
-                    return (
-                      <span
-                        key={method}
-                        className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100"
-                      >
-                        <span className="text-[10px]">{methodMeta.icon}</span>
-                        {locale === "fr" ? methodMeta.fr : methodMeta.en}
-                      </span>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 border-t border-white/10 pt-3 text-xs text-zinc-400">
-                  <p>
-                    {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
-                  </p>
-                  <p className="mt-1 text-[11px] text-amber-200">
-                    ? {trip.transporter.transporterRating.toFixed(1)} ({trip.transporter.transporterReviewCount})
-                  </p>
-                  {(trip.contactPhone || trip.transporter.phone) && (
-                    <p className="mt-1">
-                      {locale === "fr" ? "Contact" : "Contact"}: {trip.contactPhone ?? trip.transporter.phone}
-                    </p>
-                  )}
-                  <Link
-                    href={`/transporters/${trip.transporter.id}`}
-                    className="mt-2 inline-flex rounded-full border border-white/15 px-3 py-1 text-[11px] text-zinc-200 transition hover:border-cyan-300/60"
-                  >
-                    {locale === "fr" ? "Voir le profil transporteur" : "View transporter profile"}
-                  </Link>
-                  {trip.notes && <p className="mt-2">{trip.notes}</p>}
-                </div>
-
-                <GpTripReviewForm
-                  tripId={trip.id}
-                  locale={locale}
-                  isLoggedIn={Boolean(session?.user?.id)}
-                  isOwner={session?.user?.id === trip.transporterId}
-                />
-              </article>
+                locale={locale}
+                trip={trip}
+                bookingStatus={bookingStatus}
+                isLoggedIn={Boolean(session?.user?.id)}
+                viewerUserId={session?.user?.id}
+              />
             );
           })}
 
