@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@/i18n/navigation";
 
@@ -20,6 +20,8 @@ type GpTripBookingFormProps = {
   isLoggedIn: boolean;
   isOwner: boolean;
   initialStatus?: BookingStatus | null;
+  secondaryActions?: ReactNode;
+  actionRowClassName?: string;
 };
 
 const confirmedStatuses = new Set<BookingStatus>([
@@ -29,12 +31,64 @@ const confirmedStatuses = new Set<BookingStatus>([
   "DELIVERED",
 ]);
 
+const statusMeta: Record<
+  BookingStatus,
+  {
+    fr: string;
+    en: string;
+    className: string;
+  }
+> = {
+  DRAFT: {
+    fr: "Brouillon",
+    en: "Draft",
+    className: "border-zinc-500/40 bg-zinc-500/15 text-zinc-200",
+  },
+  PENDING: {
+    fr: "En attente de confirmation",
+    en: "Awaiting confirmation",
+    className: "border-amber-400/40 bg-amber-400/15 text-amber-100",
+  },
+  ACCEPTED: {
+    fr: "Acceptee",
+    en: "Accepted",
+    className: "border-cyan-400/40 bg-cyan-400/15 text-cyan-100",
+  },
+  CONFIRMED: {
+    fr: "Confirmee",
+    en: "Confirmed",
+    className: "border-indigo-400/40 bg-indigo-400/15 text-indigo-100",
+  },
+  COMPLETED: {
+    fr: "Terminee",
+    en: "Completed",
+    className: "border-emerald-400/40 bg-emerald-400/15 text-emerald-100",
+  },
+  DELIVERED: {
+    fr: "Livree",
+    en: "Delivered",
+    className: "border-emerald-400/40 bg-emerald-400/15 text-emerald-100",
+  },
+  CANCELED: {
+    fr: "Annulee",
+    en: "Canceled",
+    className: "border-rose-400/40 bg-rose-400/15 text-rose-100",
+  },
+  REJECTED: {
+    fr: "Refusee",
+    en: "Rejected",
+    className: "border-rose-400/40 bg-rose-400/15 text-rose-100",
+  },
+};
+
 export default function GpTripBookingForm({
   tripId,
   locale,
   isLoggedIn,
   isOwner,
   initialStatus,
+  secondaryActions,
+  actionRowClassName,
 }: GpTripBookingFormProps) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -211,46 +265,51 @@ export default function GpTripBookingForm({
     </div>
   );
 
+  const statusBadge = status ? statusMeta[status] : null;
+
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
-      {!isLoggedIn ? (
-        <Link
-          href="/login"
-          className="rounded-full border border-white/20 px-3 py-1.5 font-semibold text-white transition hover:border-white/50"
-        >
-          {locale === "fr" ? "Se connecter pour reserver" : "Sign in to book"}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-full bg-emerald-400 px-3 py-1.5 font-semibold text-zinc-950"
-        >
-          {locale === "fr" ? "Reserver" : "Book"}
-        </button>
-      )}
+    <div className="text-xs">
+      <div className={actionRowClassName ?? "mt-4 flex flex-wrap items-center gap-2"}>
+        {!isLoggedIn ? (
+          <Link
+            href="/login"
+            className="shrink-0 rounded-full border border-white/20 px-3 py-1.5 font-semibold text-white transition hover:border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
+          >
+            {locale === "fr" ? "Se connecter pour reserver" : "Sign in to book"}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="shrink-0 rounded-full bg-gradient-to-r from-emerald-300 to-emerald-400 px-4 py-1.5 font-semibold text-zinc-950 shadow-[0_8px_22px_rgba(16,185,129,0.25)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+            aria-label={locale === "fr" ? "Reserver ce trajet" : "Book this trip"}
+          >
+            {locale === "fr" ? "Reserver" : "Book"}
+          </button>
+        )}
 
-      {canContact ? (
-        <Link
-          href={`/messages?tripId=${tripId}`}
-          className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-1.5 font-semibold text-cyan-100 transition hover:border-cyan-300/80"
-        >
-          {locale === "fr" ? "Contacter" : "Contact"}
-        </Link>
-      ) : (
-        <span className="text-[11px] text-zinc-500">
-          {status
-            ? locale === "fr"
-              ? `Reservation: ${status}`
-              : `Booking: ${status}`
-            : locale === "fr"
-            ? "Aucune reservation"
-            : "No booking"}
-        </span>
-      )}
+        {secondaryActions}
+      </div>
 
-      {success && <p className="w-full text-[11px] text-emerald-300">{success}</p>}
-      {error && <p className="w-full text-[11px] text-rose-300">{error}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {statusBadge ? (
+          <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusBadge.className}`}>
+            {locale === "fr" ? statusBadge.fr : statusBadge.en}
+          </span>
+        ) : null}
+
+        {canContact ? (
+          <Link
+            href={`/messages?tripId=${tripId}`}
+            className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold text-cyan-100 transition hover:border-cyan-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
+          >
+            {locale === "fr" ? "Contacter" : "Contact"}
+          </Link>
+        ) : null}
+      </div>
+
+      {success && <p className="mt-2 text-[11px] text-emerald-300">{success}</p>}
+      {error && <p className="mt-2 text-[11px] text-rose-300">{error}</p>}
 
       {mounted ? createPortal(modal, document.body) : null}
     </div>

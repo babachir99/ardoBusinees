@@ -36,6 +36,7 @@ export default function GpTripDetailsPopover({
 }: GpTripDetailsPopoverProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [rendered, setRendered] = useState(false);
   const [position, setPosition] = useState<PopoverPosition>({
     top: 0,
     left: 0,
@@ -52,7 +53,17 @@ export default function GpTripDetailsPopover({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setRendered(true);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setRendered(false), 140);
+    return () => window.clearTimeout(timeoutId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!rendered) return;
 
     const updatePosition = () => {
       const trigger = triggerRef.current;
@@ -110,7 +121,7 @@ export default function GpTripDetailsPopover({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open]);
+  }, [rendered]);
 
   useEffect(() => {
     if (!open) return;
@@ -141,12 +152,13 @@ export default function GpTripDetailsPopover({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:border-cyan-300/60 hover:bg-cyan-300/10"
+        className="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:border-cyan-300/60 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
+        aria-label={locale === "fr" ? "Afficher les details du trajet" : "Show trip details"}
       >
-        {locale === "fr" ? "Voir les details" : "View details"}
+        {locale === "fr" ? "Details" : "Details"}
       </button>
 
-      {mounted && open
+      {mounted && rendered
         ? createPortal(
             <div className="pointer-events-none fixed inset-0 z-[120]">
               <div
@@ -156,19 +168,21 @@ export default function GpTripDetailsPopover({
                   left: `${position.left}px`,
                   width: `${position.width}px`,
                 }}
-                className="pointer-events-auto fixed rounded-2xl border border-white/15 bg-zinc-900/85 p-3 text-xs text-zinc-200 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                className={`pointer-events-auto fixed rounded-2xl border border-white/15 bg-zinc-900/75 p-3 text-xs text-zinc-100 shadow-[0_24px_60px_rgba(0,0,0,0.48)] backdrop-blur-xl transition-all duration-150 ${
+                  open ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                }`}
               >
                 <span
                   aria-hidden
                   style={{ left: `${position.arrowLeft}px` }}
-                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 rotate-45 border border-white/20 bg-zinc-900/85 ${
+                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 rotate-45 border border-white/20 bg-zinc-900/75 ${
                     position.placement === "top"
                       ? "-bottom-1.5 border-t-0 border-l-0"
                       : "-top-1.5 border-r-0 border-b-0"
                   }`}
                 />
 
-                <div className="grid gap-2">
+                <div className="grid gap-2.5">
                   <p>
                     <span className="text-zinc-400">{locale === "fr" ? "Depart:" : "Departure:"}</span>{" "}
                     {originAddress}
