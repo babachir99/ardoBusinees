@@ -20,6 +20,19 @@ function formatDate(value: string) {
   return parsed.toLocaleString();
 }
 
+function contactHintLabel(locale: string, paymentMethod: string | null) {
+  const isCash = paymentMethod === "CASH";
+  if (locale === "fr") {
+    return isCash
+      ? "Contact disponible apres ACCEPTED"
+      : "Contact disponible apres ACCEPTED + paiement";
+  }
+
+  return isCash
+    ? "Contact available after ACCEPTED"
+    : "Contact available after ACCEPTED + payment";
+}
+
 export default function TiakDeliveryDetails({
   locale,
   deliveryId,
@@ -156,6 +169,9 @@ export default function TiakDeliveryDetails({
               <p className="font-medium text-white">{delivery.pickupArea} -&gt; {delivery.dropoffArea}</p>
               <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Statut" : "Status"}: {delivery.status}</p>
               <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Cree le" : "Created"}: {formatDate(delivery.createdAt)}</p>
+              {!delivery.canContact && (
+                <p className="mt-1 text-xs text-zinc-500">{contactHintLabel(locale, delivery.paymentMethod)}</p>
+              )}
 
               {delivery.pickupAddress ? (
                 <p className="mt-3 text-xs text-zinc-300">

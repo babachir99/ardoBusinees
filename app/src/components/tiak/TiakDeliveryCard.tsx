@@ -22,6 +22,19 @@ function formatAmount(priceCents: number | null, currency: string) {
   return `${priceCents} ${label}`;
 }
 
+function contactHintLabel(locale: string, paymentMethod: string | null) {
+  const isCash = paymentMethod === "CASH";
+  if (locale === "fr") {
+    return isCash
+      ? "Contact disponible apres ACCEPTED"
+      : "Contact disponible apres ACCEPTED + paiement";
+  }
+
+  return isCash
+    ? "Contact available after ACCEPTED"
+    : "Contact available after ACCEPTED + payment";
+}
+
 export default function TiakDeliveryCard({
   locale,
   delivery,
@@ -170,9 +183,9 @@ export default function TiakDeliveryCard({
         }}
       />
 
-      {!delivery.canContact && delivery.contactUnlockStatusHint && (
+      {!delivery.canContact && (
         <p className="mt-2 text-[11px] text-zinc-500">
-          {locale === "fr" ? "Contact verrouille jusqu'au statut" : "Contact locked until status"}: {delivery.contactUnlockStatusHint}
+          {contactHintLabel(locale, delivery.paymentMethod)}
         </p>
       )}
 

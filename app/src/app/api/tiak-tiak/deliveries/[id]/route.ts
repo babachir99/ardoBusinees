@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -30,7 +31,16 @@ function toArea(address: string) {
   return base.slice(0, 72);
 }
 
-function getContactState(delivery: { status: string; customerId: string; courierId: string | null }, viewer?: { id?: string | null; role?: string | null }) {
+function getContactState(
+  delivery: {
+    status: string;
+    customerId: string;
+    courierId: string | null;
+    paymentMethod: PaymentMethod | null;
+    paymentStatus: PaymentStatus | null;
+  },
+  viewer?: { id?: string | null; role?: string | null }
+) {
   const isAdmin = viewer?.role === "ADMIN";
   const isParticipant = Boolean(
     viewer?.id &&
@@ -40,13 +50,17 @@ function getContactState(delivery: { status: string; customerId: string; courier
   const unlockedByStatus =
     isParticipant &&
     (contactUnlockStatuses as readonly string[]).includes(delivery.status);
+  const requiresPaidContact = delivery.paymentMethod !== PaymentMethod.CASH;
+  const unlockedByPayment = !requiresPaidContact || delivery.paymentStatus === PaymentStatus.PAID;
+  const unlockedByStatusAndPayment = unlockedByStatus && unlockedByPayment;
+  const unlockStatusHint = requiresPaidContact ? "ACCEPTED_AND_PAID" : "ACCEPTED";
 
   const policy = evaluateContactPolicy({
     viewerId: viewer?.id,
     viewerRole: viewer?.role,
-    unlockedByStatus,
+    unlockedByStatus: unlockedByStatusAndPayment,
     lockedByDefault: rules.contact.lockedByDefault,
-    unlockStatusHint: rules.contact.unlockStatusHint,
+    unlockStatusHint,
   });
 
   return {

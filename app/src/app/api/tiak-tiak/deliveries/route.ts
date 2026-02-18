@@ -46,7 +46,13 @@ function toArea(address: string) {
 }
 
 function getContactState(
-  delivery: { status: string; customerId: string; courierId: string | null },
+  delivery: {
+    status: string;
+    customerId: string;
+    courierId: string | null;
+    paymentMethod: PaymentMethod | null;
+    paymentStatus: PaymentStatus | null;
+  },
   viewer?: { id?: string | null; role?: string | null }
 ) {
   const isAdmin = viewer?.role === "ADMIN";
@@ -58,13 +64,17 @@ function getContactState(
   const unlockedByStatus =
     isParticipant &&
     (contactUnlockStatuses as readonly string[]).includes(delivery.status);
+  const requiresPaidContact = delivery.paymentMethod !== PaymentMethod.CASH;
+  const unlockedByPayment = !requiresPaidContact || delivery.paymentStatus === PaymentStatus.PAID;
+  const unlockedByStatusAndPayment = unlockedByStatus && unlockedByPayment;
+  const unlockStatusHint = requiresPaidContact ? "ACCEPTED_AND_PAID" : "ACCEPTED";
 
   const policy = evaluateContactPolicy({
     viewerId: viewer?.id,
     viewerRole: viewer?.role,
-    unlockedByStatus,
+    unlockedByStatus: unlockedByStatusAndPayment,
     lockedByDefault: rules.contact.lockedByDefault,
-    unlockStatusHint: rules.contact.unlockStatusHint,
+    unlockStatusHint,
   });
 
   return {
