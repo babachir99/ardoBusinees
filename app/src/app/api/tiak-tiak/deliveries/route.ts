@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
@@ -32,12 +32,12 @@ function parsePositiveInt(value: unknown) {
   return rounded > 0 ? rounded : null;
 }
 
-function parsePaymentMethod(value: unknown): PaymentMethod | null {
+function parsePaymentMethod(value: unknown): PaymentMethod {
   const paymentMethod = normalizeString(value).toUpperCase();
   if ((Object.values(PaymentMethod) as string[]).includes(paymentMethod)) {
     return paymentMethod as PaymentMethod;
   }
-  return null;
+  return PaymentMethod.CASH;
 }
 
 function toArea(address: string) {
@@ -74,6 +74,54 @@ function getContactState(
   };
 }
 
+function serializeDelivery(
+  delivery: {
+    id: string;
+    customerId: string;
+    courierId: string | null;
+    status: string;
+    pickupAddress: string;
+    dropoffAddress: string;
+    note: string | null;
+    priceCents: number | null;
+    currency: string;
+    paymentMethod: PaymentMethod | null;
+    paymentStatus: PaymentStatus | null;
+    paidAt: Date | null;
+    orderId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    customer?: { id: string; name: string | null; image: string | null } | null;
+    courier?: { id: string; name: string | null; image: string | null } | null;
+  },
+  viewer?: { id?: string | null; role?: string | null }
+) {
+  const contact = getContactState(delivery, viewer);
+
+  return {
+    id: delivery.id,
+    customerId: delivery.customerId,
+    courierId: delivery.courierId,
+    status: delivery.status,
+    pickupArea: toArea(delivery.pickupAddress),
+    dropoffArea: toArea(delivery.dropoffAddress),
+    note: delivery.note,
+    priceCents: delivery.priceCents,
+    currency: delivery.currency,
+    paymentMethod: delivery.paymentMethod,
+    paymentStatus: delivery.paymentStatus,
+    paidAt: delivery.paidAt,
+    orderId: delivery.orderId,
+    createdAt: delivery.createdAt,
+    updatedAt: delivery.updatedAt,
+    customer: delivery.customer ?? null,
+    courier: delivery.courier ?? null,
+    contactLocked: contact.contactLocked,
+    contactUnlockStatusHint: contact.contactUnlockStatusHint,
+    canContact: contact.canContact,
+  };
+}
+
 export async function GET(request: NextRequest) {
   if (!hasTiakDelegates()) {
     return NextResponse.json(
@@ -102,6 +150,8 @@ export async function GET(request: NextRequest) {
       priceCents: true,
       currency: true,
       paymentMethod: true,
+      paymentStatus: true,
+      paidAt: true,
       orderId: true,
       createdAt: true,
       updatedAt: true,
@@ -123,33 +173,12 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json(
-    deliveries.map((delivery) => {
-      const contact = getContactState(delivery, {
+    deliveries.map((delivery) =>
+      serializeDelivery(delivery, {
         id: session?.user?.id,
         role: session?.user?.role,
-      });
-
-      return {
-        id: delivery.id,
-        customerId: delivery.customerId,
-        courierId: delivery.courierId,
-        status: delivery.status,
-        pickupArea: toArea(delivery.pickupAddress),
-        dropoffArea: toArea(delivery.dropoffAddress),
-        note: delivery.note,
-        priceCents: delivery.priceCents,
-        currency: delivery.currency,
-        paymentMethod: delivery.paymentMethod,
-        orderId: delivery.orderId,
-        createdAt: delivery.createdAt,
-        updatedAt: delivery.updatedAt,
-        customer: delivery.customer,
-        courier: delivery.courier,
-        contactLocked: contact.contactLocked,
-        contactUnlockStatusHint: contact.contactUnlockStatusHint,
-        canContact: contact.canContact,
-      };
-    })
+      })
+    )
   );
 }
 
@@ -177,7 +206,7 @@ export async function POST(request: NextRequest) {
   const priceCents = parsePositiveInt(body.priceCents);
   const currency = normalizeString(body.currency).toUpperCase() || "XOF";
   const paymentMethod = parsePaymentMethod(body.paymentMethod);
-  const orderId = normalizeString(body.orderId) || null;
+  const isOnlinePayment = paymentMethod !== PaymentMethod.CASH && priceCents !== null;
 
   if (!pickupAddress || !dropoffAddress) {
     return NextResponse.json(
@@ -186,63 +215,135 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (orderId) {
-    const linkedOrder = await prisma.order.findUnique({
-      where: { id: orderId },
-      select: { id: true, userId: true },
-    });
+  const customer = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+    },
+  });
 
-    if (!linkedOrder) {
-      return NextResponse.json({ error: "Linked order not found" }, { status: 404 });
+  if (!customer) {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+
+  const delivery = await prisma.$transaction(async (tx) => {
+    let createdOrderId: string | null = null;
+
+    if (isOnlinePayment && priceCents !== null) {
+      const order = await tx.order.create({
+        data: {
+          userId: customer.id,
+          sellerId: null,
+          buyerName: customer.name ?? null,
+          buyerEmail: customer.email,
+          buyerPhone: customer.phone ?? null,
+          paymentMethod,
+          subtotalCents: priceCents,
+          shippingCents: 0,
+          feesCents: 0,
+          totalCents: priceCents,
+          currency,
+          status: "PENDING",
+          paymentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      createdOrderId = order.id;
     }
 
-    if (session.user.role !== "ADMIN" && linkedOrder.userId !== session.user.id) {
-      return NextResponse.json({ error: "Forbidden linked order" }, { status: 403 });
+    return tx.tiakDelivery.create({
+      data: {
+        customerId: session.user.id,
+        status: "REQUESTED",
+        pickupAddress,
+        dropoffAddress,
+        note,
+        priceCents,
+        currency,
+        paymentMethod,
+        orderId: createdOrderId,
+        paymentStatus: isOnlinePayment ? PaymentStatus.PENDING : null,
+        paidAt: null,
+      },
+      select: {
+        id: true,
+        customerId: true,
+        courierId: true,
+        status: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        note: true,
+        priceCents: true,
+        currency: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        paidAt: true,
+        orderId: true,
+        createdAt: true,
+        updatedAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+        courier: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+      },
+    });
+  });
+
+  let paymentInitialization: unknown = null;
+
+  if (isOnlinePayment && delivery.orderId) {
+    const initializeUrl = new URL("/api/payments/initialize", request.url);
+    const initializeResponse = await fetch(initializeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: request.headers.get("cookie") ?? "",
+      },
+      body: JSON.stringify({
+        orderId: delivery.orderId,
+        provider: normalizeString((body as { provider?: unknown }).provider) || "provider_pending",
+      }),
+      cache: "no-store",
+    });
+
+    paymentInitialization = await initializeResponse.json().catch(() => null);
+
+    if (!initializeResponse.ok) {
+      return NextResponse.json(
+        {
+          error: "Unable to initialize payment",
+          delivery: serializeDelivery(delivery, {
+            id: session.user.id,
+            role: session.user.role,
+          }),
+          paymentInitialization,
+        },
+        { status: 502 }
+      );
     }
   }
 
-  const delivery = await prisma.tiakDelivery.create({
-    data: {
-      customerId: session.user.id,
-      status: "REQUESTED",
-      pickupAddress,
-      dropoffAddress,
-      note,
-      priceCents,
-      currency,
-      paymentMethod,
-      orderId,
-    },
-    select: {
-      id: true,
-      customerId: true,
-      courierId: true,
-      status: true,
-      pickupAddress: true,
-      dropoffAddress: true,
-      note: true,
-      priceCents: true,
-      currency: true,
-      paymentMethod: true,
-      orderId: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  const contact = getContactState(delivery, {
-    id: session.user.id,
-    role: session.user.role,
-  });
-
   return NextResponse.json(
     {
-      ...delivery,
-      pickupArea: toArea(delivery.pickupAddress),
-      dropoffArea: toArea(delivery.dropoffAddress),
-      contactLocked: contact.contactLocked,
-      contactUnlockStatusHint: contact.contactUnlockStatusHint,
-      canContact: contact.canContact,
+      ...serializeDelivery(delivery, {
+        id: session.user.id,
+        role: session.user.role,
+      }),
+      paymentInitialization,
     },
     { status: 201 }
   );

@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
 
     if (callbackStatus === "PAID") {
       const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
+      const paidAt = new Date();
 
       await tx.order.update({
         where: { id: order.id },
@@ -118,7 +119,18 @@ export async function POST(request: NextRequest) {
         },
         data: {
           status: PrestaBookingStatus.PAID,
-          paidAt: new Date(),
+          paidAt,
+        },
+      });
+
+      await tx.tiakDelivery.updateMany({
+        where: {
+          orderId: order.id,
+          OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+        },
+        data: {
+          paymentStatus: "PAID",
+          paidAt,
         },
       });
 
@@ -153,6 +165,16 @@ export async function POST(request: NextRequest) {
               },
             ],
           },
+        },
+      });
+
+      await tx.tiakDelivery.updateMany({
+        where: {
+          orderId: order.id,
+          OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+        },
+        data: {
+          paymentStatus: "FAILED",
         },
       });
     }

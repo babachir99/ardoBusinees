@@ -181,9 +181,12 @@ export default function TiakDeliveryCard({
         deliveryId={delivery.id}
         open={detailsOpen}
         isLoggedIn={isLoggedIn}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
         onClose={() => setDetailsOpen(false)}
         onDeliveryLoaded={(loaded) => onDeliveryUpdated(loaded)}
       />
     </article>
   );
 }
+

@@ -9,7 +9,16 @@ type Props = {
   onCreated: (delivery: TiakDelivery) => void;
 };
 
-const paymentMethods = ["WAVE", "ORANGE_MONEY", "CARD", "CASH"];
+const paymentMethods = ["CASH", "WAVE", "ORANGE_MONEY", "CARD"];
+
+type CreationResponse = TiakDelivery & {
+  error?: string;
+  delivery?: TiakDelivery;
+  paymentInitialization?: {
+    intentId?: string;
+    payments?: Array<{ providerRef?: string | null }>;
+  } | null;
+};
 
 export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }: Props) {
   const [pickupAddress, setPickupAddress] = useState("");
@@ -18,9 +27,9 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
   const [priceCents, setPriceCents] = useState("");
   const [currency, setCurrency] = useState("XOF");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
-  const [orderId, setOrderId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function redirectToLogin() {
@@ -38,6 +47,7 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
     setSubmitting(true);
     setError(null);
     setSuccess(null);
+    setPaymentInfo(null);
 
     const parsedPrice = priceCents.trim() ? Number(priceCents) : null;
     if (parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)) {
@@ -57,25 +67,35 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
           priceCents: parsedPrice === null ? undefined : Math.trunc(parsedPrice),
           currency,
           paymentMethod,
-          orderId: orderId || undefined,
         }),
       });
 
-      const data = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as CreationResponse;
       if (!response.ok) {
         setError(typeof data?.error === "string" ? data.error : locale === "fr" ? "Creation impossible" : "Creation failed");
         return;
       }
 
-      onCreated(data as TiakDelivery);
+      const createdDelivery = data.delivery ?? (data as unknown as TiakDelivery);
+      onCreated(createdDelivery);
       setPickupAddress("");
       setDropoffAddress("");
       setNote("");
       setPriceCents("");
       setCurrency("XOF");
       setPaymentMethod("CASH");
-      setOrderId("");
       setSuccess(locale === "fr" ? "Demande creee" : "Request created");
+
+      const providerRef = data.paymentInitialization?.payments?.[0]?.providerRef;
+      const intentId = data.paymentInitialization?.intentId;
+
+      if (providerRef || intentId) {
+        setPaymentInfo(
+          locale === "fr"
+            ? `Paiement initialise (${providerRef ?? intentId})`
+            : `Payment initialized (${providerRef ?? intentId})`
+        );
+      }
     } catch {
       setError(locale === "fr" ? "Creation impossible" : "Creation failed");
     } finally {
@@ -170,15 +190,6 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-300">
-          {locale === "fr" ? "Order ID (optionnel)" : "Order ID (optional)"}
-          <input
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={orderId}
-            onChange={(event) => setOrderId(event.target.value)}
-          />
-        </label>
-
         <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
           {locale === "fr" ? "Note (optionnelle)" : "Optional note"}
           <textarea
@@ -189,22 +200,25 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
           />
         </label>
 
-        <div className="md:col-span-2 flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-          >
-            {submitting
-              ? locale === "fr"
-                ? "Envoi..."
-                : "Submitting..."
-              : locale === "fr"
-                ? "Creer la demande"
-                : "Create request"}
-          </button>
-          {error && <p className="text-sm text-rose-300">{error}</p>}
-          {success && <p className="text-sm text-emerald-300">{success}</p>}
+        <div className="md:col-span-2 flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+            >
+              {submitting
+                ? locale === "fr"
+                  ? "Envoi..."
+                  : "Submitting..."
+                : locale === "fr"
+                  ? "Creer la demande"
+                  : "Create request"}
+            </button>
+            {error && <p className="text-sm text-rose-300">{error}</p>}
+            {success && <p className="text-sm text-emerald-300">{success}</p>}
+          </div>
+          {paymentInfo && <p className="text-xs text-emerald-300">{paymentInfo}</p>}
         </div>
       </form>
     </section>

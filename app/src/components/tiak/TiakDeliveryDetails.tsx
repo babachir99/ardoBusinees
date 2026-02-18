@@ -10,6 +10,8 @@ type Props = {
   onClose: () => void;
   onDeliveryLoaded: (delivery: TiakDelivery) => void;
   isLoggedIn: boolean;
+  currentUserId: string | null;
+  currentUserRole: string | null;
 };
 
 function formatDate(value: string) {
@@ -25,6 +27,8 @@ export default function TiakDeliveryDetails({
   onClose,
   onDeliveryLoaded,
   isLoggedIn,
+  currentUserId,
+  currentUserRole,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [delivery, setDelivery] = useState<TiakDelivery | null>(null);
@@ -46,7 +50,7 @@ export default function TiakDeliveryDetails({
       setEventsError(null);
 
       try {
-        const detailResponse = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}?includeAddress=1`, {
+        const detailResponse = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}`, {
           method: "GET",
           cache: "no-store",
         });
@@ -60,10 +64,30 @@ export default function TiakDeliveryDetails({
           return;
         }
 
+        let resolvedDelivery = detailData as TiakDelivery;
+        const isAdmin = currentUserRole === "ADMIN";
+        const isOwner = Boolean(currentUserId && currentUserId === resolvedDelivery.customerId);
+        const isAssignedCourier = Boolean(currentUserId && currentUserId === resolvedDelivery.courierId);
+        const shouldIncludeAddress = isAdmin || isOwner || isAssignedCourier;
+
+        if (shouldIncludeAddress) {
+          const addressResponse = await fetch(
+            `/api/tiak-tiak/deliveries/${deliveryId}?includeAddress=1`,
+            {
+              method: "GET",
+              cache: "no-store",
+            }
+          );
+
+          const addressData = await addressResponse.json().catch(() => null);
+          if (addressResponse.ok && addressData) {
+            resolvedDelivery = addressData as TiakDelivery;
+          }
+        }
+
         if (!cancelled) {
-          const typedDetail = detailData as TiakDelivery;
-          setDelivery(typedDetail);
-          onDeliveryLoadedRef.current(typedDetail);
+          setDelivery(resolvedDelivery);
+          onDeliveryLoadedRef.current(resolvedDelivery);
         }
 
         if (!isLoggedIn) {
@@ -104,7 +128,7 @@ export default function TiakDeliveryDetails({
     return () => {
       cancelled = true;
     };
-  }, [deliveryId, isLoggedIn, locale, open]);
+  }, [currentUserId, currentUserRole, deliveryId, isLoggedIn, locale, open]);
 
   if (!open) return null;
 

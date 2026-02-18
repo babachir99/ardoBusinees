@@ -26,6 +26,8 @@ export type TiakDelivery = {
   priceCents: number | null;
   currency: string;
   paymentMethod: string | null;
+  paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | null;
+  paidAt: string | null;
   orderId: string | null;
   createdAt: string;
   updatedAt: string;

@@ -620,6 +620,8 @@ model TiakDelivery {
   currency       String             @default("XOF")
   paymentMethod  PaymentMethod?
   orderId        String?
+  paymentStatus  PaymentStatus?     @default(PENDING)
+  paidAt         DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -898,3 +900,4 @@ model UserCartItem {
   @@index([productId])
   @@index([offerId])
 }
+
