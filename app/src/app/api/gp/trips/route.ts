@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { GpBookingStatus, GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const allowedStatuses = new Set<GpTripStatus>(Object.values(GpTripStatus));
 const allowedCurrencies = new Set(["XOF", "EUR", "USD"] as const);
+const contactUnlockStatuses = new Set<GpBookingStatus>([
+  GpBookingStatus.CONFIRMED,
+  GpBookingStatus.COMPLETED,
+  GpBookingStatus.DELIVERED,
+]);
+const contactUnlockStatusHint = "CONFIRMED|COMPLETED|DELIVERED";
 
 type TripCurrency = "XOF" | "EUR" | "USD";
 
@@ -157,6 +163,8 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          transporterRating: true,
+          transporterReviewCount: true,
           phone: true,
         },
       },
@@ -170,7 +178,45 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(trips);
+  const isAdmin = session?.user?.role === UserRole.ADMIN;
+  const viewerId = session?.user?.id ?? null;
+
+  let unlockedTripIds = new Set<string>();
+  if (viewerId && !isAdmin && trips.length > 0) {
+    const customerBookings = await prisma.gpTripBooking.findMany({
+      where: {
+        customerId: viewerId,
+        tripId: { in: trips.map((trip) => trip.id) },
+        status: { in: Array.from(contactUnlockStatuses) },
+      },
+      select: { tripId: true },
+    });
+    unlockedTripIds = new Set(customerBookings.map((booking) => booking.tripId));
+  }
+
+  const safeTrips = trips.map((trip) => {
+    const isOwner = viewerId === trip.transporterId;
+    const canRevealContact = Boolean(isAdmin || isOwner || unlockedTripIds.has(trip.id));
+
+    const withLockMeta = {
+      ...trip,
+      contactLocked: !canRevealContact,
+      contactUnlockStatusHint,
+    };
+
+    if (canRevealContact) {
+      return withLockMeta;
+    }
+
+    const { contactPhone: _contactPhone, ...tripWithoutContact } = withLockMeta;
+    const { phone: _transporterPhone, ...transporterWithoutPhone } = trip.transporter;
+    return {
+      ...tripWithoutContact,
+      transporter: transporterWithoutPhone,
+    };
+  });
+
+  return NextResponse.json(safeTrips);
 }
 
 export async function POST(request: NextRequest) {

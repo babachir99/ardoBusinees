@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { GpBookingStatus, UserRole } from "@prisma/client";
 
 const MAX_TITLE = 80;
 const MAX_COMMENT = 1200;
+const contactUnlockStatuses = new Set<GpBookingStatus>([
+  GpBookingStatus.CONFIRMED,
+  GpBookingStatus.COMPLETED,
+  GpBookingStatus.DELIVERED,
+]);
+const contactUnlockStatusHint = "CONFIRMED|COMPLETED|DELIVERED";
 
 function normalizeText(value: unknown, max: number) {
   const text = String(value ?? "").trim();
@@ -87,7 +94,7 @@ export async function GET(
     return NextResponse.json({ error: "Trip not found" }, { status: 404 });
   }
 
-  const [reviews, stats, myReview, myEligibleBooking] = await Promise.all([
+  const [reviews, stats, myReview, myEligibleBooking, unlockedBooking] = await Promise.all([
     prisma.transporterReview.findMany({
       where: { tripId: id },
       orderBy: { createdAt: "desc" },
@@ -118,9 +125,19 @@ export async function GET(
           where: {
             tripId: id,
             customerId: session.user.id,
-            status: { in: ["DELIVERED", "COMPLETED"] },
+            status: { in: [GpBookingStatus.DELIVERED, GpBookingStatus.COMPLETED] },
           },
           select: { id: true, status: true },
+        })
+      : Promise.resolve(null),
+    session?.user?.id
+      ? prisma.gpTripBooking.findFirst({
+          where: {
+            tripId: id,
+            customerId: session.user.id,
+            status: { in: Array.from(contactUnlockStatuses) },
+          },
+          select: { id: true },
         })
       : Promise.resolve(null),
   ]);
@@ -130,9 +147,25 @@ export async function GET(
     session?.user?.id !== trip.transporterId &&
     Boolean(myEligibleBooking);
 
+  const isAdmin = session?.user?.role === UserRole.ADMIN;
+  const isOwner = session?.user?.id === trip.transporterId;
+  const canRevealContact = Boolean(isAdmin || isOwner || unlockedBooking);
+
+  const transporter = canRevealContact
+    ? trip.transporter
+    : {
+        id: trip.transporter.id,
+        name: trip.transporter.name,
+        image: trip.transporter.image,
+        transporterRating: trip.transporter.transporterRating,
+        transporterReviewCount: trip.transporter.transporterReviewCount,
+      };
+
   return NextResponse.json({
     tripId: trip.id,
-    transporter: trip.transporter,
+    transporter,
+    contactLocked: !canRevealContact,
+    contactUnlockStatusHint,
     stats: {
       average: stats._avg.rating ?? 0,
       count: stats._count._all,
@@ -213,7 +246,7 @@ export async function POST(
     where: {
       tripId: id,
       customerId: session.user.id,
-      status: { in: ["DELIVERED", "COMPLETED"] },
+      status: { in: [GpBookingStatus.DELIVERED, GpBookingStatus.COMPLETED] },
     },
     select: { id: true },
   });

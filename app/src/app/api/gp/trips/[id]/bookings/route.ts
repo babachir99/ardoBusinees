@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GpBookingStatus, GpTripStatus } from "@prisma/client";
+import { GpBookingStatus, GpTripStatus, UserRole } from "@prisma/client";
+
+const contactUnlockStatuses = new Set<GpBookingStatus>([
+  GpBookingStatus.CONFIRMED,
+  GpBookingStatus.COMPLETED,
+  GpBookingStatus.DELIVERED,
+]);
+const contactUnlockStatusHint = "CONFIRMED|COMPLETED|DELIVERED";
 
 function parsePositiveInt(value: unknown) {
   const parsed = Number(value);
@@ -18,6 +25,10 @@ function normalizeMessage(value: unknown) {
   return text.slice(0, 1200);
 }
 
+function canUnlockContact(status: GpBookingStatus | null | undefined) {
+  return Boolean(status && contactUnlockStatuses.has(status));
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,28 +40,57 @@ export async function GET(
 
   const { id } = await params;
 
-  const booking = await prisma.gpTripBooking.findUnique({
-    where: {
-      tripId_customerId: {
-        tripId: id,
-        customerId: session.user.id,
+  const [trip, booking] = await Promise.all([
+    prisma.gpTrip.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        transporterId: true,
+        contactPhone: true,
+        transporter: { select: { phone: true } },
       },
-    },
-    select: {
-      id: true,
-      tripId: true,
-      status: true,
-      requestedKg: true,
-      packageCount: true,
-      message: true,
-      createdAt: true,
-      updatedAt: true,
-      confirmedAt: true,
-      completedAt: true,
-    },
-  });
+    }),
+    prisma.gpTripBooking.findUnique({
+      where: {
+        tripId_customerId: {
+          tripId: id,
+          customerId: session.user.id,
+        },
+      },
+      select: {
+        id: true,
+        tripId: true,
+        status: true,
+        requestedKg: true,
+        packageCount: true,
+        message: true,
+        createdAt: true,
+        updatedAt: true,
+        confirmedAt: true,
+        completedAt: true,
+      },
+    }),
+  ]);
 
-  return NextResponse.json({ booking });
+  if (!trip) {
+    return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+  }
+
+  const isAdmin = session.user.role === UserRole.ADMIN;
+  const isOwner = trip.transporterId === session.user.id;
+  const canContact = Boolean(isAdmin || isOwner || canUnlockContact(booking?.status));
+
+  return NextResponse.json({
+    booking,
+    canContact,
+    contactLocked: !canContact,
+    contactUnlockStatusHint,
+    ...(canContact
+      ? {
+          contactPhone: trip.contactPhone ?? trip.transporter.phone ?? null,
+        }
+      : {}),
+  });
 }
 
 export async function POST(
@@ -89,6 +129,8 @@ export async function POST(
       availableKg: true,
       isActive: true,
       status: true,
+      contactPhone: true,
+      transporter: { select: { phone: true } },
     },
   });
 
@@ -148,5 +190,20 @@ export async function POST(
     },
   });
 
-  return NextResponse.json({ booking }, { status: 201 });
+  const canContact = canUnlockContact(booking.status);
+
+  return NextResponse.json(
+    {
+      booking,
+      canContact,
+      contactLocked: !canContact,
+      contactUnlockStatusHint,
+      ...(canContact
+        ? {
+            contactPhone: trip.contactPhone ?? trip.transporter.phone ?? null,
+          }
+        : {}),
+    },
+    { status: 201 }
+  );
 }

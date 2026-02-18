@@ -24,12 +24,6 @@ type GpTripBookingFormProps = {
   actionRowClassName?: string;
 };
 
-const confirmedStatuses = new Set<BookingStatus>([
-  "ACCEPTED",
-  "CONFIRMED",
-  "COMPLETED",
-  "DELIVERED",
-]);
 
 const statusMeta: Record<
   BookingStatus,
@@ -99,6 +93,7 @@ export default function GpTripBookingForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [status, setStatus] = useState<BookingStatus | null>(initialStatus ?? null);
+  const [canContact, setCanContact] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -122,9 +117,44 @@ export default function GpTripBookingForm({
     return () => window.removeEventListener("keydown", onEscape);
   }, [open]);
 
-  if (isOwner) return null;
 
-  const canContact = Boolean(status && confirmedStatuses.has(status));
+  useEffect(() => {
+    if (!isLoggedIn || isOwner) return;
+
+    let cancelled = false;
+
+    const loadBooking = async () => {
+      try {
+        const response = await fetch(`/api/gp/trips/${tripId}/bookings`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const payload = await response.json().catch(() => null);
+        if (cancelled || !payload) return;
+
+        const nextStatus = payload?.booking?.status as BookingStatus | undefined;
+        if (nextStatus) {
+          setStatus(nextStatus);
+        }
+
+        if (typeof payload?.canContact === "boolean") {
+          setCanContact(payload.canContact);
+        }
+      } catch {
+        // Keep silent: booking contact access is optional UI metadata.
+      }
+    };
+
+    void loadBooking();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, isOwner, tripId]);
+
+  if (isOwner) return null;
 
   const submit = async () => {
     if (submitting) return;
@@ -158,6 +188,10 @@ export default function GpTripBookingForm({
       const nextStatus = payload?.booking?.status as BookingStatus | undefined;
       if (nextStatus) {
         setStatus(nextStatus);
+      }
+
+      if (typeof payload?.canContact === "boolean") {
+        setCanContact(payload.canContact);
       }
 
       setSuccess(

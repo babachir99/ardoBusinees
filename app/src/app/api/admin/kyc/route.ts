@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, email: true, name: true, role: true, isActive: true } },
+      reviewedBy: { select: { id: true, name: true, email: true } },
     },
   });
 

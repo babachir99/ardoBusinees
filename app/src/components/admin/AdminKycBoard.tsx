@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 type Submission = {
   id: string;
   targetRole: string;
   status: string;
+  reviewedAt?: string | null;
+  reviewReason?: string | null;
+  reviewedBy?: {
+    id: string;
+    name?: string | null;
+    email: string;
+  } | null;
   docIdUrl?: string | null;
   driverLicenseUrl?: string | null;
   proofAddressUrl?: string | null;
@@ -24,6 +31,8 @@ type Submission = {
 
 export default function AdminKycBoard() {
   const t = useTranslations("AdminKyc");
+  const locale = useLocale();
+  const isFr = locale === "fr";
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("PENDING");
@@ -71,10 +80,20 @@ export default function AdminKycBoard() {
 
   const updateStatus = async (id: string, status: "APPROVED" | "REJECTED") => {
     try {
+      let reviewReason: string | undefined;
+      if (status === "REJECTED") {
+        const reason = window.prompt(
+          isFr
+            ? "Raison du refus (optionnel, recommande)"
+            : "Rejection reason (optional, recommended)"
+        );
+        reviewReason = reason?.trim() || undefined;
+      }
+
       const res = await fetch(`/api/admin/kyc/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, reviewReason }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -175,6 +194,21 @@ export default function AdminKycBoard() {
                   <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-3 sm:col-span-2">
                     <p className="text-[11px] text-zinc-400">{t("labels.notes")}</p>
                     <p className="mt-2 text-xs text-zinc-200">{submission.notes}</p>
+                  </div>
+                )}
+                {(submission.reviewedAt || submission.reviewReason) && (
+                  <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-3 sm:col-span-2">
+                    {submission.reviewedAt ? (
+                      <p className="text-[11px] text-zinc-400">
+                        Review: {new Date(submission.reviewedAt).toLocaleString(isFr ? "fr-FR" : "en-US")}
+                        {submission.reviewedBy
+                          ? ` - ${submission.reviewedBy.name || submission.reviewedBy.email}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {submission.reviewReason ? (
+                      <p className="mt-2 text-xs text-zinc-200">Reason: {submission.reviewReason}</p>
+                    ) : null}
                   </div>
                 )}
               </div>

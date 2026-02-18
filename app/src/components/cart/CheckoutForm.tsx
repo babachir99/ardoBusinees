@@ -55,8 +55,9 @@ export default function CheckoutForm() {
   const totalCents = subtotalCents + feesCents;
   const hasNonLocal = items.some((item) => item.type !== "LOCAL");
   const mockPaymentsEnabled =
-    process.env.NODE_ENV !== "production" ||
-    process.env.NEXT_PUBLIC_FORCE_TEST_PAYMENTS === "1";
+    process.env.NODE_ENV !== "production" &&
+    (process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENTS === "1" ||
+      process.env.NEXT_PUBLIC_FORCE_TEST_PAYMENTS === "1");
   const isOnlinePayment = paymentMethod !== "CASH";
   const shouldRunMockPayment = mockPaymentsEnabled && isOnlinePayment;
 
@@ -190,11 +191,6 @@ export default function CheckoutForm() {
       return;
     }
 
-    if (isOnlinePayment && !mockPaymentsEnabled) {
-      setError(t("errors.onlinePaymentUnavailable"));
-      return;
-    }
-
     setState("loading");
 
     try {
@@ -244,16 +240,32 @@ export default function CheckoutForm() {
         throw new Error("Order failed");
       }
 
-      if (shouldRunMockPayment) {
-        const paymentRes = await fetch("/api/payments/mock", {
+      if (isOnlinePayment) {
+        const initPaymentRes = await fetch("/api/payments/initialize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderIds, forceSuccess: true }),
+          body: JSON.stringify({
+            orderIds,
+            provider: "paydunya",
+          }),
         });
 
-        if (!paymentRes.ok) {
-          const data = await paymentRes.json().catch(() => null);
-          throw new Error(data?.error || "Payment failed");
+        if (!initPaymentRes.ok) {
+          const data = await initPaymentRes.json().catch(() => null);
+          throw new Error(data?.error || "Payment initialization failed");
+        }
+
+        if (shouldRunMockPayment) {
+          const paymentRes = await fetch("/api/payments/mock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderIds, forceSuccess: true }),
+          });
+
+          if (!paymentRes.ok) {
+            const data = await paymentRes.json().catch(() => null);
+            throw new Error(data?.error || "Payment failed");
+          }
         }
       }
 

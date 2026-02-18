@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { GpBookingStatus, GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const allowedStatuses = new Set<GpTripStatus>(Object.values(GpTripStatus));
+const contactUnlockStatuses = new Set<GpBookingStatus>([
+  GpBookingStatus.CONFIRMED,
+  GpBookingStatus.COMPLETED,
+  GpBookingStatus.DELIVERED,
+]);
+const contactUnlockStatusHint = "CONFIRMED|COMPLETED|DELIVERED";
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
@@ -45,7 +51,13 @@ async function loadTrip(id: string) {
     where: { id },
     include: {
       transporter: {
-        select: { id: true, name: true, phone: true },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          transporterRating: true,
+          transporterReviewCount: true,
+        },
       },
       store: {
         select: { id: true, slug: true, name: true },
@@ -70,20 +82,54 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (trip.isActive && trip.status === GpTripStatus.OPEN) {
-    return NextResponse.json(trip);
-  }
-
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isPublicTrip = trip.isActive && trip.status === GpTripStatus.OPEN;
+
+  if (!isPublicTrip) {
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!canManageTrip(session.user.id, session.user.role as UserRole, trip.transporterId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
-  if (!canManageTrip(session.user.id, session.user.role as UserRole, trip.transporterId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const viewerId = session?.user?.id ?? null;
+  const isAdmin = session?.user?.role === UserRole.ADMIN;
+  const isOwner = viewerId === trip.transporterId;
+
+  let hasUnlockedBooking = false;
+  if (viewerId && !isAdmin && !isOwner) {
+    const unlockedBooking = await prisma.gpTripBooking.findFirst({
+      where: {
+        tripId: trip.id,
+        customerId: viewerId,
+        status: { in: Array.from(contactUnlockStatuses) },
+      },
+      select: { id: true },
+    });
+
+    hasUnlockedBooking = Boolean(unlockedBooking);
   }
 
-  return NextResponse.json(trip);
+  const canRevealContact = Boolean(isAdmin || isOwner || hasUnlockedBooking);
+  const responseTrip = {
+    ...trip,
+    contactLocked: !canRevealContact,
+    contactUnlockStatusHint,
+  };
+
+  if (canRevealContact) {
+    return NextResponse.json(responseTrip);
+  }
+
+  const { contactPhone: _contactPhone, ...tripWithoutContact } = responseTrip;
+  const { phone: _transporterPhone, ...transporterWithoutPhone } = trip.transporter;
+  return NextResponse.json({
+    ...tripWithoutContact,
+    transporter: transporterWithoutPhone,
+  });
 }
 
 export async function PATCH(
@@ -234,7 +280,15 @@ export async function PATCH(
     where: { id: existing.id },
     data,
     include: {
-      transporter: { select: { id: true, name: true, phone: true } },
+      transporter: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          transporterRating: true,
+          transporterReviewCount: true,
+        },
+      },
       store: { select: { id: true, slug: true, name: true } },
     },
   });

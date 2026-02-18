@@ -39,9 +39,13 @@ function canAccessOrder(order: OrderWithSeller, userId: string, role: string): b
 }
 
 function isMockPaymentsEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
   return (
-    process.env.NODE_ENV !== "production" ||
     process.env.PAYMENTS_MOCK_ENABLED === "1" ||
+    process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENTS === "1" ||
     process.env.NEXT_PUBLIC_FORCE_TEST_PAYMENTS === "1"
   );
 }
@@ -123,7 +127,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!isMockPaymentsEnabled()) {
-    return NextResponse.json({ error: "Mock payments are disabled." }, { status: 403 });
+    return NextResponse.json({ error: "Mock payments are disabled (dev flag required)." }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);

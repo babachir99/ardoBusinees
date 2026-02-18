@@ -6,6 +6,12 @@ import type { KycStatus } from "@prisma/client";
 
 const allowedStatus = new Set(["APPROVED", "REJECTED"]);
 
+function normalizeReason(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 1200) : null;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,12 +27,24 @@ export async function PATCH(
   if (!allowedStatus.has(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
+
+  const reviewReason = normalizeReason(body?.reviewReason);
   const typedStatus = status as KycStatus;
 
   const submission = await prisma.kycSubmission.update({
     where: { id },
-    data: { status: typedStatus },
-    include: { user: true },
+    data: {
+      status: typedStatus,
+      reviewedById: session.user.id,
+      reviewedAt: new Date(),
+      reviewReason,
+    },
+    include: {
+      user: true,
+      reviewedBy: {
+        select: { id: true, name: true, email: true },
+      },
+    },
   });
 
   if (typedStatus === "APPROVED") {
@@ -40,6 +58,10 @@ export async function PATCH(
               action: "KYC_APPROVED",
               entityType: "KycSubmission",
               entityId: submission.id,
+              metadata: {
+                reviewedById: session.user.id,
+                reviewReason,
+              },
             },
           ],
         },
@@ -52,6 +74,10 @@ export async function PATCH(
         action: "KYC_REJECTED",
         entityType: "KycSubmission",
         entityId: submission.id,
+        metadata: {
+          reviewedById: session.user.id,
+          reviewReason,
+        },
       },
     });
   }
