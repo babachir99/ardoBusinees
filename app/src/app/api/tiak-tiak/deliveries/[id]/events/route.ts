@@ -3,9 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const allStatuses = ["REQUESTED", "ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED", "CANCELED", "REJECTED"] as const;
-type TiakStatus = (typeof allStatuses)[number];
-
 function hasTiakDelegates() {
   const runtimePrisma = prisma as unknown as {
     tiakDelivery?: unknown;
@@ -18,14 +15,6 @@ function hasTiakDelegates() {
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
-}
-
-function normalizeStatus(value: unknown): TiakStatus | null {
-  const status = normalizeString(value).toUpperCase();
-  if ((allStatuses as readonly string[]).includes(status)) {
-    return status as TiakStatus;
-  }
-  return null;
 }
 
 function normalizeProofUrl(value: unknown) {
@@ -128,11 +117,6 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const status = normalizeStatus(body.status);
-  if (!status) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-  }
-
   const note = normalizeString(body.note).slice(0, 600) || null;
   const proofUrl = normalizeProofUrl(body.proofUrl);
 
@@ -142,6 +126,7 @@ export async function POST(
       id: true,
       customerId: true,
       courierId: true,
+      status: true,
     },
   });
 
@@ -156,52 +141,38 @@ export async function POST(
     return NextResponse.json({ error: "Only assigned courier or admin can add events" }, { status: 403 });
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const updatedDelivery = await tx.tiakDelivery.update({
-      where: { id: delivery.id },
-      data: {
-        status,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    const event = await tx.tiakDeliveryEvent.create({
-      data: {
-        deliveryId: delivery.id,
-        status,
-        note,
-        proofUrl,
-        actorId: session.user.id,
-      },
-      select: {
-        id: true,
-        deliveryId: true,
-        status: true,
-        note: true,
-        proofUrl: true,
-        createdAt: true,
-        actorId: true,
-        actor: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            role: true,
-          },
+  const event = await prisma.tiakDeliveryEvent.create({
+    data: {
+      deliveryId: delivery.id,
+      status: delivery.status,
+      note,
+      proofUrl,
+      actorId: session.user.id,
+    },
+    select: {
+      id: true,
+      deliveryId: true,
+      status: true,
+      note: true,
+      proofUrl: true,
+      createdAt: true,
+      actorId: true,
+      actor: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          role: true,
         },
       },
-    });
-
-    return { updatedDelivery, event };
+    },
   });
 
   return NextResponse.json(
     {
-      event: result.event,
-      deliveryStatus: result.updatedDelivery.status,
+      event,
+      deliveryStatus: delivery.status,
+      ignoredInputStatus: normalizeString((body as { status?: unknown }).status).toUpperCase() || null,
     },
     { status: 201 }
   );
