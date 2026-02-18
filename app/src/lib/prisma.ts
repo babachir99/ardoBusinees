@@ -25,6 +25,8 @@ function hasRequiredDelegates(client: PrismaClient) {
     "gpTrip" in runtimeClient &&
     "gpTripBooking" in runtimeClient &&
     "transporterReview" in runtimeClient &&
+    "prestaService" in runtimeClient &&
+    "prestaBooking" in runtimeClient &&
     "userAddress" in runtimeClient &&
     "userCart" in runtimeClient &&
     "userCartItem" in runtimeClient

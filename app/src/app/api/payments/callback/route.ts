@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { PrestaBookingStatus } from "@prisma/client";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -105,6 +106,19 @@ export async function POST(request: NextRequest) {
               },
             ],
           },
+        },
+      });
+
+      await tx.prestaBooking.updateMany({
+        where: {
+          orderId: order.id,
+          status: {
+            in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
+          },
+        },
+        data: {
+          status: PrestaBookingStatus.PAID,
+          paidAt: new Date(),
         },
       });
 
