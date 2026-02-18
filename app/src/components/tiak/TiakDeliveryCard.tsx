@@ -24,12 +24,16 @@ function formatAmount(priceCents: number | null, currency: string) {
 
 function contactHintLabel(locale: string, paymentMethod: string | null) {
   const isCash = paymentMethod === "CASH";
+  const isUnset = paymentMethod === null;
+
   if (locale === "fr") {
+    if (isUnset) return "Contact disponible apres ACCEPTED + choix du paiement";
     return isCash
       ? "Contact disponible apres ACCEPTED"
       : "Contact disponible apres ACCEPTED + paiement";
   }
 
+  if (isUnset) return "Contact available after ACCEPTED + payment method selected";
   return isCash
     ? "Contact available after ACCEPTED"
     : "Contact available after ACCEPTED + payment";

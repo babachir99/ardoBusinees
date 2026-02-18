@@ -64,10 +64,16 @@ function getContactState(
   const unlockedByStatus =
     isParticipant &&
     (contactUnlockStatuses as readonly string[]).includes(delivery.status);
-  const requiresPaidContact = delivery.paymentMethod !== PaymentMethod.CASH;
+  const hasPaymentMethod = delivery.paymentMethod !== null;
+  const isCashPayment = delivery.paymentMethod === PaymentMethod.CASH;
+  const requiresPaidContact = !hasPaymentMethod || !isCashPayment;
   const unlockedByPayment = !requiresPaidContact || delivery.paymentStatus === PaymentStatus.PAID;
   const unlockedByStatusAndPayment = unlockedByStatus && unlockedByPayment;
-  const unlockStatusHint = requiresPaidContact ? "ACCEPTED_AND_PAID" : "ACCEPTED";
+  const unlockStatusHint = !hasPaymentMethod
+    ? "ACCEPTED_AND_PAYMENT_METHOD_SET"
+    : isCashPayment
+      ? "ACCEPTED"
+      : "ACCEPTED_AND_PAID";
 
   const policy = evaluateContactPolicy({
     viewerId: viewer?.id,
