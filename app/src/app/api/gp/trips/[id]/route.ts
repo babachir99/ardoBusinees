@@ -71,6 +71,49 @@ function canManageTrip(sessionUserId: string, role: UserRole, transporterId: str
   return sessionUserId === transporterId;
 }
 
+function shouldIncludeContact(request: NextRequest) {
+  return new URL(request.url).searchParams.get("includeContact") === "1";
+}
+
+function stripForbiddenContactKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripForbiddenContactKeys(entry));
+  }
+
+  if (value && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+
+    for (const [key, nestedValue] of Object.entries(source)) {
+      if (key === "phone" || key === "contactPhone") {
+        continue;
+      }
+      next[key] = stripForbiddenContactKeys(nestedValue);
+    }
+
+    return next;
+  }
+
+  return value;
+}
+
+function sanitizeTripContact(
+  trip: Record<string, unknown>,
+  canRevealContact: boolean
+) {
+  const withLockMeta = {
+    ...trip,
+    contactLocked: !canRevealContact,
+    contactUnlockStatusHint,
+  };
+
+  if (canRevealContact) {
+    return withLockMeta;
+  }
+
+  return stripForbiddenContactKeys(withLockMeta) as Record<string, unknown>;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -114,22 +157,9 @@ export async function GET(
   }
 
   const canRevealContact = Boolean(isAdmin || isOwner || hasUnlockedBooking);
-  const responseTrip = {
-    ...trip,
-    contactLocked: !canRevealContact,
-    contactUnlockStatusHint,
-  };
-
-  if (canRevealContact) {
-    return NextResponse.json(responseTrip);
-  }
-
-  const { contactPhone: _contactPhone, ...tripWithoutContact } = responseTrip;
-  const { phone: _transporterPhone, ...transporterWithoutPhone } = trip.transporter;
-  return NextResponse.json({
-    ...tripWithoutContact,
-    transporter: transporterWithoutPhone,
-  });
+  return NextResponse.json(
+    sanitizeTripContact(trip as unknown as Record<string, unknown>, canRevealContact)
+  );
 }
 
 export async function PATCH(
@@ -293,7 +323,12 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json(updated);
+  const includeContact = shouldIncludeContact(request);
+  const canRevealContact = includeContact && (isAdmin || session.user.id === existing.transporterId);
+
+  return NextResponse.json(
+    sanitizeTripContact(updated as unknown as Record<string, unknown>, canRevealContact)
+  );
 }
 
 export async function DELETE(

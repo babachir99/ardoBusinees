@@ -13,6 +13,28 @@ const contactUnlockStatuses = new Set<GpBookingStatus>([
 ]);
 const contactUnlockStatusHint = "CONFIRMED|COMPLETED|DELIVERED";
 
+function stripForbiddenContactKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripForbiddenContactKeys(entry));
+  }
+
+  if (value && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+
+    for (const [key, nestedValue] of Object.entries(source)) {
+      if (key === "phone" || key === "contactPhone") {
+        continue;
+      }
+      next[key] = stripForbiddenContactKeys(nestedValue);
+    }
+
+    return next;
+  }
+
+  return value;
+}
+
 function normalizeText(value: unknown, max: number) {
   const text = String(value ?? "").trim();
   if (!text) return undefined;
@@ -153,13 +175,13 @@ export async function GET(
 
   const transporter = canRevealContact
     ? trip.transporter
-    : {
-        id: trip.transporter.id,
-        name: trip.transporter.name,
-        image: trip.transporter.image,
-        transporterRating: trip.transporter.transporterRating,
-        transporterReviewCount: trip.transporter.transporterReviewCount,
-      };
+    : (stripForbiddenContactKeys(trip.transporter) as {
+        id: string;
+        name: string | null;
+        image: string | null;
+        transporterRating: number;
+        transporterReviewCount: number;
+      });
 
   return NextResponse.json({
     tripId: trip.id,
