@@ -53,3 +53,23 @@ export type TiakDeliveryEvent = {
     role: string;
   } | null;
 };
+
+
+export type TiakCourierProfile = {
+  id: string;
+  courierId: string;
+  isActive: boolean;
+  cities: string[];
+  areas: string[];
+  vehicleType: string | null;
+  maxWeightKg: number | null;
+  availableHours: string | null;
+  createdAt: string;
+  updatedAt: string;
+  courier: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    role: string;
+  };
+};

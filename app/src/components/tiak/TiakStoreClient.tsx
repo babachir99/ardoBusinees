@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakDeliveryCard from "@/components/tiak/TiakDeliveryCard";
-import { type TiakDelivery } from "@/components/tiak/types";
+import { type TiakCourierProfile, type TiakDelivery } from "@/components/tiak/types";
 
 type Props = {
   locale: string;
@@ -49,6 +49,21 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [trackedDeliveries, setTrackedDeliveries] = useState<TiakDelivery[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [couriers, setCouriers] = useState<TiakCourierProfile[]>([]);
+  const [couriersLoading, setCouriersLoading] = useState(false);
+  const [couriersError, setCouriersError] = useState<string | null>(null);
+
+  const [myProfile, setMyProfile] = useState<TiakCourierProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileCities, setProfileCities] = useState("");
+  const [profileAreas, setProfileAreas] = useState("");
+  const [profileVehicleType, setProfileVehicleType] = useState("");
+  const [profileMaxWeightKg, setProfileMaxWeightKg] = useState("");
+  const [profileHours, setProfileHours] = useState("");
+  const [profileIsActive, setProfileIsActive] = useState(true);
 
   const storageKey = getStoreKey(currentUserId);
 
@@ -144,6 +159,69 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     setTrackedDeliveries(loaded);
   }, [currentUserId, isLoggedIn, storageKey]);
 
+  const refreshCouriers = useCallback(async () => {
+    setCouriersLoading(true);
+    setCouriersError(null);
+
+    try {
+      const response = await fetch("/api/tiak-tiak/couriers", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        setCouriersError(typeof data?.error === "string" ? data.error : "Unable to load couriers");
+        return;
+      }
+
+      setCouriers(Array.isArray(data) ? (data as TiakCourierProfile[]) : []);
+    } catch {
+      setCouriersError("Unable to load couriers");
+    } finally {
+      setCouriersLoading(false);
+    }
+  }, []);
+
+  const refreshMyProfile = useCallback(async () => {
+    if (!isCourierOrAdmin || !isLoggedIn) {
+      setMyProfile(null);
+      return;
+    }
+
+    setProfileLoading(true);
+    setProfileError(null);
+
+    try {
+      const response = await fetch("/api/tiak-tiak/couriers/me", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setProfileError(typeof data?.error === "string" ? data.error : "Unable to load profile");
+        return;
+      }
+
+      const profile = (data ?? null) as TiakCourierProfile | null;
+      setMyProfile(profile);
+
+      if (profile) {
+        setProfileCities(profile.cities.join(", "));
+        setProfileAreas(profile.areas.join(", "));
+        setProfileVehicleType(profile.vehicleType ?? "");
+        setProfileMaxWeightKg(profile.maxWeightKg ? String(profile.maxWeightKg) : "");
+        setProfileHours(profile.availableHours ?? "");
+        setProfileIsActive(profile.isActive);
+      }
+    } catch {
+      setProfileError("Unable to load profile");
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [isCourierOrAdmin, isLoggedIn]);
+
   useEffect(() => {
     refreshOpenDeliveries();
   }, [refreshOpenDeliveries]);
@@ -151,6 +229,14 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   useEffect(() => {
     refreshTrackedDeliveries();
   }, [refreshTrackedDeliveries]);
+
+  useEffect(() => {
+    refreshCouriers();
+  }, [refreshCouriers]);
+
+  useEffect(() => {
+    refreshMyProfile();
+  }, [refreshMyProfile]);
 
   const handleDeliveryUpdated = useCallback((updated: TiakDelivery) => {
     setTrackedDeliveries((current) => upsertDelivery(current, updated));
@@ -168,6 +254,58 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     handleDeliveryUpdated(created);
   }, [handleDeliveryUpdated, trackDeliveryId]);
 
+  async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!isCourierOrAdmin) {
+      setProfileError("Forbidden");
+      return;
+    }
+
+    setProfileLoading(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+
+    const cities = profileCities
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const areas = profileAreas
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    try {
+      const response = await fetch("/api/tiak-tiak/couriers/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isActive: profileIsActive,
+          cities,
+          areas,
+          vehicleType: profileVehicleType || null,
+          maxWeightKg: profileMaxWeightKg ? Number(profileMaxWeightKg) : null,
+          availableHours: profileHours || null,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setProfileError(typeof data?.error === "string" ? data.error : "Unable to save profile");
+        return;
+      }
+
+      const profile = data as TiakCourierProfile;
+      setMyProfile(profile);
+      setProfileSuccess(locale === "fr" ? "Profil mis a jour" : "Profile updated");
+      await refreshCouriers();
+    } catch {
+      setProfileError("Unable to save profile");
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
   const displayedTracked = useMemo(() => {
     if (!currentUserId) return [] as TiakDelivery[];
 
@@ -183,6 +321,85 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   return (
     <div className="space-y-8">
       <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+
+      {isCourierOrAdmin && (
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
+          <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Mon profil courier" : "My courier profile"}</h2>
+          <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleSaveProfile}>
+            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+              {locale === "fr" ? "Villes (separees par virgules)" : "Cities (comma separated)"}
+              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileCities} onChange={(event) => setProfileCities(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+              {locale === "fr" ? "Zones (separees par virgules)" : "Areas (comma separated)"}
+              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileAreas} onChange={(event) => setProfileAreas(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Vehicule" : "Vehicle"}
+              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileVehicleType} onChange={(event) => setProfileVehicleType(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Poids max (kg)" : "Max weight (kg)"}
+              <input type="number" min={1} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileMaxWeightKg} onChange={(event) => setProfileMaxWeightKg(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+              {locale === "fr" ? "Horaires" : "Available hours"}
+              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileHours} onChange={(event) => setProfileHours(event.target.value)} />
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs text-zinc-300 md:col-span-2">
+              <input type="checkbox" checked={profileIsActive} onChange={(event) => setProfileIsActive(event.target.checked)} />
+              {locale === "fr" ? "Profil actif" : "Profile active"}
+            </label>
+            <div className="md:col-span-2 flex items-center gap-3">
+              <button type="submit" disabled={profileLoading} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
+                {profileLoading ? (locale === "fr" ? "Envoi..." : "Saving...") : locale === "fr" ? "Enregistrer" : "Save"}
+              </button>
+              {profileError && <p className="text-sm text-rose-300">{profileError}</p>}
+              {profileSuccess && <p className="text-sm text-emerald-300">{profileSuccess}</p>}
+            </div>
+          </form>
+          {myProfile && (
+            <p className="mt-3 text-xs text-zinc-400">
+              {locale === "fr" ? "Derniere mise a jour" : "Last update"}: {new Date(myProfile.updatedAt).toLocaleString()}
+            </p>
+          )}
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">
+            {locale === "fr" ? "Coursiers disponibles" : "Available couriers"}
+          </h2>
+          <button
+            type="button"
+            onClick={refreshCouriers}
+            className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+          >
+            {locale === "fr" ? "Rafraichir" : "Refresh"}
+          </button>
+        </div>
+
+        {couriersLoading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+        {couriersError && <p className="text-sm text-rose-300">{couriersError}</p>}
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {couriers.map((profile) => (
+            <article key={profile.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
+              <p className="text-sm font-semibold text-white">{profile.courier.name ?? "Courier"}</p>
+              <p className="mt-1 text-xs text-zinc-400">{profile.vehicleType ?? "-"}</p>
+              <p className="mt-2 text-xs text-zinc-300">Cities: {profile.cities.length ? profile.cities.join(", ") : "-"}</p>
+              <p className="mt-1 text-xs text-zinc-300">Areas: {profile.areas.length ? profile.areas.join(", ") : "-"}</p>
+            </article>
+          ))}
+
+          {!couriersLoading && couriers.length === 0 && (
+            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
+              {locale === "fr" ? "Aucun courier actif." : "No active courier profile."}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

@@ -125,6 +125,14 @@ enum PrestaBookingStatus {
   REJECTED
 }
 
+enum PrestaNeedStatus {
+  OPEN
+  IN_REVIEW
+  ACCEPTED
+  CLOSED
+  CANCELED
+}
+
 enum TiakDeliveryStatus {
   REQUESTED
   ACCEPTED
@@ -195,9 +203,11 @@ model User {
   prestaServices            PrestaService[]
   prestaBookingsAsCustomer  PrestaBooking[] @relation("PrestaBookingCustomer")
   prestaBookingsAsProvider  PrestaBooking[] @relation("PrestaBookingProvider")
+  prestaNeeds               PrestaNeed[]    @relation("PrestaNeedCustomer")
   disputesOpened            Dispute[]
   tiakDeliveriesAsCustomer  TiakDelivery[]      @relation("TiakDeliveryCustomer")
   tiakDeliveriesAsCourier   TiakDelivery[]      @relation("TiakDeliveryCourier")
+  tiakCourierProfile        TiakCourierProfile?
   tiakDeliveryEvents        TiakDeliveryEvent[] @relation("TiakDeliveryEventActor")
 }
 
@@ -289,10 +299,11 @@ model Store {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  products      Product[]
-  categories    StoreCategory[]
-  gpTrips       GpTrip[]
+  products       Product[]
+  categories     StoreCategory[]
+  gpTrips        GpTrip[]
   prestaServices PrestaService[]
+  prestaNeeds    PrestaNeed[]
 }
 
 model Category {
@@ -592,6 +603,29 @@ model PrestaBooking {
   @@index([orderId])
 }
 
+model PrestaNeed {
+  id            String          @id @default(cuid())
+  customerId    String
+  storeId       String?
+  title         String
+  description   String
+  city          String?
+  area          String?
+  budgetCents   Int?
+  currency      String          @default("XOF")
+  preferredDate DateTime?
+  status        PrestaNeedStatus @default(OPEN)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  customer User   @relation("PrestaNeedCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  store    Store? @relation(fields: [storeId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([storeId, status])
+}
+
 model OrderEvent {
   id        String      @id @default(cuid())
   orderId   String
@@ -607,6 +641,23 @@ model OrderEvent {
 }
 
 
+
+model TiakCourierProfile {
+  id             String   @id @default(cuid())
+  courierId      String   @unique
+  isActive       Boolean  @default(true)
+  cities         String[] @default([])
+  areas          String[] @default([])
+  vehicleType    String?
+  maxWeightKg    Int?
+  availableHours String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  courier User @relation(fields: [courierId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, updatedAt])
+}
 
 model TiakDelivery {
   id             String             @id @default(cuid())
