@@ -125,6 +125,16 @@ enum PrestaBookingStatus {
   REJECTED
 }
 
+enum TiakDeliveryStatus {
+  REQUESTED
+  ACCEPTED
+  PICKED_UP
+  DELIVERED
+  COMPLETED
+  CANCELED
+  REJECTED
+}
+
 enum InquiryStatus {
   OPEN
   CLOSED
@@ -186,6 +196,9 @@ model User {
   prestaBookingsAsCustomer  PrestaBooking[] @relation("PrestaBookingCustomer")
   prestaBookingsAsProvider  PrestaBooking[] @relation("PrestaBookingProvider")
   disputesOpened            Dispute[]
+  tiakDeliveriesAsCustomer  TiakDelivery[]      @relation("TiakDeliveryCustomer")
+  tiakDeliveriesAsCourier   TiakDelivery[]      @relation("TiakDeliveryCourier")
+  tiakDeliveryEvents        TiakDeliveryEvent[] @relation("TiakDeliveryEventActor")
 }
 
 model UserAddress {
@@ -357,8 +370,9 @@ model Order {
   items    OrderItem[]
   payment  Payment?
   payouts  Payout[]
-  events   OrderEvent[]
-  messages OrderMessage[]
+  events         OrderEvent[]
+  messages       OrderMessage[]
+  tiakDeliveries TiakDelivery[]
 
   @@index([userId])
   @@index([sellerId])
@@ -593,6 +607,48 @@ model OrderEvent {
 }
 
 
+
+model TiakDelivery {
+  id             String             @id @default(cuid())
+  customerId     String
+  courierId      String?
+  status         TiakDeliveryStatus @default(REQUESTED)
+  pickupAddress  String
+  dropoffAddress String
+  note           String?
+  priceCents     Int?
+  currency       String             @default("XOF")
+  paymentMethod  PaymentMethod?
+  orderId        String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  customer User  @relation("TiakDeliveryCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  courier  User? @relation("TiakDeliveryCourier", fields: [courierId], references: [id], onDelete: SetNull)
+  order    Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  events   TiakDeliveryEvent[]
+
+  @@index([customerId, status, createdAt])
+  @@index([courierId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([orderId])
+}
+
+model TiakDeliveryEvent {
+  id         String             @id @default(cuid())
+  deliveryId String
+  status     TiakDeliveryStatus
+  note       String?
+  proofUrl   String?
+  createdAt  DateTime           @default(now())
+  actorId    String
+
+  delivery TiakDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  actor    User         @relation("TiakDeliveryEventActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId, createdAt])
+  @@index([actorId, createdAt])
+}
 model Dispute {
   id          String        @id @default(cuid())
   vertical    String

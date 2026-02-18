@@ -61,7 +61,7 @@ export const VERTICAL_ACCESS_RULES: Record<VerticalId, VerticalAccessRules> = {
     kycRequiredForPublishing: true,
     contact: {
       lockedByDefault: true,
-      unlockStatusHint: "CONFIRMED|COMPLETED|DELIVERED",
+      unlockStatusHint: "ACCEPTED|PICKED_UP|DELIVERED|COMPLETED",
     },
   },
 };

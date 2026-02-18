@@ -30,7 +30,9 @@ function hasRequiredDelegates(client: PrismaClient) {
     "userAddress" in runtimeClient &&
     "userCart" in runtimeClient &&
     "userCartItem" in runtimeClient &&
-    "dispute" in runtimeClient
+    "dispute" in runtimeClient &&
+    "tiakDelivery" in runtimeClient &&
+    "tiakDeliveryEvent" in runtimeClient
   );
 }
 
