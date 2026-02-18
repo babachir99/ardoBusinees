@@ -75,6 +75,7 @@ enum PaymentMethod {
 
 enum PayoutStatus {
   PENDING
+  HOLD
   PAID
   FAILED
 }
@@ -137,6 +138,13 @@ enum OfferStatus {
   EXPIRED
 }
 
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -177,6 +185,7 @@ model User {
   prestaServices            PrestaService[]
   prestaBookingsAsCustomer  PrestaBooking[] @relation("PrestaBookingCustomer")
   prestaBookingsAsProvider  PrestaBooking[] @relation("PrestaBookingProvider")
+  disputesOpened            Dispute[]
 }
 
 model UserAddress {
@@ -583,6 +592,24 @@ model OrderEvent {
   @@index([status])
 }
 
+
+model Dispute {
+  id          String        @id @default(cuid())
+  vertical    String
+  referenceId String
+  reason      String
+  status      DisputeStatus @default(OPEN)
+  openedById  String
+  resolvedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  openedBy User @relation(fields: [openedById], references: [id], onDelete: Cascade)
+
+  @@index([openedById, status, createdAt])
+  @@index([referenceId])
+  @@index([vertical, status])
+}
 model Account {
   id                String  @id @default(cuid())
   userId            String

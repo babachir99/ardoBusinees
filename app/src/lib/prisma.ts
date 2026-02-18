@@ -29,7 +29,8 @@ function hasRequiredDelegates(client: PrismaClient) {
     "prestaBooking" in runtimeClient &&
     "userAddress" in runtimeClient &&
     "userCart" in runtimeClient &&
-    "userCartItem" in runtimeClient
+    "userCartItem" in runtimeClient &&
+    "dispute" in runtimeClient
   );
 }
 

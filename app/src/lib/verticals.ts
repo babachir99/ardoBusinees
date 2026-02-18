@@ -1,4 +1,4 @@
-﻿export const Vertical = {
+export const Vertical = {
   SHOP: "SHOP",
   PRESTA: "PRESTA",
   GP: "GP",
@@ -73,4 +73,7 @@ export function getVerticalByStoreSlug(slug: string | null | undefined): Vertica
 
 export function getVerticalRules(vertical: VerticalId): VerticalAccessRules {
   return VERTICAL_ACCESS_RULES[vertical];
+}
+export function isVertical(value: unknown): value is VerticalId {
+  return typeof value === "string" && Object.values(Vertical).includes(value as VerticalId);
 }
