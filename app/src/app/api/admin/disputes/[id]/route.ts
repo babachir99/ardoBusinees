@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { DisputeStatus, PayoutStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical } from "@/lib/verticals";
 
-function normalizeStatus(value: unknown): DisputeStatus | null {
+const allDisputeStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"] as const;
+const blockingStatuses = ["OPEN", "IN_REVIEW"] as const;
+
+type DisputeStatusValue = (typeof allDisputeStatuses)[number];
+
+function normalizeStatus(value: unknown): DisputeStatusValue | null {
   const status = String(value ?? "").trim().toUpperCase();
   if (!status) return null;
-  return Object.values(DisputeStatus).includes(status as DisputeStatus)
-    ? (status as DisputeStatus)
-    : null;
+  if ((allDisputeStatuses as readonly string[]).includes(status)) {
+    return status as DisputeStatusValue;
+  }
+  return null;
 }
 
 export async function PATCH(
@@ -41,36 +46,43 @@ export async function PATCH(
         throw new Error("DISPUTE_NOT_FOUND");
       }
 
+      if (dispute.status === "RESOLVED" && nextStatus !== "RESOLVED") {
+        throw new Error("DISPUTE_ALREADY_RESOLVED");
+      }
+
       const updated = await tx.dispute.update({
         where: { id: dispute.id },
         data: {
           status: nextStatus,
-          resolvedAt: nextStatus === DisputeStatus.RESOLVED ? new Date() : null,
+          resolvedAt:
+            nextStatus === "RESOLVED"
+              ? (dispute.resolvedAt ?? new Date())
+              : dispute.resolvedAt,
         },
       });
 
       let payoutReleasedCount = 0;
 
       if (
-        nextStatus === DisputeStatus.RESOLVED &&
+        nextStatus === "RESOLVED" &&
         (dispute.vertical === Vertical.SHOP || dispute.vertical === Vertical.PRESTA)
       ) {
-        const remainingOpenForReference = await tx.dispute.count({
+        const remainingBlockingForReference = await tx.dispute.count({
           where: {
             referenceId: dispute.referenceId,
-            status: DisputeStatus.OPEN,
+            status: { in: ["OPEN", "IN_REVIEW"] },
             id: { not: dispute.id },
           },
         });
 
-        if (remainingOpenForReference === 0) {
+        if (remainingBlockingForReference === 0) {
           const releaseResult = await tx.payout.updateMany({
             where: {
               orderId: dispute.referenceId,
-              status: PayoutStatus.HOLD,
+              status: "HOLD",
             },
             data: {
-              status: PayoutStatus.PENDING,
+              status: "PENDING",
             },
           });
 
@@ -88,6 +100,13 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof Error && error.message === "DISPUTE_NOT_FOUND") {
       return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
+    }
+
+    if (error instanceof Error && error.message === "DISPUTE_ALREADY_RESOLVED") {
+      return NextResponse.json(
+        { error: "Resolved disputes cannot be moved back to another status." },
+        { status: 400 }
+      );
     }
 
     throw error;

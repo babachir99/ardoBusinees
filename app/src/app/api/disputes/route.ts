@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { DisputeStatus, PayoutStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, isVertical } from "@/lib/verticals";
+
+const blockingStatuses = ["OPEN", "IN_REVIEW"] as const;
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
@@ -15,7 +16,7 @@ function serializeDispute(dispute: {
   vertical: string;
   referenceId: string;
   reason: string;
-  status: DisputeStatus;
+  status: string;
   openedById: string;
   resolvedAt: Date | null;
   createdAt: Date;
@@ -43,7 +44,7 @@ export async function GET() {
   const disputes = await prisma.dispute.findMany({
     where: {
       openedById: session.user.id,
-      status: DisputeStatus.OPEN,
+      status: "OPEN",
     },
     orderBy: [{ createdAt: "desc" }],
     select: {
@@ -88,13 +89,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const isAdmin = session.user.role === "ADMIN";
+
   try {
     const created = await prisma.$transaction(async (tx) => {
       const existingOpen = await tx.dispute.findFirst({
         where: {
           openedById: session.user.id,
           referenceId,
-          status: DisputeStatus.OPEN,
+          status: { in: ["OPEN", "IN_REVIEW"] },
         },
         select: { id: true },
       });
@@ -105,23 +108,76 @@ export async function POST(request: NextRequest) {
 
       let payoutHoldCount = 0;
 
-      if (verticalValue === Vertical.SHOP || verticalValue === Vertical.PRESTA) {
+      if (verticalValue === Vertical.PRESTA) {
+        const booking = await tx.prestaBooking.findFirst({
+          where: { orderId: referenceId },
+          select: {
+            id: true,
+            customerId: true,
+            providerId: true,
+          },
+        });
+
+        if (!booking) {
+          throw new Error("REFERENCE_NOT_FOUND");
+        }
+
+        const canOpenDispute =
+          isAdmin ||
+          booking.customerId === session.user.id ||
+          booking.providerId === session.user.id;
+
+        if (!canOpenDispute) {
+          throw new Error("FORBIDDEN_REFERENCE");
+        }
+
+        const holdResult = await tx.payout.updateMany({
+          where: {
+            orderId: referenceId,
+            status: "PENDING",
+          },
+          data: {
+            status: "HOLD",
+          },
+        });
+
+        payoutHoldCount = holdResult.count;
+      }
+
+      if (verticalValue === Vertical.SHOP) {
         const order = await tx.order.findUnique({
           where: { id: referenceId },
-          select: { id: true },
+          select: {
+            id: true,
+            userId: true,
+            seller: {
+              select: {
+                userId: true,
+              },
+            },
+          },
         });
 
         if (!order) {
           throw new Error("REFERENCE_NOT_FOUND");
         }
 
+        const canOpenDispute =
+          isAdmin ||
+          order.userId === session.user.id ||
+          order.seller?.userId === session.user.id;
+
+        if (!canOpenDispute) {
+          throw new Error("FORBIDDEN_REFERENCE");
+        }
+
         const holdResult = await tx.payout.updateMany({
           where: {
-            orderId: order.id,
-            status: PayoutStatus.PENDING,
+            orderId: referenceId,
+            status: "PENDING",
           },
           data: {
-            status: PayoutStatus.HOLD,
+            status: "HOLD",
           },
         });
 
@@ -133,7 +189,7 @@ export async function POST(request: NextRequest) {
           vertical: verticalValue,
           referenceId,
           reason,
-          status: DisputeStatus.OPEN,
+          status: "OPEN",
           openedById: session.user.id,
         },
       });
@@ -154,7 +210,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "DISPUTE_ALREADY_OPEN") {
       return NextResponse.json(
-        { error: "An OPEN dispute already exists for this reference." },
+        { error: "An OPEN or IN_REVIEW dispute already exists for this reference." },
         { status: 409 }
       );
     }
@@ -163,6 +219,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Order reference not found for this vertical." },
         { status: 404 }
+      );
+    }
+
+    if (error instanceof Error && error.message === "FORBIDDEN_REFERENCE") {
+      return NextResponse.json(
+        { error: "You are not allowed to open a dispute for this reference." },
+        { status: 403 }
       );
     }
 
