@@ -200,6 +200,14 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
       const data = await response.json().catch(() => null);
       if (!response.ok) {
+        if (response.status === 403) {
+          setProfileError(
+            locale === "fr"
+              ? "Profil courier reserve aux comptes COURIER/ADMIN."
+              : "Courier profile is available for COURIER/ADMIN accounts only."
+          );
+          return;
+        }
         setProfileError(typeof data?.error === "string" ? data.error : "Unable to load profile");
         return;
       }
@@ -291,6 +299,14 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
       const data = await response.json().catch(() => null);
       if (!response.ok) {
+        if (response.status === 403) {
+          setProfileError(
+            locale === "fr"
+              ? "KYC requis: complete ton KYC courier avant de publier ton profil."
+              : "KYC required: complete courier KYC before publishing your profile."
+          );
+          return;
+        }
         setProfileError(typeof data?.error === "string" ? data.error : "Unable to save profile");
         return;
       }
@@ -324,7 +340,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
       {isCourierOrAdmin && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Mon profil courier" : "My courier profile"}</h2>
+          <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Espace livreur" : "Courier space"}</h2>
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleSaveProfile}>
             <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
               {locale === "fr" ? "Villes (separees par virgules)" : "Cities (comma separated)"}
@@ -390,6 +406,9 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               <p className="mt-1 text-xs text-zinc-400">{profile.vehicleType ?? "-"}</p>
               <p className="mt-2 text-xs text-zinc-300">Cities: {profile.cities.length ? profile.cities.join(", ") : "-"}</p>
               <p className="mt-1 text-xs text-zinc-300">Areas: {profile.areas.length ? profile.areas.join(", ") : "-"}</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {locale === "fr" ? "Mise a jour" : "Updated"}: {new Date(profile.updatedAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
+              </p>
             </article>
           ))}
 

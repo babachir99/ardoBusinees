@@ -61,6 +61,13 @@ function shortDescription(value: string | null) {
   return `${value.slice(0, 107)}...`;
 }
 
+function formatDateLabel(value: string | null, locale: string) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US");
+}
+
 export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Props) {
   const [tab, setTab] = useState<"offers" | "needs">("offers");
 
@@ -89,6 +96,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
   const [needError, setNeedError] = useState<string | null>(null);
   const [needSuccess, setNeedSuccess] = useState<string | null>(null);
   const [submittingNeed, setSubmittingNeed] = useState(false);
+  const [showNeedForm, setShowNeedForm] = useState(false);
 
   const [bookingService, setBookingService] = useState<PrestaService | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
@@ -126,7 +134,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     setError(null);
 
     try {
-      const response = await fetch("/api/presta/needs", {
+      const response = await fetch("/api/presta/needs?take=24", {
         method: "GET",
         cache: "no-store",
       });
@@ -228,6 +236,19 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       return;
     }
 
+    const normalizedTitle = needTitle.trim();
+    const normalizedDescription = needDescription.trim();
+
+    if (!normalizedTitle || !normalizedDescription) {
+      setNeedError(locale === "fr" ? "Titre et description obligatoires" : "Title and description are required");
+      return;
+    }
+
+    if (normalizedTitle.length > 140 || normalizedDescription.length > 3000) {
+      setNeedError(locale === "fr" ? "Texte trop long" : "Text is too long");
+      return;
+    }
+
     const parsedBudget = needBudget ? Number(needBudget) : null;
     const parsedBudgetValue = parsedBudget ?? undefined;
     if (parsedBudgetValue !== undefined && (!Number.isFinite(parsedBudgetValue) || parsedBudgetValue < 0)) {
@@ -242,8 +263,8 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: needTitle,
-          description: needDescription,
+          title: normalizedTitle,
+          description: normalizedDescription,
           city: needCity || undefined,
           area: needArea || undefined,
           budgetCents: parsedBudgetValue !== undefined ? Math.trunc(parsedBudgetValue) : undefined,
@@ -267,12 +288,25 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       setNeedCurrency("XOF");
       setNeedPreferredDate("");
       setNeedSuccess(locale === "fr" ? "Besoin publie" : "Need published");
+      setShowNeedForm(false);
       await loadNeeds();
     } catch {
       setNeedError("Need publish failed");
     } finally {
       setSubmittingNeed(false);
     }
+  }
+
+  function openNeedComposer() {
+    if (!isLoggedIn) {
+      const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+      return;
+    }
+
+    setNeedError(null);
+    setNeedSuccess(null);
+    setShowNeedForm((current) => !current);
   }
 
   async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
@@ -395,50 +429,111 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
         </section>
       )}
 
-      {tab === "needs" && isLoggedIn && (
+      {tab === "needs" && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <h2 className="text-base font-semibold text-white">{locale === "fr" ? "Publier un besoin" : "Publish a need"}</h2>
-          <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateNeed}>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Titre
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needTitle} onChange={(event) => setNeedTitle(event.target.value)} required />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Budget
-              <input type="number" min={0} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needBudget} onChange={(event) => setNeedBudget(event.target.value)} />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-1 text-xs text-zinc-300">
-              Description
-              <textarea className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white" value={needDescription} onChange={(event) => setNeedDescription(event.target.value)} required />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Ville
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCity} onChange={(event) => setNeedCity(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Zone
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needArea} onChange={(event) => setNeedArea(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Devise
-              <select className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCurrency} onChange={(event) => setNeedCurrency(event.target.value)}>
-                <option value="XOF">XOF</option>
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              {locale === "fr" ? "Date souhaitee" : "Preferred date"}
-              <input type="date" className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needPreferredDate} onChange={(event) => setNeedPreferredDate(event.target.value)} />
-            </label>
-            <div className="md:col-span-2 flex items-center gap-3">
-              <button type="submit" disabled={submittingNeed} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                {submittingNeed ? "Envoi..." : locale === "fr" ? "Publier" : "Publish"}
-              </button>
-              {needError && <p className="text-sm text-rose-300">{needError}</p>}
-              {needSuccess && <p className="text-sm text-emerald-300">{needSuccess}</p>}
-            </div>
-          </form>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-white">
+              {locale === "fr" ? "Publier un besoin" : "Publish a need"}
+            </h2>
+            <button
+              type="button"
+              onClick={openNeedComposer}
+              className="rounded-lg bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
+            >
+              {locale === "fr" ? "Publier un besoin" : "Publish a need"}
+            </button>
+          </div>
+
+          {!isLoggedIn && (
+            <p className="mt-3 text-xs text-zinc-400">
+              {locale === "fr"
+                ? "Connecte-toi pour publier un besoin."
+                : "Sign in to publish a need."}
+            </p>
+          )}
+
+          {showNeedForm && isLoggedIn && (
+            <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateNeed}>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                Titre
+                <input
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needTitle}
+                  onChange={(event) => setNeedTitle(event.target.value)}
+                  required
+                  maxLength={140}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                Budget
+                <input
+                  type="number"
+                  min={0}
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needBudget}
+                  onChange={(event) => setNeedBudget(event.target.value)}
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-1 text-xs text-zinc-300">
+                Description
+                <textarea
+                  className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+                  value={needDescription}
+                  onChange={(event) => setNeedDescription(event.target.value)}
+                  required
+                  maxLength={3000}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                Ville
+                <input
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needCity}
+                  onChange={(event) => setNeedCity(event.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                Zone
+                <input
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needArea}
+                  onChange={(event) => setNeedArea(event.target.value)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                Devise
+                <select
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needCurrency}
+                  onChange={(event) => setNeedCurrency(event.target.value)}
+                >
+                  <option value="XOF">XOF</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                {locale === "fr" ? "Date souhaitee" : "Preferred date"}
+                <input
+                  type="date"
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={needPreferredDate}
+                  onChange={(event) => setNeedPreferredDate(event.target.value)}
+                />
+              </label>
+              <div className="md:col-span-2 flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={submittingNeed}
+                  className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+                >
+                  {submittingNeed ? "Envoi..." : locale === "fr" ? "Publier" : "Publish"}
+                </button>
+                {needError && <p className="text-sm text-rose-300">{needError}</p>}
+                {needSuccess && <p className="text-sm text-emerald-300">{needSuccess}</p>}
+              </div>
+            </form>
+          )}
         </section>
       )}
 
@@ -508,6 +603,8 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   <p>{locale === "fr" ? "Ville" : "City"}: {need.city ?? "-"}</p>
                   <p>{locale === "fr" ? "Zone" : "Area"}: {need.area ?? "-"}</p>
                   <p>{locale === "fr" ? "Budget" : "Budget"}: {formatAmount(need.budgetCents, need.currency)}</p>
+                  <p>{locale === "fr" ? "Date souhaitee" : "Preferred date"}: {formatDateLabel(need.preferredDate, locale)}</p>
+                  <p>{locale === "fr" ? "Publie le" : "Published"}: {formatDateLabel(need.createdAt, locale)}</p>
                 </div>
               </article>
             ))}
