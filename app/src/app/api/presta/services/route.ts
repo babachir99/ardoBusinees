@@ -10,6 +10,15 @@ const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
 const unlockStatusHint = rules.contact.unlockStatusHint;
 
+function hasPrestaDelegates() {
+  const runtimePrisma = prisma as unknown as {
+    prestaService?: unknown;
+    prestaBooking?: unknown;
+  };
+
+  return Boolean(runtimePrisma.prestaService && runtimePrisma.prestaBooking);
+}
+
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -35,6 +44,13 @@ function parsePaymentMethods(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!hasPrestaDelegates()) {
+    return NextResponse.json(
+      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
+      { status: 503 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const q = normalizeString(searchParams.get("q"));
   const city = normalizeString(searchParams.get("city"));
@@ -115,6 +131,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!hasPrestaDelegates()) {
+    return NextResponse.json(
+      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
+      { status: 503 }
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

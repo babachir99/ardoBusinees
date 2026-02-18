@@ -10,6 +10,15 @@ const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
 const unlockStatusHint = rules.contact.unlockStatusHint;
 
+function hasPrestaDelegates() {
+  const runtimePrisma = prisma as unknown as {
+    prestaService?: unknown;
+    prestaBooking?: unknown;
+  };
+
+  return Boolean(runtimePrisma.prestaService && runtimePrisma.prestaBooking);
+}
+
 function normalizeStatus(value: unknown): PrestaBookingStatus | null {
   const raw = String(value ?? "").trim().toUpperCase();
   if (!raw) return null;
@@ -23,6 +32,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!hasPrestaDelegates()) {
+    return NextResponse.json(
+      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
+      { status: 503 }
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

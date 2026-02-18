@@ -9,6 +9,15 @@ import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
 const unlockStatusHint = rules.contact.unlockStatusHint;
+
+function hasPrestaDelegates() {
+  const runtimePrisma = prisma as unknown as {
+    prestaService?: unknown;
+    prestaBooking?: unknown;
+  };
+
+  return Boolean(runtimePrisma.prestaService && runtimePrisma.prestaBooking);
+}
 const contactUnlockStatuses: PrestaBookingStatus[] = [
   PrestaBookingStatus.CONFIRMED,
   PrestaBookingStatus.PAID,
@@ -43,6 +52,13 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!hasPrestaDelegates()) {
+    return NextResponse.json(
+      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
+      { status: 503 }
+    );
+  }
+
   const { id } = await params;
   const session = await getServerSession(authOptions);
 
