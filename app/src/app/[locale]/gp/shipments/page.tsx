@@ -82,7 +82,7 @@ export default async function GpShipmentsPage({
           </p>
         </section>
 
-        <GpShipmentsTimelineClient locale={locale} />
+        <GpShipmentsTimelineClient locale={locale} currentUserId={session.user.id} currentUserRole={session.user.role ?? null} />
       </main>
 
       <Footer />

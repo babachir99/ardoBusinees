@@ -15,6 +15,29 @@ function normalizeNote(value: unknown) {
   return text.slice(0, 1000);
 }
 
+function normalizeProofUrl(value: unknown) {
+  if (value === undefined || value === null) {
+    return { value: null as string | null, invalid: false };
+  }
+
+  const text = String(value).trim();
+  if (!text) {
+    return { value: null as string | null, invalid: false };
+  }
+
+  if (!text.startsWith("/uploads/")) {
+    return { value: null as string | null, invalid: true };
+  }
+
+  return { value: text.slice(0, 500), invalid: false };
+}
+
+function normalizeProofType(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  return text.slice(0, 100);
+}
+
 function isAllowedRole(role: string | undefined) {
   return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER", "CUSTOMER"].includes(role ?? "");
 }
@@ -120,6 +143,8 @@ export async function GET(
         status: true,
         createdAt: true,
         note: true,
+        proofUrl: true,
+        proofType: true,
       },
     });
 
@@ -156,6 +181,12 @@ export async function POST(
   const requestedStatus = String((body as { status?: unknown }).status ?? "").toUpperCase();
   const providedCode = String((body as { code?: unknown }).code ?? "").trim();
   const note = normalizeNote((body as { note?: unknown }).note);
+  const parsedProof = normalizeProofUrl((body as { proofUrl?: unknown }).proofUrl);
+  const proofType = normalizeProofType((body as { proofType?: unknown }).proofType);
+
+  if (parsedProof.invalid) {
+    return errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path.");
+  }
 
   if (!orderedStatuses.includes(requestedStatus as (typeof orderedStatuses)[number])) {
     return errorResponse(400, "INVALID_STATUS", "Invalid tracking status.");
@@ -194,7 +225,14 @@ export async function POST(
           update: (args: unknown) => Promise<{ id: string; code: string; status: string }>;
         };
         gpShipmentEvent: {
-          create: (args: unknown) => Promise<{ id: string; status: string; createdAt: Date; note: string | null }>;
+          create: (args: unknown) => Promise<{
+            id: string;
+            status: string;
+            createdAt: Date;
+            note: string | null;
+            proofUrl: string | null;
+            proofType: string | null;
+          }>;
         };
       };
 
@@ -209,6 +247,8 @@ export async function POST(
           shipmentId: shipment.id,
           status: requestedStatus,
           note,
+          proofUrl: parsedProof.value,
+          proofType,
           actorId: session.user.id,
         },
         select: {
@@ -216,6 +256,8 @@ export async function POST(
           status: true,
           createdAt: true,
           note: true,
+          proofUrl: true,
+          proofType: true,
         },
       });
 

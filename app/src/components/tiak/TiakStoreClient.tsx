@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
+import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryCard from "@/components/tiak/TiakDeliveryCard";
 import { type TiakCourierProfile, type TiakDelivery } from "@/components/tiak/types";
 
@@ -337,6 +338,13 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   return (
     <div className="space-y-8">
       <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+
+      <TiakCourierAvailabilityPanel
+        locale={locale}
+        isLoggedIn={isLoggedIn}
+        currentUserRole={currentUserRole}
+        onRequireLogin={requestLogin}
+      />
 
       {isCourierOrAdmin && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">

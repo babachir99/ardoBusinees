@@ -581,6 +581,8 @@ model GpShipmentEvent {
   shipmentId String
   status     GpShipmentStatus
   note       String?
+  proofUrl   String?
+  proofType  String?
   actorId    String
   createdAt  DateTime         @default(now())
 

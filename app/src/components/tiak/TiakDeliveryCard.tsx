@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import TiakCourierActions from "@/components/tiak/TiakCourierActions";
+import TiakCourierMatcher from "@/components/tiak/TiakCourierMatcher";
 import TiakDeliveryDetails from "@/components/tiak/TiakDeliveryDetails";
 import { type TiakDelivery } from "@/components/tiak/types";
 
@@ -175,6 +176,19 @@ export default function TiakDeliveryCard({
       </div>
 
       {customerActionError && <p className="mt-2 text-xs text-rose-300">{customerActionError}</p>}
+
+      <TiakCourierMatcher
+        locale={locale}
+        delivery={delivery}
+        isLoggedIn={isLoggedIn}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
+        onRequireLogin={onRequireLogin}
+        onAssigned={(updated) => {
+          onTrackDelivery(updated.id);
+          onDeliveryUpdated(updated);
+        }}
+      />
 
       <TiakCourierActions
         locale={locale}
