@@ -212,6 +212,8 @@ model User {
   prestaBookingsAsProvider  PrestaBooking[] @relation("PrestaBookingProvider")
   prestaNeeds               PrestaNeed[]    @relation("PrestaNeedCustomer")
   prestaProposals          PrestaProposal[] @relation("PrestaProposalProvider")
+  prestaReviewsAuthored    Review[]         @relation("PrestaReviewAuthor")
+  prestaReviewsReceived    Review[]         @relation("PrestaReviewTarget")
   disputesOpened            Dispute[]
   tiakDeliveriesAsCustomer  TiakDelivery[]      @relation("TiakDeliveryCustomer")
   tiakDeliveriesAsCourier   TiakDelivery[]      @relation("TiakDeliveryCourier")
@@ -608,6 +610,7 @@ model PrestaBooking {
   provider       User           @relation("PrestaBookingProvider", fields: [providerId], references: [id], onDelete: Cascade)
   proposal       PrestaProposal? @relation("PrestaProposalBooking", fields: [proposalId], references: [id], onDelete: SetNull)
   linkedProposal PrestaProposal? @relation("PrestaBookingByProposalId")
+  reviews        Review[]
 
   @@index([serviceId, status, createdAt])
   @@index([customerId, status, createdAt])
@@ -660,6 +663,22 @@ model PrestaProposal {
   @@index([needId, status, createdAt])
   @@index([serviceId])
   @@index([providerId, createdAt])
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  authorId     String
+  targetUserId String
+  bookingId    String
+  rating       Int
+  comment      String?
+
+  author     User         @relation("PrestaReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  targetUser User         @relation("PrestaReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  booking    PrestaBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([authorId, bookingId])
 }
 
 model OrderEvent {

@@ -122,6 +122,7 @@ export default function PrestaStoreClient({
   const [submittingNeed, setSubmittingNeed] = useState(false);
   const [showNeedForm, setShowNeedForm] = useState(false);
   const [selectedNeedForProposals, setSelectedNeedForProposals] = useState<string | null>(null);
+  const [showProviderProposalsPanel, setShowProviderProposalsPanel] = useState(false);
 
   const [bookingService, setBookingService] = useState<BookingTarget | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
@@ -654,8 +655,16 @@ export default function PrestaStoreClient({
           </div>
         ) : (
           <div className="space-y-4">
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowProviderProposalsPanel(true)}
+                className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
+              >
+                {locale === "fr" ? "Mes propositions" : "My proposals"}
+              </button>
+            </div>
             <PrestaProviderMatchingPanel locale={locale} isLoggedIn={isLoggedIn} enabled={canPublish} onRequireLogin={goToLogin} />
-            <PrestaProviderProposalsPanel locale={locale} enabled={canPublish} />
           </div>
         )}
       </section>
@@ -667,6 +676,12 @@ export default function PrestaStoreClient({
             setSelectedNeedForProposals(null);
             await loadNeeds();
           }}
+        />
+      )}
+
+      {showProviderProposalsPanel && (
+        <PrestaProviderProposalsPanel
+          onClose={() => setShowProviderProposalsPanel(false)}
         />
       )}
 

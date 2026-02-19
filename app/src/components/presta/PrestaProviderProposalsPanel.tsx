@@ -1,42 +1,24 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type Proposal = {
   id: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN";
   createdAt: string;
-  message: string | null;
-  need: {
+  service?: {
     id: string;
     title: string;
-    status: string;
-    city: string | null;
-    area: string | null;
-    customer: {
-      id: string;
-      name: string | null;
-      image: string | null;
-    };
   };
-  service: {
+  need?: {
     id: string;
     title: string;
-    basePriceCents: number;
-    currency: string;
-    city: string | null;
   };
-  booking: {
-    id: string;
-    status: string;
-    orderId: string | null;
-    createdAt: string;
-  } | null;
 };
 
 type Props = {
-  locale: string;
-  enabled: boolean;
+  onClose: () => void;
 };
 
 function toErrorMessage(data: unknown, fallback: string) {
@@ -46,86 +28,142 @@ function toErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-export default function PrestaProviderProposalsPanel({ locale, enabled }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-
-  async function loadProposals() {
-    if (!enabled) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/presta/proposals?mine=1&take=60", {
-        method: "GET",
-        cache: "no-store",
-      });
-      const data = await response.json().catch(() => []);
-
-      if (!response.ok) {
-        setError(toErrorMessage(data, "Unable to load proposals"));
-        return;
-      }
-
-      setProposals(Array.isArray(data) ? data : []);
-    } catch {
-      setError("Unable to load proposals");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadProposals();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  if (!enabled) return null;
-
-  return (
-    <section className="space-y-3 rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-white">
-          {locale === "fr" ? "Mes propositions" : "My proposals"}
-        </h2>
-        <button
-          type="button"
-          onClick={loadProposals}
-          className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
-        >
-          {locale === "fr" ? "Rafraichir" : "Refresh"}
-        </button>
-      </div>
-
-      {loading && <p className="text-sm text-zinc-300">Chargement...</p>}
-      {error && <p className="text-sm text-rose-300">{error}</p>}
-
-      {!loading && !error && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {proposals.map((proposal) => (
-            <article key={proposal.id} className="rounded-xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-200">
-              <p className="font-semibold text-white">{proposal.need.title}</p>
-              <p className="mt-1 text-zinc-400">{proposal.service.title}</p>
-              <p className="mt-1 text-zinc-400">{proposal.need.customer.name ?? "Client"}</p>
-              <p className="mt-2 text-zinc-300">{proposal.status}</p>
-              {proposal.booking?.id && (
-                <p className="mt-1 text-zinc-400">
-                  Booking: {proposal.booking.id} ({proposal.booking.status})
-                </p>
-              )}
-            </article>
-          ))}
-
-          {!loading && proposals.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Aucune proposition pour le moment." : "No proposals yet."}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
+function formatDateLabel(value: string, locale: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US");
 }
 
+export default function PrestaProviderProposalsPanel({ onClose }: Props) {
+  const pathname = usePathname();
+  const locale = useMemo(() => (pathname?.startsWith("/fr") ? "fr" : "en"), [pathname]);
+
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setErrorMsg(null);
+
+      try {
+        const response = await fetch("/api/presta/proposals?mine=1", {
+          method: "GET",
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => null);
+
+        if (cancelled) return;
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setErrorMsg(locale === "fr" ? "Connecte-toi pour voir tes propositions." : "Sign in to view your proposals.");
+            return;
+          }
+
+          if (response.status === 403) {
+            setErrorMsg(locale === "fr" ? "Accès réservé prestataires." : "Access restricted to providers.");
+            return;
+          }
+
+          if (response.status === 503) {
+            setErrorMsg(locale === "fr" ? "Service indisponible." : "Service unavailable.");
+            return;
+          }
+
+          setErrorMsg(toErrorMessage(data, locale === "fr" ? "Erreur serveur." : "Server error."));
+          return;
+        }
+
+        setProposals(Array.isArray(data) ? (data as Proposal[]) : []);
+      } catch {
+        if (!cancelled) {
+          setErrorMsg(locale === "fr" ? "Erreur serveur." : "Server error.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locale]);
+
+  function goToLogin() {
+    const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/70 p-3 md:items-center" role="dialog" aria-modal="true">
+      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-zinc-900 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-white">
+            {locale === "fr" ? "Mes propositions" : "My proposals"}
+          </h3>
+          <button
+            type="button"
+            className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+            onClick={onClose}
+          >
+            {locale === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+
+        {loading && <p className="mt-3 text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+        {errorMsg && <p className="mt-3 text-sm text-rose-300">{errorMsg}</p>}
+
+        {!loading && !errorMsg && (
+          <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+            <table className="min-w-full divide-y divide-white/10 text-xs text-zinc-200">
+              <thead className="bg-zinc-950/70 text-zinc-400">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">{locale === "fr" ? "Service" : "Service"}</th>
+                  <th className="px-3 py-2 text-left font-medium">{locale === "fr" ? "Besoin" : "Need"}</th>
+                  <th className="px-3 py-2 text-left font-medium">{locale === "fr" ? "Statut" : "Status"}</th>
+                  <th className="px-3 py-2 text-left font-medium">{locale === "fr" ? "Date" : "Date"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10 bg-zinc-900/60">
+                {proposals.map((proposal) => (
+                  <tr key={proposal.id}>
+                    <td className="px-3 py-2 align-top text-white">{proposal.service?.title ?? "-"}</td>
+                    <td className="px-3 py-2 align-top">{proposal.need?.title ?? "-"}</td>
+                    <td className="px-3 py-2 align-top">{proposal.status}</td>
+                    <td className="px-3 py-2 align-top">{formatDateLabel(proposal.createdAt, locale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {proposals.length === 0 && (
+              <div className="px-3 py-4 text-xs text-zinc-400">
+                {locale === "fr" ? "Aucune proposition." : "No proposals."}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && errorMsg?.includes("Connecte") && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={goToLogin}
+              className="rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-zinc-950"
+            >
+              {locale === "fr" ? "Se connecter" : "Sign in"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
