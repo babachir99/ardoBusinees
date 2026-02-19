@@ -28,6 +28,67 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   const canAccessPartnerDashboard =
     canViewShop || canViewPresta || canViewGp || canViewTiak;
 
+  let gpKpis: {
+    tripsUpcoming: number;
+    shipmentsActive: number;
+    kilosSold: number;
+    revenuePendingCents: number;
+    currency: string;
+  } | null = null;
+
+  if (canViewGp && session?.user?.id) {
+    try {
+      const [tripsUpcoming, shipmentsActive, kilosSold, pendingRevenueRows] = await Promise.all([
+        prisma.gpTrip.count({
+          where: {
+            transporterId: session.user.id,
+            isActive: true,
+            status: "OPEN",
+            flightDate: { gte: new Date() },
+          },
+        }),
+        prisma.gpTripBooking.count({
+          where: {
+            transporterId: session.user.id,
+            status: { in: ["ACCEPTED", "CONFIRMED"] },
+          },
+        }),
+        prisma.gpTripBooking.aggregate({
+          _sum: { requestedKg: true },
+          where: {
+            transporterId: session.user.id,
+            status: { in: ["CONFIRMED", "COMPLETED", "DELIVERED"] },
+          },
+        }),
+        prisma.gpTripBooking.findMany({
+          where: {
+            transporterId: session.user.id,
+            status: { in: ["ACCEPTED", "CONFIRMED"] },
+          },
+          select: {
+            requestedKg: true,
+            trip: { select: { pricePerKgCents: true } },
+          },
+        }),
+      ]);
+
+      const revenuePendingCents = pendingRevenueRows.reduce((sum, row) => {
+        const pricePerKg = row.trip?.pricePerKgCents ?? 0;
+        return sum + row.requestedKg * pricePerKg;
+      }, 0);
+
+      gpKpis = {
+        tripsUpcoming,
+        shipmentsActive,
+        kilosSold: kilosSold._sum.requestedKg ?? 0,
+        revenuePendingCents,
+        currency: "XOF",
+      };
+    } catch {
+      gpKpis = null;
+    }
+  }
+
   if (!session || !canAccessPartnerDashboard) {
     return (
       <div className="min-h-screen bg-jonta text-zinc-100">
@@ -49,30 +110,6 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   }
 
   if (!canViewShop) {
-    const verticalCards = [
-      canViewPresta
-        ? {
-            title: "PRESTA block",
-            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
-            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
-          }
-        : null,
-      canViewGp
-        ? {
-            title: "GP block",
-            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
-            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
-          }
-        : null,
-      canViewTiak
-        ? {
-            title: "TIAK block",
-            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
-            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
-          }
-        : null,
-    ].filter((value): value is { title: string; subtitle: string; caption: string } => Boolean(value));
-
     return (
       <div className="min-h-screen bg-jonta text-zinc-100">
         <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
@@ -101,16 +138,49 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
-            {verticalCards.map((card) => (
-              <article
-                key={card.title}
-                className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6"
-              >
-                <h2 className="text-lg font-semibold text-white">{card.title} (coming next)</h2>
-                <p className="mt-2 text-sm text-zinc-300">{card.subtitle}</p>
-                <p className="mt-1 text-xs text-zinc-500">{card.caption}</p>
+            {canViewPresta && (
+              <article className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold text-white">PRESTA block (coming next)</h2>
+                <p className="mt-2 text-sm text-zinc-300">
+                  {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                </p>
               </article>
-            ))}
+            )}
+
+            {canViewGp && (
+              <article className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-white">JONTAADO GP</h2>
+                  <Link
+                    href="/stores/jontaado-gp"
+                    className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-white/50"
+                  >
+                    {locale === "fr" ? "Voir mes trajets" : "View my trips"}
+                  </Link>
+                </div>
+                <div className="mt-4 grid gap-2 text-xs text-zinc-300">
+                  <p>{locale === "fr" ? "Trips upcoming" : "Trips upcoming"}: <span className="text-white">{gpKpis?.tripsUpcoming ?? "?"}</span></p>
+                  <p>{locale === "fr" ? "Shipments active" : "Shipments active"}: <span className="text-white">{gpKpis?.shipmentsActive ?? "?"}</span></p>
+                  <p>{locale === "fr" ? "Kilos sold" : "Kilos sold"}: <span className="text-white">{gpKpis?.kilosSold ?? "?"}</span></p>
+                  <p>{locale === "fr" ? "Revenue pending" : "Revenue pending"}: <span className="text-white">{gpKpis ? formatMoney(gpKpis.revenuePendingCents, gpKpis.currency, locale) : "?"}</span></p>
+                </div>
+              </article>
+            )}
+
+            {canViewTiak && (
+              <article className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold text-white">TIAK block (coming next)</h2>
+                <p className="mt-2 text-sm text-zinc-300">
+                  {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                </p>
+              </article>
+            )}
           </section>
         </main>
 
@@ -875,13 +945,21 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
               )}
               {canViewGp && (
                 <article className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5">
-                  <h3 className="text-base font-semibold text-white">GP block (coming next)</h3>
-                  <p className="mt-2 text-sm text-zinc-300">
-                    {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {locale === "fr" ? "Acces a venir" : "Access coming soon"}
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-white">JONTAADO GP</h3>
+                    <Link
+                      href="/stores/jontaado-gp"
+                      className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-white/50"
+                    >
+                      {locale === "fr" ? "Voir mes trajets" : "View my trips"}
+                    </Link>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-xs text-zinc-300">
+                    <p>{locale === "fr" ? "Trips upcoming" : "Trips upcoming"}: <span className="text-white">{gpKpis?.tripsUpcoming ?? "?"}</span></p>
+                    <p>{locale === "fr" ? "Shipments active" : "Shipments active"}: <span className="text-white">{gpKpis?.shipmentsActive ?? "?"}</span></p>
+                    <p>{locale === "fr" ? "Kilos sold" : "Kilos sold"}: <span className="text-white">{gpKpis?.kilosSold ?? "?"}</span></p>
+                    <p>{locale === "fr" ? "Revenue pending" : "Revenue pending"}: <span className="text-white">{gpKpis ? formatMoney(gpKpis.revenuePendingCents, gpKpis.currency, locale) : "?"}</span></p>
+                  </div>
                 </article>
               )}
               {canViewTiak && (

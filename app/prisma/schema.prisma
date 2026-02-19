@@ -116,6 +116,14 @@ enum GpBookingStatus {
   REJECTED
 }
 
+enum GpShipmentStatus {
+  DROPPED_OFF
+  PICKED_UP
+  BOARDED
+  ARRIVED
+  DELIVERED
+}
+
 enum PrestaBookingStatus {
   PENDING
   CONFIRMED
@@ -212,6 +220,10 @@ model User {
   gpTrips                    GpTrip[]
   gpBookingsAsCustomer       GpTripBooking[]         @relation("GpBookingCustomer")
   gpBookingsAsTransporter    GpTripBooking[]         @relation("GpBookingTransporter")
+  gpShipmentsAsSender        GpShipment[]            @relation("GpShipmentSender")
+  gpShipmentsAsReceiver      GpShipment[]            @relation("GpShipmentReceiver")
+  gpShipmentsAsTransporter   GpShipment[]            @relation("GpShipmentTransporter")
+  gpShipmentEvents           GpShipmentEvent[]       @relation("GpShipmentEventActor")
   transporterReviewsReceived TransporterReview[]     @relation("TransporterReviewTransporter")
   transporterReviewsGiven    TransporterReview[]     @relation("TransporterReviewAuthor")
   prestaServices             PrestaService[]
@@ -502,6 +514,7 @@ model GpTrip {
   store       Store?              @relation(fields: [storeId], references: [id])
   reviews     TransporterReview[]
   bookings    GpTripBooking[]
+  shipments   GpShipment[]
 
   @@index([transporterId])
   @@index([storeId])
@@ -523,14 +536,59 @@ model GpTripBooking {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  trip        GpTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  customer    User   @relation("GpBookingCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  transporter User   @relation("GpBookingTransporter", fields: [transporterId], references: [id], onDelete: Cascade)
+  trip        GpTrip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  customer    User         @relation("GpBookingCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  transporter User         @relation("GpBookingTransporter", fields: [transporterId], references: [id], onDelete: Cascade)
+  shipment    GpShipment?
 
   @@unique([tripId, customerId])
   @@index([customerId, status, createdAt])
   @@index([transporterId, status, createdAt])
   @@index([tripId, status, createdAt])
+}
+
+model GpShipment {
+  id            String           @id @default(cuid())
+  bookingId     String?          @unique
+  tripId        String?
+  senderId      String?
+  receiverId    String?
+  transporterId String
+  code          String           @unique
+  fromCity      String
+  toCity        String
+  weightKg      Int
+  status        GpShipmentStatus @default(DROPPED_OFF)
+  note          String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  booking     GpTripBooking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  trip        GpTrip?          @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  sender      User?            @relation("GpShipmentSender", fields: [senderId], references: [id], onDelete: SetNull)
+  receiver    User?            @relation("GpShipmentReceiver", fields: [receiverId], references: [id], onDelete: SetNull)
+  transporter User             @relation("GpShipmentTransporter", fields: [transporterId], references: [id], onDelete: Cascade)
+  events      GpShipmentEvent[]
+
+  @@index([transporterId, status, updatedAt])
+  @@index([senderId, status, updatedAt])
+  @@index([receiverId, status, updatedAt])
+  @@index([tripId, status])
+}
+
+model GpShipmentEvent {
+  id         String           @id @default(cuid())
+  shipmentId String
+  status     GpShipmentStatus
+  note       String?
+  actorId    String
+  createdAt  DateTime         @default(now())
+
+  shipment GpShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  actor    User       @relation("GpShipmentEventActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model ServiceListing {
