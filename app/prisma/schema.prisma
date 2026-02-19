@@ -155,6 +155,13 @@ enum PrestaPayoutStatus {
   FAILED
 }
 
+enum TiakPayoutStatus {
+  PENDING
+  READY
+  PAID
+  FAILED
+}
+
 enum TiakDeliveryStatus {
   REQUESTED
   ACCEPTED
@@ -239,6 +246,7 @@ model User {
   tiakDeliveriesAsCourier    TiakDelivery[]          @relation("TiakDeliveryCourier")
   tiakCourierProfile         TiakCourierProfile?
   tiakDeliveryEvents         TiakDeliveryEvent[]     @relation("TiakDeliveryEventActor")
+  tiakPayouts               TiakPayout[]
 }
 
 model UserAddress {
@@ -821,6 +829,7 @@ model TiakDelivery {
   courier  User?               @relation("TiakDeliveryCourier", fields: [courierId], references: [id], onDelete: SetNull)
   order    Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
   events   TiakDeliveryEvent[]
+  payout   TiakPayout?
 
   @@index([customerId, status, createdAt])
   @@index([courierId, status, createdAt])
@@ -842,6 +851,23 @@ model TiakDeliveryEvent {
 
   @@index([deliveryId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model TiakPayout {
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now())
+  deliveryId         String           @unique
+  courierId          String
+  amountTotalCents   Int
+  platformFeeCents   Int
+  courierPayoutCents Int
+  currency           String           @default("XOF")
+  status             TiakPayoutStatus @default(PENDING)
+
+  delivery TiakDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  courier  User         @relation(fields: [courierId], references: [id], onDelete: Restrict)
+
+  @@index([courierId, status, createdAt])
 }
 
 model Dispute {

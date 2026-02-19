@@ -1,4 +1,4 @@
-﻿export type TiakDeliveryStatus =
+export type TiakDeliveryStatus =
   | "REQUESTED"
   | "ACCEPTED"
   | "PICKED_UP"
@@ -75,4 +75,13 @@ export type TiakCourierProfile = {
     role: string;
   };
 };
-
+export type TiakPayout = {
+  id: string;
+  status: "PENDING" | "READY" | "PAID" | "FAILED";
+  amountTotalCents: number;
+  platformFeeCents: number;
+  courierPayoutCents: number;
+  currency: string;
+  createdAt: string;
+  deliveryId: string;
+};

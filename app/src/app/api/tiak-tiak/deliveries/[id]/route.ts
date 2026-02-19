@@ -1,5 +1,5 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { PaymentMethod, PaymentStatus, TiakPayoutStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,15 +10,17 @@ const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
 const allStatuses = ["REQUESTED", "ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED", "CANCELED", "REJECTED"] as const;
 const contactUnlockStatuses = ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED"] as const;
+const PLATFORM_FEE_BPS = 1000;
 type TiakStatus = (typeof allStatuses)[number];
 
 function hasTiakDelegates() {
   const runtimePrisma = prisma as unknown as {
     tiakDelivery?: unknown;
     tiakDeliveryEvent?: unknown;
+    tiakPayout?: unknown;
   };
 
-  return Boolean(runtimePrisma.tiakDelivery && runtimePrisma.tiakDeliveryEvent);
+  return Boolean(runtimePrisma.tiakDelivery && runtimePrisma.tiakDeliveryEvent && runtimePrisma.tiakPayout);
 }
 
 function normalizeString(value: unknown) {
@@ -82,6 +84,23 @@ function normalizeStatus(value: unknown): TiakStatus | null {
     return status as TiakStatus;
   }
   return null;
+}
+
+function buildTiakPayoutDraft(delivery: { priceCents: number | null; currency: string; courierId: string | null }) {
+  const amountTotalCents = delivery.priceCents;
+  if (amountTotalCents === null || amountTotalCents <= 0) return null;
+  if (!delivery.courierId) return null;
+
+  const platformFeeCents = Math.round((amountTotalCents * PLATFORM_FEE_BPS) / 10000);
+  const courierPayoutCents = amountTotalCents - platformFeeCents;
+
+  return {
+    courierId: delivery.courierId,
+    amountTotalCents,
+    platformFeeCents,
+    courierPayoutCents,
+    currency: delivery.currency || "XOF",
+  };
 }
 
 export async function GET(
@@ -320,89 +339,140 @@ export async function PATCH(
     return NextResponse.json({ error: "Cannot revert status to REQUESTED" }, { status: 400 });
   }
 
-  const updated = await prisma.tiakDelivery.update({
-    where: { id: delivery.id },
-    data: {
-      status: nextStatus,
-      courierId:
-        nextStatus === "ACCEPTED"
-          ? (delivery.courierId ?? session.user.id)
-          : delivery.courierId,
-      assignedAt: nextStatus === "ACCEPTED" ? (delivery.assignedAt ?? new Date()) : delivery.assignedAt,
-      assignExpiresAt: nextStatus === "ACCEPTED" ? null : delivery.assignExpiresAt,
-      events: {
-        create: [
-          {
-            status: nextStatus,
-            note: normalizeString(body.note).slice(0, 600) || null,
-            actorId: session.user.id,
+  const payoutDraft = nextStatus === "DELIVERED" ? buildTiakPayoutDraft(delivery) : null;
+  if (nextStatus === "DELIVERED" && !payoutDraft) {
+    return NextResponse.json(
+      { error: "AMOUNT_UNKNOWN", message: "Unable to compute courier payout amount." },
+      { status: 400 }
+    );
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.tiakDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: nextStatus,
+        courierId:
+          nextStatus === "ACCEPTED"
+            ? (delivery.courierId ?? session.user.id)
+            : delivery.courierId,
+        assignedAt: nextStatus === "ACCEPTED" ? (delivery.assignedAt ?? new Date()) : delivery.assignedAt,
+        assignExpiresAt: nextStatus === "ACCEPTED" ? null : delivery.assignExpiresAt,
+        events: {
+          create: [
+            {
+              status: nextStatus,
+              note: normalizeString(body.note).slice(0, 600) || null,
+              actorId: session.user.id,
+            },
+          ],
+        },
+      },
+      select: {
+        id: true,
+        customerId: true,
+        courierId: true,
+        status: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        note: true,
+        priceCents: true,
+        currency: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        paidAt: true,
+        orderId: true,
+        assignedAt: true,
+        assignExpiresAt: true,
+        createdAt: true,
+        updatedAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
           },
-        ],
-      },
-    },
-    select: {
-      id: true,
-      customerId: true,
-      courierId: true,
-      status: true,
-      pickupAddress: true,
-      dropoffAddress: true,
-      note: true,
-      priceCents: true,
-      currency: true,
-      paymentMethod: true,
-      paymentStatus: true,
-      paidAt: true,
-      orderId: true,
-      assignedAt: true,
-      assignExpiresAt: true,
-      createdAt: true,
-      updatedAt: true,
-      customer: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
+        },
+        courier: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
         },
       },
-      courier: {
+    });
+
+    let payout: {
+      id: string;
+      status: TiakPayoutStatus;
+      amountTotalCents: number;
+      platformFeeCents: number;
+      courierPayoutCents: number;
+      currency: string;
+      createdAt: Date;
+      deliveryId: string;
+    } | null = null;
+
+    if (nextStatus === "DELIVERED" && payoutDraft) {
+      payout = await tx.tiakPayout.upsert({
+        where: { deliveryId: updated.id },
+        update: {},
+        create: {
+          deliveryId: updated.id,
+          courierId: payoutDraft.courierId,
+          amountTotalCents: payoutDraft.amountTotalCents,
+          platformFeeCents: payoutDraft.platformFeeCents,
+          courierPayoutCents: payoutDraft.courierPayoutCents,
+          currency: payoutDraft.currency,
+          status: TiakPayoutStatus.PENDING,
+        },
         select: {
           id: true,
-          name: true,
-          image: true,
+          status: true,
+          amountTotalCents: true,
+          platformFeeCents: true,
+          courierPayoutCents: true,
+          currency: true,
+          createdAt: true,
+          deliveryId: true,
         },
-      },
-    },
+      });
+    }
+
+    return { updated, payout };
   });
 
-  const contact = getContactState(updated, {
+  const contact = getContactState(result.updated, {
     id: session.user.id,
     role: session.user.role,
   });
 
   return NextResponse.json({
-    id: updated.id,
-    customerId: updated.customerId,
-    courierId: updated.courierId,
-    status: updated.status,
-    pickupArea: toArea(updated.pickupAddress),
-    dropoffArea: toArea(updated.dropoffAddress),
-    note: updated.note,
-    priceCents: updated.priceCents,
-    currency: updated.currency,
-    paymentMethod: updated.paymentMethod,
-    paymentStatus: updated.paymentStatus,
-    paidAt: updated.paidAt,
-    orderId: updated.orderId,
-    assignedAt: updated.assignedAt,
-    assignExpiresAt: updated.assignExpiresAt,
-    createdAt: updated.createdAt,
-    updatedAt: updated.updatedAt,
-    customer: updated.customer,
-    courier: updated.courier,
+    id: result.updated.id,
+    customerId: result.updated.customerId,
+    courierId: result.updated.courierId,
+    status: result.updated.status,
+    pickupArea: toArea(result.updated.pickupAddress),
+    dropoffArea: toArea(result.updated.dropoffAddress),
+    note: result.updated.note,
+    priceCents: result.updated.priceCents,
+    currency: result.updated.currency,
+    paymentMethod: result.updated.paymentMethod,
+    paymentStatus: result.updated.paymentStatus,
+    paidAt: result.updated.paidAt,
+    orderId: result.updated.orderId,
+    assignedAt: result.updated.assignedAt,
+    assignExpiresAt: result.updated.assignExpiresAt,
+    createdAt: result.updated.createdAt,
+    updatedAt: result.updated.updatedAt,
+    customer: result.updated.customer,
+    courier: result.updated.courier,
     contactLocked: contact.contactLocked,
     contactUnlockStatusHint: contact.contactUnlockStatusHint,
     canContact: contact.canContact,
+    job: { id: result.updated.id, status: result.updated.status },
+    payout: result.payout,
   });
 }
 

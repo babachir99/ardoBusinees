@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryCard from "@/components/tiak/TiakDeliveryCard";
-import { type TiakCourierProfile, type TiakDelivery } from "@/components/tiak/types";
+import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
 
 type Props = {
   locale: string;
@@ -45,6 +45,18 @@ function writeStoredIds(key: string | null, ids: string[]) {
   window.localStorage.setItem(key, JSON.stringify(ids.slice(0, 60)));
 }
 
+function formatAmount(value: number, currency: string) {
+  if (!Number.isFinite(value)) return "-";
+  if (currency === "XOF") return `${value} FCFA`;
+  return `${value} ${currency}`;
+}
+
+function formatDateLabel(value: string, locale: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US");
+}
+
 export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, currentUserRole }: Props) {
   const [openDeliveries, setOpenDeliveries] = useState<TiakDelivery[]>([]);
   const [trackedDeliveries, setTrackedDeliveries] = useState<TiakDelivery[]>([]);
@@ -65,6 +77,11 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [profileMaxWeightKg, setProfileMaxWeightKg] = useState("");
   const [profileHours, setProfileHours] = useState("");
   const [profileIsActive, setProfileIsActive] = useState(true);
+
+  const [payouts, setPayouts] = useState<TiakPayout[]>([]);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
+  const [payoutsError, setPayoutsError] = useState<string | null>(null);
+  const [payoutsMeta, setPayoutsMeta] = useState<{ count: number; sumCourierPayoutCents: number } | null>(null);
 
   const storageKey = getStoreKey(currentUserId);
 
@@ -231,6 +248,54 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     }
   }, [isCourierOrAdmin, isLoggedIn]);
 
+  const refreshPayouts = useCallback(async () => {
+    if (!isCourierOrAdmin || !isLoggedIn) {
+      setPayouts([]);
+      setPayoutsMeta(null);
+      return;
+    }
+
+    setPayoutsLoading(true);
+    setPayoutsError(null);
+
+    try {
+      const response = await fetch("/api/tiak/payouts?mine=1&take=60", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (response.status === 403) {
+          setPayoutsError(locale === "fr" ? "Acces reserve aux coursiers." : "Access restricted to couriers.");
+          return;
+        }
+        if (response.status === 401) {
+          setPayoutsError(locale === "fr" ? "Connecte-toi pour voir tes gains." : "Sign in to view your earnings.");
+          return;
+        }
+        setPayoutsError(typeof data?.message === "string" ? data.message : "Unable to load payouts");
+        return;
+      }
+
+      const payoutsList = Array.isArray(data?.payouts) ? (data.payouts as TiakPayout[]) : [];
+      setPayouts(payoutsList);
+      setPayoutsMeta(
+        data && typeof data === "object" && data.meta && typeof data.meta === "object"
+          ? {
+              count: Number((data.meta as { count?: unknown }).count ?? payoutsList.length) || 0,
+              sumCourierPayoutCents:
+                Number((data.meta as { sumCourierPayoutCents?: unknown }).sumCourierPayoutCents ?? 0) || 0,
+            }
+          : { count: payoutsList.length, sumCourierPayoutCents: 0 }
+      );
+    } catch {
+      setPayoutsError("Unable to load payouts");
+    } finally {
+      setPayoutsLoading(false);
+    }
+  }, [isCourierOrAdmin, isLoggedIn, locale]);
+
   useEffect(() => {
     refreshOpenDeliveries();
   }, [refreshOpenDeliveries]);
@@ -246,6 +311,10 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   useEffect(() => {
     refreshMyProfile();
   }, [refreshMyProfile]);
+
+  useEffect(() => {
+    refreshPayouts();
+  }, [refreshPayouts]);
 
   const handleDeliveryUpdated = useCallback((updated: TiakDelivery) => {
     setTrackedDeliveries((current) => upsertDelivery(current, updated));
@@ -386,6 +455,64 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
             <p className="mt-3 text-xs text-zinc-400">
               {locale === "fr" ? "Derniere mise a jour" : "Last update"}: {new Date(myProfile.updatedAt).toLocaleString()}
             </p>
+          )}
+        </section>
+      )}
+
+      {isCourierOrAdmin && isLoggedIn && (
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h2>
+            <button
+              type="button"
+              onClick={refreshPayouts}
+              className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+            >
+              {locale === "fr" ? "Rafraichir" : "Refresh"}
+            </button>
+          </div>
+
+          {payoutsMeta && (
+            <p className="mt-2 text-xs text-zinc-400">
+              {locale === "fr" ? "Total net" : "Total net"}: {formatAmount(payoutsMeta.sumCourierPayoutCents, "XOF")}
+            </p>
+          )}
+
+          {payoutsLoading && <p className="mt-3 text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+          {payoutsError && <p className="mt-3 text-sm text-rose-300">{payoutsError}</p>}
+
+          {!payoutsLoading && !payoutsError && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-xs text-zinc-200">
+                <thead className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                  <tr>
+                    <th className="py-2 pr-4">{locale === "fr" ? "Date" : "Date"}</th>
+                    <th className="py-2 pr-4">{locale === "fr" ? "Total" : "Total"}</th>
+                    <th className="py-2 pr-4">Fee</th>
+                    <th className="py-2 pr-4">{locale === "fr" ? "Net" : "Net"}</th>
+                    <th className="py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payouts.map((payout) => (
+                    <tr key={payout.id} className="border-t border-white/10">
+                      <td className="py-2 pr-4">{formatDateLabel(payout.createdAt, locale)}</td>
+                      <td className="py-2 pr-4">{formatAmount(payout.amountTotalCents, payout.currency)}</td>
+                      <td className="py-2 pr-4">{formatAmount(payout.platformFeeCents, payout.currency)}</td>
+                      <td className="py-2 pr-4 text-emerald-300">{formatAmount(payout.courierPayoutCents, payout.currency)}</td>
+                      <td className="py-2">{payout.status}</td>
+                    </tr>
+                  ))}
+                  {payouts.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-4 text-zinc-400">
+                        {locale === "fr" ? "Aucun payout." : "No payouts."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}
