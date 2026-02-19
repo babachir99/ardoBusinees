@@ -133,6 +133,13 @@ enum PrestaNeedStatus {
   CANCELED
 }
 
+enum PrestaProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
 enum TiakDeliveryStatus {
   REQUESTED
   ACCEPTED
@@ -204,6 +211,7 @@ model User {
   prestaBookingsAsCustomer  PrestaBooking[] @relation("PrestaBookingCustomer")
   prestaBookingsAsProvider  PrestaBooking[] @relation("PrestaBookingProvider")
   prestaNeeds               PrestaNeed[]    @relation("PrestaNeedCustomer")
+  prestaProposals          PrestaProposal[] @relation("PrestaProposalProvider")
   disputesOpened            Dispute[]
   tiakDeliveriesAsCustomer  TiakDelivery[]      @relation("TiakDeliveryCustomer")
   tiakDeliveriesAsCourier   TiakDelivery[]      @relation("TiakDeliveryCourier")
@@ -568,7 +576,8 @@ model PrestaService {
 
   provider User   @relation(fields: [providerId], references: [id], onDelete: Cascade)
   store    Store? @relation(fields: [storeId], references: [id])
-  bookings PrestaBooking[]
+  bookings  PrestaBooking[]
+  proposals PrestaProposal[]
 
   @@index([providerId])
   @@index([storeId])
@@ -618,12 +627,33 @@ model PrestaNeed {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  customer User   @relation("PrestaNeedCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  store    Store? @relation(fields: [storeId], references: [id])
+  customer  User              @relation("PrestaNeedCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  store     Store?            @relation(fields: [storeId], references: [id])
+  proposals PrestaProposal[]
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
   @@index([storeId, status])
+}
+
+model PrestaProposal {
+  id         String               @id @default(cuid())
+  needId     String
+  serviceId  String
+  providerId String
+  message    String?
+  status     PrestaProposalStatus @default(PENDING)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  need     PrestaNeed    @relation(fields: [needId], references: [id], onDelete: Cascade)
+  service  PrestaService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  provider User          @relation("PrestaProposalProvider", fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([needId, providerId])
+  @@index([needId, status, createdAt])
+  @@index([serviceId])
+  @@index([providerId, createdAt])
 }
 
 model OrderEvent {
