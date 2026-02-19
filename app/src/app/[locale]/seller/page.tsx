@@ -20,7 +20,15 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   const tSpace = await getTranslations("SellerSpace");
   const locale = await getLocale();
 
-  if (!session || !["SELLER", "ADMIN"].includes(session.user.role)) {
+  const role = session?.user?.role ?? "CUSTOMER";
+  const canViewShop = ["SELLER", "ADMIN"].includes(role);
+  const canViewPresta = ["PROVIDER", "ADMIN"].includes(role);
+  const canViewGp = ["TRANSPORTER", "GP_CARRIER", "TRAVELER", "ADMIN"].includes(role);
+  const canViewTiak = ["COURIER", "ADMIN"].includes(role);
+  const canAccessPartnerDashboard =
+    canViewShop || canViewPresta || canViewGp || canViewTiak;
+
+  if (!session || !canAccessPartnerDashboard) {
     return (
       <div className="min-h-screen bg-jonta text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12">
@@ -35,6 +43,77 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
             </Link>
           </div>
         </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!canViewShop) {
+    const verticalCards = [
+      canViewPresta
+        ? {
+            title: "PRESTA block",
+            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
+            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
+          }
+        : null,
+      canViewGp
+        ? {
+            title: "GP block",
+            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
+            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
+          }
+        : null,
+      canViewTiak
+        ? {
+            title: "TIAK block",
+            subtitle: locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon",
+            caption: locale === "fr" ? "Acces a venir" : "Access coming soon",
+          }
+        : null,
+    ].filter((value): value is { title: string; subtitle: string; caption: string } => Boolean(value));
+
+    return (
+      <div className="min-h-screen bg-jonta text-zinc-100">
+        <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
+          <Link href="/" className="flex items-center gap-3">
+            <Image
+              src="/logo.png"
+              alt="JONTAADO logo"
+              width={140}
+              height={140}
+              className="h-[115px] w-auto md:h-[135px]"
+              priority
+            />
+          </Link>
+        </header>
+
+        <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-24">
+          <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+            <h1 className="text-2xl font-semibold">
+              {locale === "fr" ? "Dashboard plateforme" : "Platform dashboard"}
+            </h1>
+            <p className="mt-2 text-sm text-zinc-300">
+              {locale === "fr"
+                ? "Les blocs metiers apparaissent selon ton role."
+                : "Vertical blocks appear based on your role."}
+            </p>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-3">
+            {verticalCards.map((card) => (
+              <article
+                key={card.title}
+                className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6"
+              >
+                <h2 className="text-lg font-semibold text-white">{card.title} (coming next)</h2>
+                <p className="mt-2 text-sm text-zinc-300">{card.subtitle}</p>
+                <p className="mt-1 text-xs text-zinc-500">{card.caption}</p>
+              </article>
+            ))}
+          </section>
+        </main>
+
         <Footer />
       </div>
     );
@@ -771,6 +850,54 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
             </span>
           </div>
         </section>
+
+        {(canViewPresta || canViewGp || canViewTiak) && (
+          <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+            <h2 className="text-xl font-semibold text-white">
+              {locale === "fr" ? "Blocs autres verticales" : "Other vertical blocks"}
+            </h2>
+            <p className="mt-2 text-sm text-zinc-300">
+              {locale === "fr"
+                ? "Le bloc SHOP reste actif. Les autres verticales arrivent ici."
+                : "SHOP stays active. Other verticals will appear here."}
+            </p>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              {canViewPresta && (
+                <article className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5">
+                  <h3 className="text-base font-semibold text-white">PRESTA block (coming next)</h3>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                  </p>
+                </article>
+              )}
+              {canViewGp && (
+                <article className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5">
+                  <h3 className="text-base font-semibold text-white">GP block (coming next)</h3>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                  </p>
+                </article>
+              )}
+              {canViewTiak && (
+                <article className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5">
+                  <h3 className="text-base font-semibold text-white">TIAK block (coming next)</h3>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                  </p>
+                </article>
+              )}
+            </div>
+          </section>
+        )}
       </main>
       <Footer />
     </div>

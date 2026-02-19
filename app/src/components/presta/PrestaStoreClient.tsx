@@ -123,6 +123,7 @@ export default function PrestaStoreClient({
   const [showNeedForm, setShowNeedForm] = useState(false);
   const [selectedNeedForProposals, setSelectedNeedForProposals] = useState<string | null>(null);
   const [showProviderProposalsPanel, setShowProviderProposalsPanel] = useState(false);
+  const [providerPanelView, setProviderPanelView] = useState<"proposals" | "payouts">("proposals");
 
   const [bookingService, setBookingService] = useState<BookingTarget | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
@@ -656,13 +657,28 @@ export default function PrestaStoreClient({
         ) : (
           <div className="space-y-4">
             <div>
-              <button
-                type="button"
-                onClick={() => setShowProviderProposalsPanel(true)}
-                className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
-              >
-                {locale === "fr" ? "Mes propositions" : "My proposals"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProviderPanelView("proposals");
+                    setShowProviderProposalsPanel(true);
+                  }}
+                  className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
+                >
+                  {locale === "fr" ? "Mes propositions" : "My proposals"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProviderPanelView("payouts");
+                    setShowProviderProposalsPanel(true);
+                  }}
+                  className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
+                >
+                  {locale === "fr" ? "Mes payouts" : "My payouts"}
+                </button>
+              </div>
             </div>
             <PrestaProviderMatchingPanel locale={locale} isLoggedIn={isLoggedIn} enabled={canPublish} onRequireLogin={goToLogin} />
           </div>
@@ -681,6 +697,7 @@ export default function PrestaStoreClient({
 
       {showProviderProposalsPanel && (
         <PrestaProviderProposalsPanel
+          initialView={providerPanelView}
           onClose={() => setShowProviderProposalsPanel(false)}
         />
       )}
