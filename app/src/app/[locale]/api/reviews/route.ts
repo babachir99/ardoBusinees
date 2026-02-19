@@ -1,2 +1,1 @@
-﻿export { POST } from "@/app/api/reviews/route";
-
+export { GET, POST } from "@/app/api/reviews/route";

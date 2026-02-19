@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type MatchingService = {
   id: string;
@@ -20,6 +20,11 @@ type MatchingService = {
 
 type MatchingResponse = {
   services: MatchingService[];
+};
+
+type ProviderRating = {
+  avgRating: number | null;
+  count: number;
 };
 
 type Props = {
@@ -53,6 +58,66 @@ export default function PrestaNeedSuggestions({
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [services, setServices] = useState<MatchingService[]>([]);
+  const [providerRatings, setProviderRatings] = useState<Record<string, ProviderRating>>({});
+  const loadingProviderIdsRef = useRef<Set<string>>(new Set());
+
+  async function loadProviderRatings(list: MatchingService[]) {
+    const providerIds = Array.from(
+      new Set(
+        list
+          .map((service) => service.provider?.id)
+          .filter((providerId): providerId is string => Boolean(providerId))
+      )
+    );
+
+    const idsToFetch = providerIds.filter(
+      (providerId) =>
+        providerRatings[providerId] === undefined && !loadingProviderIdsRef.current.has(providerId)
+    );
+
+    if (idsToFetch.length === 0) return;
+
+    idsToFetch.forEach((providerId) => loadingProviderIdsRef.current.add(providerId));
+
+    const entries = await Promise.all(
+      idsToFetch.map(async (providerId) => {
+        try {
+          const response = await fetch(
+            `/api/reviews?targetUserId=${encodeURIComponent(providerId)}&take=1`,
+            { method: "GET", cache: "no-store" }
+          );
+
+          if (!response.ok) return [providerId, null] as const;
+
+          const data = (await response.json().catch(() => null)) as
+            | { meta?: { count?: number; avgRating?: number | null } }
+            | null;
+
+          const count = Number(data?.meta?.count ?? 0);
+          const avgRatingRaw = data?.meta?.avgRating;
+          const avgRating =
+            typeof avgRatingRaw === "number" && Number.isFinite(avgRatingRaw) ? avgRatingRaw : null;
+
+          return [providerId, { count, avgRating }] as const;
+        } catch {
+          return [providerId, null] as const;
+        } finally {
+          loadingProviderIdsRef.current.delete(providerId);
+        }
+      })
+    );
+
+    const next: Record<string, ProviderRating> = {};
+    for (const [providerId, rating] of entries) {
+      if (rating) {
+        next[providerId] = rating;
+      }
+    }
+
+    if (Object.keys(next).length > 0) {
+      setProviderRatings((current) => ({ ...current, ...next }));
+    }
+  }
 
   async function loadSuggestions() {
     setLoading(true);
@@ -70,7 +135,9 @@ export default function PrestaNeedSuggestions({
         return;
       }
 
-      setServices(Array.isArray(data.services) ? data.services : []);
+      const nextServices = Array.isArray(data.services) ? data.services : [];
+      setServices(nextServices);
+      void loadProviderRatings(nextServices);
     } catch {
       setError("Unable to load service suggestions");
     } finally {
@@ -148,6 +215,13 @@ export default function PrestaNeedSuggestions({
                 <div>
                   <p className="font-semibold text-white">{service.title}</p>
                   <p className="text-zinc-400">{service.provider.name ?? "Provider"}</p>
+                  {service.provider?.id &&
+                    providerRatings[service.provider.id]?.count > 0 && (
+                      <p className="mt-1 inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-200">
+                        {"\u2605"} {providerRatings[service.provider.id].avgRating?.toFixed(1) ?? "0.0"} (
+                        {providerRatings[service.provider.id].count})
+                      </p>
+                    )}
                 </div>
                 <p className="font-semibold text-emerald-300">{formatAmount(service.basePriceCents, service.currency)}</p>
               </div>
@@ -189,4 +263,5 @@ export default function PrestaNeedSuggestions({
     </div>
   );
 }
+
 

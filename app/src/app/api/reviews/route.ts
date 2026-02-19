@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { PrestaBookingStatus, Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -20,6 +20,92 @@ function hasReviewDelegates() {
   };
 
   return Boolean(runtimePrisma.review && runtimePrisma.prestaBooking);
+}
+
+function isMissingMigrationError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+    return true;
+  }
+
+  const message = String((error as { message?: unknown })?.message ?? "").toLowerCase();
+  return message.includes("table does not exist") || message.includes("relation does not exist");
+}
+
+function normalizeNonNegativeInt(value: string | null, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const normalized = Math.trunc(parsed);
+  return normalized < 0 ? 0 : normalized;
+}
+
+function normalizeTake(value: string | null) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 20;
+  const normalized = Math.trunc(parsed);
+  if (normalized < 1) return 20;
+  return Math.min(normalized, 50);
+}
+
+export async function GET(request: NextRequest) {
+  if (!hasReviewDelegates()) {
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "Review delegates unavailable. Run npx prisma generate and restart dev server."
+    );
+  }
+
+  const targetUserId = normalizeString(new URL(request.url).searchParams.get("targetUserId"));
+  if (!targetUserId) {
+    return errorResponse(400, "TARGET_USER_ID_REQUIRED", "targetUserId is required.");
+  }
+
+  const searchParams = new URL(request.url).searchParams;
+  const take = normalizeTake(searchParams.get("take"));
+  const skip = normalizeNonNegativeInt(searchParams.get("skip"), 0);
+
+  try {
+    const [reviews, aggregate] = await Promise.all([
+      prisma.review.findMany({
+        where: { targetUserId },
+        orderBy: [{ createdAt: "desc" }],
+        take,
+        skip,
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+          author: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+        },
+      }),
+      prisma.review.aggregate({
+        where: { targetUserId },
+        _count: { _all: true },
+        _avg: { rating: true },
+      }),
+    ]);
+
+    return NextResponse.json({
+      reviews,
+      meta: {
+        count: aggregate._count._all,
+        avgRating: aggregate._avg.rating,
+      },
+    });
+  } catch (error) {
+    if (isMissingMigrationError(error)) {
+      return errorResponse(503, "PRISMA_ERROR", "Migration missing: run prisma migrate");
+    }
+
+    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+  }
 }
 
 export async function POST(request: NextRequest) {
