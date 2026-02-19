@@ -10,6 +10,9 @@ const allowedStatuses = new Set<PrestaProposalStatus>([
   PrestaProposalStatus.WITHDRAWN,
 ]);
 
+const acceptRaceNotes =
+  "409 INVALID_PROPOSAL_STATE if proposal already processed; 409 ALREADY_ACCEPTED if need already accepted/closed";
+
 const proposalSelect = {
   id: true,
   needId: true,
@@ -58,6 +61,10 @@ function normalizeString(value: unknown) {
   return value.trim();
 }
 
+function errorResponse(status: number, error: string, message: string) {
+  return NextResponse.json({ error, message }, { status });
+}
+
 type ProposalView = {
   id: string;
   needId: string;
@@ -88,11 +95,17 @@ function serializeProposal(proposal: ProposalView) {
   };
 }
 
-function okResponse(proposal: ProposalView, needStatus: PrestaNeedStatus, rejectedCount: number) {
+function okResponse(
+  proposal: ProposalView,
+  needStatus: PrestaNeedStatus,
+  rejectedCount: number,
+  options?: { includeAcceptRaceNotes?: boolean }
+) {
   return NextResponse.json({
     proposal: serializeProposal(proposal),
     needStatus,
     rejectedCount,
+    ...(options?.includeAcceptRaceNotes ? { acceptRaceNotes } : {}),
   });
 }
 
@@ -101,22 +114,23 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasPrestaProposalDelegates()) {
-    return NextResponse.json(
-      { error: "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const body = await request.json().catch(() => null);
   const nextStatus = normalizeString((body as { status?: unknown })?.status).toUpperCase();
 
   if (!allowedStatuses.has(nextStatus as PrestaProposalStatus)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    return errorResponse(400, "INVALID_STATUS", "Unsupported proposal status transition.");
   }
 
   const { id } = await params;
@@ -127,7 +141,7 @@ export async function PATCH(
   });
 
   if (!existing) {
-    return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+    return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
   }
 
   const isAdmin = session.user.role === "ADMIN";
@@ -137,11 +151,11 @@ export async function PATCH(
 
   if (targetStatus === PrestaProposalStatus.WITHDRAWN) {
     if (!isProvider && !isAdmin) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return errorResponse(403, "FORBIDDEN", "Only provider or admin can withdraw this proposal.");
     }
 
     if (existing.status !== PrestaProposalStatus.PENDING) {
-      return NextResponse.json({ error: "INVALID_PROPOSAL_STATE" }, { status: 409 });
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
     }
 
     const updated = await prisma.prestaProposal.updateMany({
@@ -153,7 +167,7 @@ export async function PATCH(
     });
 
     if (updated.count === 0) {
-      return NextResponse.json({ error: "INVALID_PROPOSAL_STATE" }, { status: 409 });
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
     }
 
     const proposal = await prisma.prestaProposal.findUnique({
@@ -162,19 +176,19 @@ export async function PATCH(
     });
 
     if (!proposal) {
-      return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+      return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
     }
 
     return okResponse(proposal, proposal.need.status, 0);
   }
 
   if (!isNeedOwner && !isAdmin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return errorResponse(403, "FORBIDDEN", "Only need owner or admin can manage this proposal.");
   }
 
   if (targetStatus === PrestaProposalStatus.REJECTED) {
     if (existing.status === PrestaProposalStatus.ACCEPTED) {
-      return NextResponse.json({ error: "INVALID_PROPOSAL_STATE" }, { status: 409 });
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Accepted proposal cannot be rejected.");
     }
 
     const proposal = await prisma.prestaProposal.update({
@@ -187,15 +201,31 @@ export async function PATCH(
   }
 
   if (existing.status !== PrestaProposalStatus.PENDING) {
-    return NextResponse.json({ error: "INVALID_PROPOSAL_STATE" }, { status: 409 });
+    return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
   }
 
   if (existing.need.status !== PrestaNeedStatus.OPEN) {
-    return NextResponse.json({ error: "NEED_NOT_OPEN" }, { status: 409 });
+    return errorResponse(
+      409,
+      "ALREADY_ACCEPTED",
+      "Need is no longer open (already accepted or closed)."
+    );
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const needUpdated = await tx.prestaNeed.updateMany({
+        where: {
+          id: existing.needId,
+          status: PrestaNeedStatus.OPEN,
+        },
+        data: { status: PrestaNeedStatus.ACCEPTED },
+      });
+
+      if (needUpdated.count === 0) {
+        throw new Error("ALREADY_ACCEPTED");
+      }
+
       const acceptedUpdate = await tx.prestaProposal.updateMany({
         where: {
           id: existing.id,
@@ -217,18 +247,6 @@ export async function PATCH(
         data: { status: PrestaProposalStatus.REJECTED },
       });
 
-      const needUpdated = await tx.prestaNeed.updateMany({
-        where: {
-          id: existing.needId,
-          status: PrestaNeedStatus.OPEN,
-        },
-        data: { status: PrestaNeedStatus.ACCEPTED },
-      });
-
-      if (needUpdated.count === 0) {
-        throw new Error("ALREADY_ACCEPTED");
-      }
-
       const proposal = await tx.prestaProposal.findUnique({
         where: { id: existing.id },
         select: proposalSelect,
@@ -245,18 +263,24 @@ export async function PATCH(
       };
     });
 
-    return okResponse(result.proposal, result.needStatus, result.rejectedCount);
+    return okResponse(result.proposal, result.needStatus, result.rejectedCount, {
+      includeAcceptRaceNotes: true,
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "INVALID_PROPOSAL_STATE") {
-      return NextResponse.json({ error: "INVALID_PROPOSAL_STATE" }, { status: 409 });
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
     }
 
     if (error instanceof Error && error.message === "ALREADY_ACCEPTED") {
-      return NextResponse.json({ error: "ALREADY_ACCEPTED" }, { status: 409 });
+      return errorResponse(
+        409,
+        "ALREADY_ACCEPTED",
+        "Need is no longer open (already accepted or closed)."
+      );
     }
 
     if (error instanceof Error && error.message === "PROPOSAL_NOT_FOUND") {
-      return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+      return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
     }
 
     throw error;

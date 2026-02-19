@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { type FormEvent, useEffect, useState } from "react";
+import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
+import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 
 type PrestaService = {
   id: string;
@@ -47,6 +49,11 @@ type Props = {
   canPublish: boolean;
 };
 
+type BookingTarget = {
+  id: string;
+  title: string;
+};
+
 const paymentMethods = ["WAVE", "ORANGE_MONEY", "CARD", "CASH"] as const;
 
 function formatAmount(value: number | null, currency: string) {
@@ -69,7 +76,7 @@ function formatDateLabel(value: string | null, locale: string) {
 }
 
 export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Props) {
-  const [tab, setTab] = useState<"offers" | "needs">("offers");
+  const [tab, setTab] = useState<"offers" | "needs" | "provider">("offers");
 
   const [services, setServices] = useState<PrestaService[]>([]);
   const [needs, setNeeds] = useState<PrestaNeed[]>([]);
@@ -98,7 +105,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
   const [submittingNeed, setSubmittingNeed] = useState(false);
   const [showNeedForm, setShowNeedForm] = useState(false);
 
-  const [bookingService, setBookingService] = useState<PrestaService | null>(null);
+  const [bookingService, setBookingService] = useState<BookingTarget | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingMethod, setBookingMethod] = useState("WAVE");
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -159,7 +166,14 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       loadServices();
       return;
     }
-    loadNeeds();
+
+    if (tab === "needs") {
+      loadNeeds();
+      return;
+    }
+
+    setLoading(false);
+    setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -297,10 +311,14 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     }
   }
 
+  function goToLogin() {
+    const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+  }
+
   function openNeedComposer() {
     if (!isLoggedIn) {
-      const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+      goToLogin();
       return;
     }
 
@@ -346,10 +364,9 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     }
   }
 
-  function openBooking(service: PrestaService) {
+  function openBooking(service: BookingTarget) {
     if (!isLoggedIn) {
-      const callbackUrl = encodeURIComponent(window.location.pathname);
-      window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+      goToLogin();
       return;
     }
 
@@ -360,7 +377,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3">
-        <div className="inline-flex gap-2 rounded-full border border-white/10 bg-zinc-950/70 p-1">
+        <div className="inline-flex flex-wrap gap-2 rounded-full border border-white/10 bg-zinc-950/70 p-1">
           <button
             type="button"
             onClick={() => setTab("offers")}
@@ -379,6 +396,17 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
           >
             {locale === "fr" ? "Besoins" : "Needs"}
           </button>
+          {canPublish && (
+            <button
+              type="button"
+              onClick={() => setTab("provider")}
+              className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
+                tab === "provider" ? "bg-emerald-400 text-zinc-950" : "text-zinc-300"
+              }`}
+            >
+              {locale === "fr" ? "Je suis prestataire" : "Provider mode"}
+            </button>
+          )}
         </div>
       </section>
 
@@ -540,19 +568,29 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">
-            {tab === "offers" ? "Services PRESTA" : locale === "fr" ? "Besoins PRESTA" : "PRESTA needs"}
+            {tab === "offers"
+              ? "Services PRESTA"
+              : tab === "needs"
+                ? locale === "fr"
+                  ? "Besoins PRESTA"
+                  : "PRESTA needs"
+                : locale === "fr"
+                  ? "Matching prestataire"
+                  : "Provider matching"}
           </h2>
-          <button
-            type="button"
-            onClick={() => (tab === "offers" ? loadServices() : loadNeeds())}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
-          >
-            Rafraichir
-          </button>
+          {tab !== "provider" && (
+            <button
+              type="button"
+              onClick={() => (tab === "offers" ? loadServices() : loadNeeds())}
+              className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+            >
+              Rafraichir
+            </button>
+          )}
         </div>
 
-        {loading && <p className="text-sm text-zinc-300">Chargement...</p>}
-        {error && <p className="text-sm text-rose-300">{error}</p>}
+        {tab !== "provider" && loading && <p className="text-sm text-zinc-300">Chargement...</p>}
+        {tab !== "provider" && error && <p className="text-sm text-rose-300">{error}</p>}
 
         {tab === "offers" ? (
           <div className="grid gap-3 md:grid-cols-2">
@@ -579,7 +617,11 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   <p className="mt-2 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
                 )}
 
-                <button type="button" onClick={() => openBooking(service)} className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
+                <button
+                  type="button"
+                  onClick={() => openBooking({ id: service.id, title: service.title })}
+                  className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
+                >
                   Reserver
                 </button>
               </article>
@@ -591,7 +633,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
               </div>
             )}
           </div>
-        ) : (
+        ) : tab === "needs" ? (
           <div className="grid gap-3 md:grid-cols-2">
             {needs.map((need) => (
               <article key={need.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
@@ -606,6 +648,14 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   <p>{locale === "fr" ? "Date souhaitee" : "Preferred date"}: {formatDateLabel(need.preferredDate, locale)}</p>
                   <p>{locale === "fr" ? "Publie le" : "Published"}: {formatDateLabel(need.createdAt, locale)}</p>
                 </div>
+
+                <PrestaNeedSuggestions
+                  locale={locale}
+                  needId={need.id}
+                  isLoggedIn={isLoggedIn}
+                  onRequireLogin={goToLogin}
+                  onOpenBooking={openBooking}
+                />
               </article>
             ))}
 
@@ -615,6 +665,13 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
               </div>
             )}
           </div>
+        ) : (
+          <PrestaProviderMatchingPanel
+            locale={locale}
+            isLoggedIn={isLoggedIn}
+            enabled={canPublish}
+            onRequireLogin={goToLogin}
+          />
         )}
       </section>
 

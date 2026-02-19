@@ -21,11 +21,16 @@ function parseNullableInt(value: unknown) {
   return rounded >= 0 ? rounded : null;
 }
 
+function errorResponse(status: number, error: string, message: string) {
+  return NextResponse.json({ error, message }, { status });
+}
+
 export async function GET(request: NextRequest) {
   if (!hasPrestaNeedDelegate()) {
-    return NextResponse.json(
-      { error: "PRESTA needs delegate unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA needs delegate unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
@@ -99,20 +104,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!hasPrestaNeedDelegate()) {
-    return NextResponse.json(
-      { error: "PRESTA needs delegate unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA needs delegate unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return errorResponse(400, "INVALID_BODY", "Invalid JSON body.");
   }
 
   const title = normalizeString((body as { title?: unknown }).title);
@@ -125,11 +131,11 @@ export async function POST(request: NextRequest) {
   const preferredDate = preferredDateRaw ? new Date(preferredDateRaw) : null;
 
   if (!title || !description) {
-    return NextResponse.json({ error: "title and description are required" }, { status: 400 });
+    return errorResponse(400, "VALIDATION_ERROR", "title and description are required.");
   }
 
   if (preferredDate && Number.isNaN(preferredDate.getTime())) {
-    return NextResponse.json({ error: "Invalid preferredDate" }, { status: 400 });
+    return errorResponse(400, "INVALID_PREFERRED_DATE", "Invalid preferredDate.");
   }
 
   const prestaStore = await prisma.store.findUnique({

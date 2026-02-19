@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { KycRole, KycStatus, PaymentMethod } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -32,6 +32,12 @@ function parsePositiveInt(value: unknown) {
   return rounded;
 }
 
+function normalizeTake(value: string | null, fallback: number, max: number) {
+  const parsed = Number(value ?? String(fallback));
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.trunc(parsed), 1), max);
+}
+
 function parsePaymentMethods(value: unknown) {
   if (!Array.isArray(value)) return [PaymentMethod.CASH];
   const allowed = new Set<PaymentMethod>(Object.values(PaymentMethod));
@@ -43,22 +49,35 @@ function parsePaymentMethods(value: unknown) {
   return unique.length > 0 ? unique : [PaymentMethod.CASH];
 }
 
+function errorResponse(status: number, error: string, message: string) {
+  return NextResponse.json({ error, message }, { status });
+}
+
 export async function GET(request: NextRequest) {
   if (!hasPrestaDelegates()) {
-    return NextResponse.json(
-      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA delegates unavailable. Run npx prisma generate and restart dev server."
     );
   }
+
+  const session = await getServerSession(authOptions);
 
   const { searchParams } = new URL(request.url);
   const q = normalizeString(searchParams.get("q"));
   const city = normalizeString(searchParams.get("city"));
   const category = normalizeString(searchParams.get("category"));
-  const takeRaw = Number(searchParams.get("take") ?? "20");
-  const take = Number.isFinite(takeRaw) ? Math.min(Math.max(Math.trunc(takeRaw), 1), 100) : 20;
+  const take = normalizeTake(searchParams.get("take"), 20, 100);
+  const mine = searchParams.get("mine") === "1";
 
-  const where: Record<string, unknown> = { isActive: true };
+  if (mine && !session?.user?.id) {
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required for mine=1.");
+  }
+
+  const where: Record<string, unknown> = mine
+    ? { providerId: session!.user.id, isActive: true }
+    : { isActive: true };
 
   if (city) {
     where.city = { contains: city, mode: "insensitive" };
@@ -98,6 +117,9 @@ export async function GET(request: NextRequest) {
 
   const payload = services.map((service) => {
     const policy = evaluateContactPolicy({
+      viewerId: session?.user?.id,
+      viewerRole: session?.user?.role,
+      ownerId: service.providerId,
       lockedByDefault: rules.contact.lockedByDefault,
       unlockStatusHint,
     });
@@ -124,6 +146,9 @@ export async function GET(request: NextRequest) {
       store: service.store,
       contactLocked: policy.contactLocked,
       contactUnlockStatusHint: policy.contactUnlockStatusHint,
+      ...(policy.canRevealContact
+        ? { contactPhone: service.contactPhone ?? service.provider.phone ?? null }
+        : {}),
     };
   });
 
@@ -132,20 +157,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!hasPrestaDelegates()) {
-    return NextResponse.json(
-      { error: "PRESTA delegates unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA delegates unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const allowedRoles = new Set(rules.publishRoles);
-  if (!allowedRoles.has(session.user.role as typeof rules.publishRoles[number])) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!allowedRoles.has(session.user.role as (typeof rules.publishRoles)[number])) {
+    return errorResponse(403, "FORBIDDEN", "Role is not allowed to publish PRESTA services.");
   }
 
   if (rules.kycRequiredForPublishing && session.user.role !== "ADMIN") {
@@ -160,16 +186,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!approvedKyc) {
-      return NextResponse.json(
-        { error: "KYC approval is required to publish on PRESTA." },
-        { status: 403 }
-      );
+      return errorResponse(403, "KYC_REQUIRED", "KYC approval is required to publish on PRESTA.");
     }
   }
 
   const body = await request.json().catch(() => null);
   if (!body) {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return errorResponse(400, "INVALID_BODY", "Invalid JSON body.");
   }
 
   const title = normalizeString(body.title);
@@ -181,10 +204,7 @@ export async function POST(request: NextRequest) {
   const acceptedPaymentMethods = parsePaymentMethods(body.acceptedPaymentMethods);
 
   if (!title || !basePriceCents) {
-    return NextResponse.json(
-      { error: "title and basePriceCents are required" },
-      { status: 400 }
-    );
+    return errorResponse(400, "VALIDATION_ERROR", "title and basePriceCents are required.");
   }
 
   const prestaStore = await prisma.store.findUnique({

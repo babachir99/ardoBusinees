@@ -19,6 +19,10 @@ function normalizeString(value: unknown) {
   return value.trim();
 }
 
+function errorResponse(status: number, error: string, message: string) {
+  return NextResponse.json({ error, message }, { status });
+}
+
 function serializeProposal(proposal: {
   id: string;
   needId: string;
@@ -50,15 +54,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasPrestaProposalDelegates()) {
-    return NextResponse.json(
-      { error: "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const { id } = await params;
@@ -68,13 +73,13 @@ export async function GET(
   });
 
   if (!need) {
-    return NextResponse.json({ error: "Need not found" }, { status: 404 });
+    return errorResponse(404, "NEED_NOT_FOUND", "Need not found.");
   }
 
   const isAdmin = session.user.role === "ADMIN";
   const isOwner = session.user.id === need.customerId;
   if (!isAdmin && !isOwner) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return errorResponse(403, "FORBIDDEN", "Only need owner or admin can view proposals.");
   }
 
   const proposals = await prisma.prestaProposal.findMany({
@@ -116,27 +121,28 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasPrestaProposalDelegates()) {
-    return NextResponse.json(
-      { error: "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server." },
-      { status: 503 }
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "PRESTA proposal delegates unavailable. Run npx prisma generate and restart dev server."
     );
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return errorResponse(400, "INVALID_BODY", "Invalid JSON body.");
   }
 
   const serviceId = normalizeString((body as { serviceId?: unknown }).serviceId);
   const message = normalizeString((body as { message?: unknown }).message).slice(0, 1200) || null;
 
   if (!serviceId) {
-    return NextResponse.json({ error: "serviceId is required" }, { status: 400 });
+    return errorResponse(400, "SERVICE_ID_REQUIRED", "serviceId is required.");
   }
 
   const { id } = await params;
@@ -147,18 +153,15 @@ export async function POST(
   });
 
   if (!need) {
-    return NextResponse.json({ error: "Need not found" }, { status: 404 });
+    return errorResponse(404, "NEED_NOT_FOUND", "Need not found.");
   }
 
   if (need.status !== "OPEN") {
-    return NextResponse.json(
-      { error: "NEED_NOT_OPEN", message: "Need is not open for proposals" },
-      { status: 409 }
-    );
+    return errorResponse(409, "NEED_NOT_OPEN", "Need is not open for proposals.");
   }
 
   if (need.customerId === session.user.id) {
-    return NextResponse.json({ error: "Cannot propose on your own need" }, { status: 403 });
+    return errorResponse(403, "FORBIDDEN", "Cannot propose on your own need.");
   }
 
   const service = await prisma.prestaService.findUnique({
@@ -171,11 +174,11 @@ export async function POST(
   });
 
   if (!service || !service.isActive) {
-    return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    return errorResponse(404, "SERVICE_NOT_FOUND", "Service not found.");
   }
 
   if (service.providerId !== session.user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return errorResponse(403, "FORBIDDEN", "Only the service owner can create this proposal.");
   }
 
   const existing = await prisma.prestaProposal.findFirst({
@@ -187,10 +190,7 @@ export async function POST(
   });
 
   if (existing) {
-    return NextResponse.json(
-      { error: "ALREADY_PROPOSED", message: "Provider already proposed for this need" },
-      { status: 409 }
-    );
+    return errorResponse(409, "ALREADY_PROPOSED", "Provider already proposed for this need.");
   }
 
   try {
@@ -236,10 +236,7 @@ export async function POST(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      return NextResponse.json(
-        { error: "ALREADY_PROPOSED", message: "Provider already proposed for this need" },
-        { status: 409 }
-      );
+      return errorResponse(409, "ALREADY_PROPOSED", "Provider already proposed for this need.");
     }
 
     throw error;
