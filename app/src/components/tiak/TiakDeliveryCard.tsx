@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import TiakCourierActions from "@/components/tiak/TiakCourierActions";
@@ -21,6 +21,13 @@ function formatAmount(priceCents: number | null, currency: string) {
   if (priceCents === null) return "-";
   const label = currency === "XOF" ? "FCFA" : currency;
   return `${priceCents} ${label}`;
+}
+
+function toErrorMessage(data: unknown, fallback: string) {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (typeof record?.message === "string") return record.message;
+  if (typeof record?.error === "string") return record.error;
+  return fallback;
 }
 
 function contactHintLabel(locale: string, paymentMethod: string | null) {
@@ -53,10 +60,14 @@ export default function TiakDeliveryCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [customerActionLoading, setCustomerActionLoading] = useState(false);
   const [customerActionError, setCustomerActionError] = useState<string | null>(null);
+  const [autoAssignLoading, setAutoAssignLoading] = useState(false);
+  const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
 
   const isCustomerOwner = Boolean(currentUserId && currentUserId === delivery.customerId);
+  const isAdmin = currentUserRole === "ADMIN";
   const canCancel = isCustomerOwner && delivery.status === "REQUESTED";
   const canComplete = isCustomerOwner && delivery.status === "DELIVERED";
+  const canAutoAssign = (isCustomerOwner || isAdmin) && delivery.status === "REQUESTED" && !delivery.courierId;
 
   const statusClass = useMemo(() => {
     if (delivery.status === "REQUESTED") return "border-sky-300/40 bg-sky-300/10 text-sky-200";
@@ -104,6 +115,55 @@ export default function TiakDeliveryCard({
       setCustomerActionError(locale === "fr" ? "Action refusee" : "Action denied");
     } finally {
       setCustomerActionLoading(false);
+    }
+  }
+
+  async function autoAssignCourier() {
+    if (!isLoggedIn) {
+      onRequireLogin();
+      return;
+    }
+
+    setAutoAssignLoading(true);
+    setAutoAssignError(null);
+
+    try {
+      const response = await fetch(`/api/tiak/jobs/${delivery.id}/auto-assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAutoAssignError(
+          toErrorMessage(
+            data,
+            locale === "fr" ? "Assignation automatique impossible" : "Auto-assignment failed"
+          )
+        );
+        return;
+      }
+
+      const assignedCourierId =
+        data && typeof data === "object" && data.job && typeof data.job === "object"
+          ? (data.job as { assignedCourierId?: unknown }).assignedCourierId
+          : null;
+      const assignExpiresAt =
+        data && typeof data === "object" && data.job && typeof data.job === "object"
+          ? (data.job as { assignExpiresAt?: unknown }).assignExpiresAt
+          : null;
+
+      onTrackDelivery(delivery.id);
+      onDeliveryUpdated({
+        ...delivery,
+        courierId: typeof assignedCourierId === "string" ? assignedCourierId : delivery.courierId,
+        assignedAt: new Date().toISOString(),
+        assignExpiresAt: typeof assignExpiresAt === "string" ? assignExpiresAt : delivery.assignExpiresAt,
+      });
+    } catch {
+      setAutoAssignError(locale === "fr" ? "Assignation automatique impossible" : "Auto-assignment failed");
+    } finally {
+      setAutoAssignLoading(false);
     }
   }
 
@@ -173,9 +233,33 @@ export default function TiakDeliveryCard({
             {locale === "fr" ? "Confirmer reception" : "Confirm received"}
           </button>
         )}
+
+        {canAutoAssign && (
+          <button
+            type="button"
+            onClick={() => void autoAssignCourier()}
+            disabled={autoAssignLoading}
+            className="rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 disabled:opacity-60"
+          >
+            {autoAssignLoading
+              ? locale === "fr"
+                ? "Recherche..."
+                : "Assigning..."
+              : locale === "fr"
+                ? "Assigner automatiquement"
+                : "Auto-assign best courier"}
+          </button>
+        )}
       </div>
 
       {customerActionError && <p className="mt-2 text-xs text-rose-300">{customerActionError}</p>}
+      {autoAssignError && <p className="mt-2 text-xs text-rose-300">{autoAssignError}</p>}
+      {delivery.assignExpiresAt && delivery.status === "REQUESTED" && delivery.courierId && (
+        <p className="mt-1 text-[11px] text-amber-200">
+          {locale === "fr" ? "Assignation en attente - expire le" : "Assignment pending - expires at"}{" "}
+          {new Date(delivery.assignExpiresAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US")}
+        </p>
+      )}
 
       <TiakCourierMatcher
         locale={locale}

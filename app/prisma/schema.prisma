@@ -812,6 +812,8 @@ model TiakDelivery {
   orderId        String?
   paymentStatus  PaymentStatus?     @default(PENDING)
   paidAt         DateTime?
+  assignedAt     DateTime?
+  assignExpiresAt DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -116,6 +116,8 @@ export async function GET(
       paymentStatus: true,
       paidAt: true,
       orderId: true,
+      assignedAt: true,
+      assignExpiresAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -173,6 +175,8 @@ export async function GET(
     paymentStatus: delivery.paymentStatus,
     paidAt: delivery.paidAt,
     orderId: delivery.orderId,
+    assignedAt: delivery.assignedAt,
+    assignExpiresAt: delivery.assignExpiresAt,
     createdAt: delivery.createdAt,
     updatedAt: delivery.updatedAt,
     customer: delivery.customer,
@@ -226,6 +230,8 @@ export async function PATCH(
       paymentStatus: true,
       paidAt: true,
       orderId: true,
+      assignedAt: true,
+      assignExpiresAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -263,6 +269,10 @@ export async function PATCH(
     }
     if (delivery.courierId && delivery.courierId !== session.user.id && !isAdmin) {
       return NextResponse.json({ error: "Delivery already assigned" }, { status: 409 });
+    }
+
+    if (delivery.assignExpiresAt && new Date(delivery.assignExpiresAt).getTime() < Date.now()) {
+      return NextResponse.json({ error: "Assignment expired" }, { status: 409 });
     }
   }
 
@@ -318,6 +328,8 @@ export async function PATCH(
         nextStatus === "ACCEPTED"
           ? (delivery.courierId ?? session.user.id)
           : delivery.courierId,
+      assignedAt: nextStatus === "ACCEPTED" ? (delivery.assignedAt ?? new Date()) : delivery.assignedAt,
+      assignExpiresAt: nextStatus === "ACCEPTED" ? null : delivery.assignExpiresAt,
       events: {
         create: [
           {
@@ -342,6 +354,8 @@ export async function PATCH(
       paymentStatus: true,
       paidAt: true,
       orderId: true,
+      assignedAt: true,
+      assignExpiresAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -380,6 +394,8 @@ export async function PATCH(
     paymentStatus: updated.paymentStatus,
     paidAt: updated.paidAt,
     orderId: updated.orderId,
+    assignedAt: updated.assignedAt,
+    assignExpiresAt: updated.assignExpiresAt,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
     customer: updated.customer,
@@ -389,4 +405,5 @@ export async function PATCH(
     canContact: contact.canContact,
   });
 }
+
 

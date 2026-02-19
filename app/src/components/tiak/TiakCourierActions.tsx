@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { type FormEvent, useState } from "react";
 import { type TiakDelivery, type TiakDeliveryStatus } from "@/components/tiak/types";
@@ -11,6 +11,13 @@ type Props = {
   onDeliveryUpdated: (delivery: TiakDelivery) => void;
 };
 
+function toErrorMessage(data: unknown, fallback: string) {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (typeof record?.message === "string") return record.message;
+  if (typeof record?.error === "string") return record.error;
+  return fallback;
+}
+
 export default function TiakCourierActions({
   locale,
   delivery,
@@ -21,6 +28,7 @@ export default function TiakCourierActions({
   const [proofUrl, setProofUrl] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState<TiakDeliveryStatus | null>(null);
+  const [assignmentAction, setAssignmentAction] = useState<"accept" | "decline" | null>(null);
   const [postingEvent, setPostingEvent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventMessage, setEventMessage] = useState<string | null>(null);
@@ -28,12 +36,15 @@ export default function TiakCourierActions({
   const isAdmin = currentUserRole === "ADMIN";
   const isCourierRole = currentUserRole === "COURIER" || isAdmin;
   const isAssignedCourier = Boolean(currentUserId && currentUserId === delivery.courierId);
-  const canAccept = isCourierRole && delivery.status === "REQUESTED";
+
+  const canAcceptDirect = isCourierRole && delivery.status === "REQUESTED" && !delivery.courierId;
+  const canAcceptAssigned = (isAssignedCourier || isAdmin) && delivery.status === "REQUESTED" && !!delivery.courierId;
+  const canDeclineAssigned = canAcceptAssigned;
   const canPickUp = (isAssignedCourier || isAdmin) && delivery.status === "ACCEPTED";
   const canDeliver = (isAssignedCourier || isAdmin) && delivery.status === "PICKED_UP";
   const canAddProof = isAssignedCourier || isAdmin;
 
-  if (!canAccept && !canPickUp && !canDeliver && !canAddProof) {
+  if (!canAcceptDirect && !canAcceptAssigned && !canDeclineAssigned && !canPickUp && !canDeliver && !canAddProof) {
     return null;
   }
 
@@ -51,7 +62,12 @@ export default function TiakCourierActions({
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(typeof data?.error === "string" ? data.error : locale === "fr" ? "Action refusee" : "Action denied");
+        setError(
+          toErrorMessage(
+            data,
+            locale === "fr" ? "Action refusee" : "Action denied"
+          )
+        );
         return;
       }
 
@@ -60,6 +76,56 @@ export default function TiakCourierActions({
       setError(locale === "fr" ? "Action refusee" : "Action denied");
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function respondAssigned(action: "accept" | "decline") {
+    setAssignmentAction(action);
+    setError(null);
+    setEventMessage(null);
+
+    try {
+      const endpoint =
+        action === "accept"
+          ? `/api/tiak/jobs/${delivery.id}/courier-accept`
+          : `/api/tiak/jobs/${delivery.id}/courier-decline`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(
+          toErrorMessage(
+            data,
+            locale === "fr" ? "Action refusee" : "Action denied"
+          )
+        );
+        return;
+      }
+
+      if (action === "accept") {
+        onDeliveryUpdated({
+          ...delivery,
+          status: "ACCEPTED",
+          assignExpiresAt: null,
+        });
+      } else {
+        onDeliveryUpdated({
+          ...delivery,
+          status: "REQUESTED",
+          courierId: null,
+          courier: null,
+          assignExpiresAt: null,
+          assignedAt: null,
+        });
+      }
+    } catch {
+      setError(locale === "fr" ? "Action refusee" : "Action denied");
+    } finally {
+      setAssignmentAction(null);
     }
   }
 
@@ -83,7 +149,12 @@ export default function TiakCourierActions({
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(typeof data?.error === "string" ? data.error : locale === "fr" ? "Preuve refusee" : "Proof rejected");
+        setError(
+          toErrorMessage(
+            data,
+            locale === "fr" ? "Preuve refusee" : "Proof rejected"
+          )
+        );
         return;
       }
 
@@ -104,7 +175,7 @@ export default function TiakCourierActions({
       </p>
 
       <div className="flex flex-wrap gap-2">
-        {canAccept && (
+        {canAcceptDirect && (
           <button
             type="button"
             disabled={saving !== null}
@@ -118,6 +189,40 @@ export default function TiakCourierActions({
               : locale === "fr"
                 ? "Accepter"
                 : "Accept"}
+          </button>
+        )}
+
+        {canAcceptAssigned && (
+          <button
+            type="button"
+            disabled={assignmentAction !== null}
+            onClick={() => void respondAssigned("accept")}
+            className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 disabled:opacity-60"
+          >
+            {assignmentAction === "accept"
+              ? locale === "fr"
+                ? "En cours..."
+                : "Updating..."
+              : locale === "fr"
+                ? "Accepter"
+                : "Accept"}
+          </button>
+        )}
+
+        {canDeclineAssigned && (
+          <button
+            type="button"
+            disabled={assignmentAction !== null}
+            onClick={() => void respondAssigned("decline")}
+            className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1.5 text-xs font-semibold text-rose-200 disabled:opacity-60"
+          >
+            {assignmentAction === "decline"
+              ? locale === "fr"
+                ? "En cours..."
+                : "Updating..."
+              : locale === "fr"
+                ? "Refuser"
+                : "Decline"}
           </button>
         )}
 
@@ -199,3 +304,4 @@ export default function TiakCourierActions({
     </div>
   );
 }
+

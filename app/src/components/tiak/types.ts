@@ -1,4 +1,4 @@
-export type TiakDeliveryStatus =
+﻿export type TiakDeliveryStatus =
   | "REQUESTED"
   | "ACCEPTED"
   | "PICKED_UP"
@@ -29,6 +29,8 @@ export type TiakDelivery = {
   paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | null;
   paidAt: string | null;
   orderId: string | null;
+  assignedAt: string | null;
+  assignExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
   customer: TiakUserLite | null;
@@ -73,3 +75,4 @@ export type TiakCourierProfile = {
     role: string;
   };
 };
+

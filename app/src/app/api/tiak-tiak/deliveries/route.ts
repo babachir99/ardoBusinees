@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -105,6 +105,8 @@ function serializeDelivery(
     paymentStatus: PaymentStatus | null;
     paidAt: Date | null;
     orderId: string | null;
+    assignedAt: Date | null;
+    assignExpiresAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
     customer?: { id: string; name: string | null; image: string | null } | null;
@@ -128,6 +130,8 @@ function serializeDelivery(
     paymentStatus: delivery.paymentStatus,
     paidAt: delivery.paidAt,
     orderId: delivery.orderId,
+    assignedAt: delivery.assignedAt,
+    assignExpiresAt: delivery.assignExpiresAt,
     createdAt: delivery.createdAt,
     updatedAt: delivery.updatedAt,
     customer: delivery.customer ?? null,
@@ -151,8 +155,20 @@ export async function GET(request: NextRequest) {
   const takeRaw = Number(searchParams.get("take") ?? "20");
   const take = Number.isFinite(takeRaw) ? Math.min(Math.max(Math.trunc(takeRaw), 1), 100) : 20;
 
+  const where = session?.user?.id
+    ? session.user.role === "ADMIN"
+      ? { status: "REQUESTED" as const }
+      : {
+          status: "REQUESTED" as const,
+          OR: [{ courierId: null }, { courierId: session.user.id }],
+        }
+    : {
+        status: "REQUESTED" as const,
+        courierId: null,
+      };
+
   const deliveries = await prisma.tiakDelivery.findMany({
-    where: { status: "REQUESTED" },
+    where,
     orderBy: [{ createdAt: "desc" }],
     take,
     select: {
@@ -169,6 +185,8 @@ export async function GET(request: NextRequest) {
       paymentStatus: true,
       paidAt: true,
       orderId: true,
+      assignedAt: true,
+      assignExpiresAt: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -284,6 +302,8 @@ export async function POST(request: NextRequest) {
         orderId: createdOrderId,
         paymentStatus: isOnlinePayment ? PaymentStatus.PENDING : null,
         paidAt: null,
+        assignedAt: null,
+        assignExpiresAt: null,
       },
       select: {
         id: true,
@@ -299,6 +319,8 @@ export async function POST(request: NextRequest) {
         paymentStatus: true,
         paidAt: true,
         orderId: true,
+        assignedAt: true,
+        assignExpiresAt: true,
         createdAt: true,
         updatedAt: true,
         customer: {
@@ -364,3 +386,4 @@ export async function POST(request: NextRequest) {
     { status: 201 }
   );
 }
+
