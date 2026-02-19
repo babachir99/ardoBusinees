@@ -223,7 +223,7 @@ export async function PATCH(
     }
 
     if (existing.status !== PrestaProposalStatus.PENDING) {
-      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal not pending.");
     }
 
     const updated = await prisma.prestaProposal.updateMany({
@@ -235,7 +235,7 @@ export async function PATCH(
     });
 
     if (updated.count === 0) {
-      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal not pending.");
     }
 
     const proposal = await prisma.prestaProposal.findUnique({
@@ -311,14 +311,14 @@ export async function PATCH(
   }
 
   if (existing.status !== PrestaProposalStatus.PENDING) {
-    return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
+    return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal not pending.");
   }
 
   if (existing.need.status !== PrestaNeedStatus.OPEN) {
     return errorResponse(
       409,
       "ALREADY_ACCEPTED",
-      "Need is no longer open (already accepted or closed)."
+      "Need already accepted or not open."
     );
   }
 
@@ -514,7 +514,7 @@ export async function PATCH(
       if (!initializeResponse.ok) {
         return errorResponse(
           502,
-          "PAYMENT_INITIALIZE_FAILED",
+          "PAYMENT_INIT_FAILED",
           "Booking accepted but payment initialization failed."
         );
       }
@@ -571,14 +571,14 @@ export async function PATCH(
     });
   } catch (error) {
     if (error instanceof Error && error.message === "INVALID_PROPOSAL_STATE") {
-      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal is not pending anymore.");
+      return errorResponse(409, "INVALID_PROPOSAL_STATE", "Proposal not pending.");
     }
 
     if (error instanceof Error && error.message === "ALREADY_ACCEPTED") {
       return errorResponse(
         409,
         "ALREADY_ACCEPTED",
-        "Need is no longer open (already accepted or closed)."
+        "Need already accepted or not open."
       );
     }
 
@@ -594,3 +594,18 @@ export async function PATCH(
   }
 }
 
+
+/**
+ * curl tests (manual):
+ * 1) Accept proposal (normal)
+ * curl -X PATCH "http://localhost:3000/api/presta/proposals/<PROPOSAL_ID>" -H "Content-Type: application/json" -H "Cookie: <SESSION_COOKIE>" -d "{\"status\":\"ACCEPTED\",\"paymentMethod\":\"CASH\"}"
+ * -> 200 {"proposal":{"id":"...","status":"ACCEPTED"},"needStatus":"ACCEPTED","rejectedCount":1,"booking":{"id":"...","status":"CONFIRMED"}}
+ *
+ * 2) Re-accept same proposal (idempotent)
+ * curl -X PATCH "http://localhost:3000/api/presta/proposals/<PROPOSAL_ID>" -H "Content-Type: application/json" -H "Cookie: <SESSION_COOKIE>" -d "{\"status\":\"ACCEPTED\",\"paymentMethod\":\"CASH\"}"
+ * -> 200 {"proposal":{"id":"...","status":"ACCEPTED"},"needStatus":"ACCEPTED","rejectedCount":0,"booking":{"id":"...","status":"CONFIRMED"}}
+ *
+ * 3) Accept another proposal on same need
+ * curl -X PATCH "http://localhost:3000/api/presta/proposals/<OTHER_PROPOSAL_ID>" -H "Content-Type: application/json" -H "Cookie: <SESSION_COOKIE>" -d "{\"status\":\"ACCEPTED\",\"paymentMethod\":\"CASH\"}"
+ * -> 409 {"error":"ALREADY_ACCEPTED","message":"Need already accepted or not open."}
+ */
