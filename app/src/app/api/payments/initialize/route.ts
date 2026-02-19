@@ -1,8 +1,11 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentLedgerContextType, PaymentLedgerStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+
+const PLATFORM_FEE_BPS = 1000;
 
 type OrderWithSeller = {
   id: string;
@@ -16,6 +19,15 @@ type OrderWithSeller = {
   paymentMethod: "WAVE" | "ORANGE_MONEY" | "CARD" | "CASH" | null;
   seller: { userId: string } | null;
 };
+
+function errorResponse(status: number, error: string, message: string) {
+  return NextResponse.json({ error, message }, { status });
+}
+
+function hasPaymentLedgerDelegate() {
+  const runtimePrisma = prisma as unknown as { paymentLedger?: unknown };
+  return Boolean(runtimePrisma.paymentLedger);
+}
 
 function getRequestedOrderIds(body: unknown): string[] {
   if (!body || typeof body !== "object") {
@@ -45,16 +57,24 @@ function normalizeProvider(value: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  if (!hasPaymentLedgerDelegate()) {
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "Payment ledger delegate unavailable. Run npx prisma generate and restart dev server."
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
   const body = await request.json().catch(() => null);
   const orderIds = getRequestedOrderIds(body);
 
   if (orderIds.length === 0) {
-    return NextResponse.json({ error: "orderId or orderIds is required" }, { status: 400 });
+    return errorResponse(400, "INVALID_INPUT", "orderId or orderIds is required.");
   }
 
   const provider = normalizeProvider((body as { provider?: unknown } | null)?.provider);
@@ -71,7 +91,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (orders.length !== orderIds.length) {
-    return NextResponse.json({ error: "One or more orders were not found" }, { status: 404 });
+    return errorResponse(404, "ORDER_NOT_FOUND", "One or more orders were not found.");
   }
 
   const forbiddenOrder = orders.find(
@@ -79,95 +99,153 @@ export async function POST(request: NextRequest) {
   );
 
   if (forbiddenOrder) {
-    return NextResponse.json({ error: `Forbidden for order ${forbiddenOrder.id}` }, { status: 403 });
+    return errorResponse(403, "FORBIDDEN", `Forbidden for order ${forbiddenOrder.id}.`);
   }
 
   const intentId = randomUUID();
+  const providerNormalized = provider.toUpperCase();
 
-  const initializedPayments = await prisma.$transaction(async (tx) => {
-    const records: Array<{
-      orderId: string;
-      paymentId: string;
-      providerRef: string | null;
-      status: string;
-      amountCents: number;
-      currency: string;
-    }> = [];
+  try {
+    const initializedPayments = await prisma.$transaction(async (tx) => {
+      const records: Array<{
+        orderId: string;
+        paymentId: string;
+        providerRef: string | null;
+        status: string;
+        amountCents: number;
+        currency: string;
+      }> = [];
 
-    for (const order of orders as OrderWithSeller[]) {
-      const providerRef = `${provider}_${intentId}_${order.id}`;
+      for (const order of orders as OrderWithSeller[]) {
+        const providerRef = `${provider}_${intentId}_${order.id}`;
 
-      const payment = await tx.payment.upsert({
-        where: { orderId: order.id },
-        update: {
-          provider,
-          providerRef,
-          amountCents: order.totalCents,
-          currency: order.currency,
-          status: "PENDING",
-          method: order.paymentMethod ?? undefined,
-          splitMeta: {
-            mode: "provider-ready",
-            intentId,
-            returnUrl,
-            cancelUrl,
+        const payment = await tx.payment.upsert({
+          where: { orderId: order.id },
+          update: {
+            provider,
+            providerRef,
+            amountCents: order.totalCents,
+            currency: order.currency,
+            status: "PENDING",
+            method: order.paymentMethod ?? undefined,
+            splitMeta: {
+              mode: "provider-ready",
+              intentId,
+              returnUrl,
+              cancelUrl,
+            },
           },
-        },
-        create: {
+          create: {
+            orderId: order.id,
+            provider,
+            providerRef,
+            amountCents: order.totalCents,
+            currency: order.currency,
+            status: "PENDING",
+            method: order.paymentMethod ?? undefined,
+            splitMeta: {
+              mode: "provider-ready",
+              intentId,
+              returnUrl,
+              cancelUrl,
+            },
+          },
+        });
+
+        if (order.paymentStatus !== "PENDING") {
+          await tx.order.update({
+            where: { id: order.id },
+            data: { paymentStatus: "PENDING" },
+          });
+        }
+
+        await tx.orderEvent.create({
+          data: {
+            orderId: order.id,
+            status: order.status,
+            note: `Payment initialized (${provider})`,
+          },
+        });
+
+        const [prestaBooking, tiakDelivery] = await Promise.all([
+          tx.prestaBooking.findUnique({
+            where: { orderId: order.id },
+            select: { id: true },
+          }),
+          tx.tiakDelivery.findFirst({
+            where: { orderId: order.id },
+            select: { id: true },
+          }),
+        ]);
+
+        const contextType = prestaBooking
+          ? PaymentLedgerContextType.PRESTA_BOOKING
+          : tiakDelivery
+            ? PaymentLedgerContextType.TIAK_DELIVERY
+            : PaymentLedgerContextType.SHOP_ORDER;
+        const contextId = prestaBooking?.id ?? tiakDelivery?.id ?? order.id;
+
+        const platformFeeCents = Math.round((order.totalCents * PLATFORM_FEE_BPS) / 10000);
+        const payoutCents = order.totalCents - platformFeeCents;
+        const providerIntentId = orderIds.length === 1 ? intentId : `${intentId}_${order.id}`;
+
+        await tx.paymentLedger.upsert({
+          where: {
+            contextType_contextId: {
+              contextType,
+              contextId,
+            },
+          },
+          update: {
+            provider: providerNormalized,
+            providerIntentId,
+            orderId: order.id,
+            amountTotalCents: order.totalCents,
+            platformFeeCents,
+            payoutCents,
+            currency: order.currency,
+            status: PaymentLedgerStatus.INITIATED,
+          },
+          create: {
+            provider: providerNormalized,
+            providerIntentId,
+            orderId: order.id,
+            contextType,
+            contextId,
+            amountTotalCents: order.totalCents,
+            platformFeeCents,
+            payoutCents,
+            currency: order.currency,
+            status: PaymentLedgerStatus.INITIATED,
+          },
+        });
+
+        records.push({
           orderId: order.id,
-          provider,
-          providerRef,
-          amountCents: order.totalCents,
-          currency: order.currency,
-          status: "PENDING",
-          method: order.paymentMethod ?? undefined,
-          splitMeta: {
-            mode: "provider-ready",
-            intentId,
-            returnUrl,
-            cancelUrl,
-          },
-        },
-      });
-
-      if (order.paymentStatus !== "PENDING") {
-        await tx.order.update({
-          where: { id: order.id },
-          data: { paymentStatus: "PENDING" },
+          paymentId: payment.id,
+          providerRef: payment.providerRef,
+          status: payment.status,
+          amountCents: payment.amountCents,
+          currency: payment.currency,
         });
       }
 
-      await tx.orderEvent.create({
-        data: {
-          orderId: order.id,
-          status: order.status,
-          note: `Payment initialized (${provider})`,
-        },
-      });
+      return records;
+    });
 
-      records.push({
-        orderId: order.id,
-        paymentId: payment.id,
-        providerRef: payment.providerRef,
-        status: payment.status,
-        amountCents: payment.amountCents,
-        currency: payment.currency,
-      });
-    }
-
-    return records;
-  });
-
-  return NextResponse.json(
-    {
-      success: true,
-      intentId,
-      provider,
-      callbackUrl: "/api/payments/callback",
-      redirectUrl: null,
-      orderIds: initializedPayments.map((payment) => payment.orderId),
-      payments: initializedPayments,
-    },
-    { status: 201 }
-  );
+    return NextResponse.json(
+      {
+        success: true,
+        intentId,
+        provider,
+        callbackUrl: "/api/payments/callback",
+        redirectUrl: null,
+        orderIds: initializedPayments.map((payment) => payment.orderId),
+        payments: initializedPayments,
+      },
+      { status: 201 }
+    );
+  } catch {
+    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+  }
 }

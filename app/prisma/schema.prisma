@@ -162,6 +162,18 @@ enum TiakPayoutStatus {
   FAILED
 }
 
+enum PaymentLedgerContextType {
+  SHOP_ORDER
+  PRESTA_BOOKING
+  TIAK_DELIVERY
+}
+
+enum PaymentLedgerStatus {
+  INITIATED
+  CONFIRMED
+  FAILED
+}
+
 enum TiakDeliveryStatus {
   REQUESTED
   ACCEPTED
@@ -422,6 +434,7 @@ model Order {
   events         OrderEvent[]
   messages       OrderMessage[]
   tiakDeliveries TiakDelivery[]
+  paymentLedgers PaymentLedger[]
 
   @@index([userId])
   @@index([sellerId])
@@ -474,6 +487,26 @@ model Payment {
   createdAt   DateTime       @default(now())
 
   order Order @relation(fields: [orderId], references: [id])
+}
+
+model PaymentLedger {
+  id               String                   @id @default(cuid())
+  createdAt        DateTime                 @default(now())
+  provider         String                   @default("PAYDUNYA")
+  providerIntentId String?                  @unique
+  orderId          String?
+  contextType      PaymentLedgerContextType
+  contextId        String
+  amountTotalCents Int
+  platformFeeCents Int
+  payoutCents      Int
+  currency         String                   @default("XOF")
+  status           PaymentLedgerStatus      @default(INITIATED)
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([contextType, contextId])
+  @@index([orderId])
 }
 
 model Payout {
