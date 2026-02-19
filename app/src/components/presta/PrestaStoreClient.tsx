@@ -121,6 +121,7 @@ export default function PrestaStoreClient({
   const [needSuccess, setNeedSuccess] = useState<string | null>(null);
   const [submittingNeed, setSubmittingNeed] = useState(false);
   const [showNeedForm, setShowNeedForm] = useState(false);
+  const [selectedNeedForProposals, setSelectedNeedForProposals] = useState<string | null>(null);
 
   const [bookingService, setBookingService] = useState<BookingTarget | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
@@ -631,15 +632,17 @@ export default function PrestaStoreClient({
                   onOpenBooking={openBooking}
                 />
 
-                <PrestaNeedProposalsPanel
-                  locale={locale}
-                  needId={need.id}
-                  needStatus={need.status}
-                  isLoggedIn={isLoggedIn}
-                  isOwner={Boolean(currentUserId && currentUserId === need.customerId) || isAdmin}
-                  onRequireLogin={goToLogin}
-                  onAccepted={loadNeeds}
-                />
+                {need.status === "OPEN" && (Boolean(currentUserId && currentUserId === need.customerId) || isAdmin) && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedNeedForProposals(need.id)}
+                      className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
+                    >
+                      {locale === "fr" ? "Voir propositions" : "View proposals"}
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
 
@@ -656,6 +659,16 @@ export default function PrestaStoreClient({
           </div>
         )}
       </section>
+
+      {selectedNeedForProposals && (
+        <PrestaNeedProposalsPanel
+          needId={selectedNeedForProposals}
+          onClose={async () => {
+            setSelectedNeedForProposals(null);
+            await loadNeeds();
+          }}
+        />
+      )}
 
       {bookingService && (
         <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-3 md:items-center" role="dialog" aria-modal="true">
