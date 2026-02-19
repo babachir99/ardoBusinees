@@ -590,6 +590,7 @@ model PrestaBooking {
   customerId    String
   providerId    String
   orderId       String?             @unique
+  proposalId    String?             @unique
   status        PrestaBookingStatus @default(PENDING)
   quantity      Int                 @default(1)
   message       String?
@@ -602,9 +603,11 @@ model PrestaBooking {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  service  PrestaService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  customer User          @relation("PrestaBookingCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  provider User          @relation("PrestaBookingProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  service        PrestaService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customer       User           @relation("PrestaBookingCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  provider       User           @relation("PrestaBookingProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  proposal       PrestaProposal? @relation("PrestaProposalBooking", fields: [proposalId], references: [id], onDelete: SetNull)
+  linkedProposal PrestaProposal? @relation("PrestaBookingByProposalId")
 
   @@index([serviceId, status, createdAt])
   @@index([customerId, status, createdAt])
@@ -641,14 +644,17 @@ model PrestaProposal {
   needId     String
   serviceId  String
   providerId String
+  bookingId  String?              @unique
   message    String?
   status     PrestaProposalStatus @default(PENDING)
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
 
-  need     PrestaNeed    @relation(fields: [needId], references: [id], onDelete: Cascade)
-  service  PrestaService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  provider User          @relation("PrestaProposalProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  need            PrestaNeed     @relation(fields: [needId], references: [id], onDelete: Cascade)
+  service         PrestaService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  provider        User           @relation("PrestaProposalProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  booking         PrestaBooking? @relation("PrestaBookingByProposalId", fields: [bookingId], references: [id], onDelete: SetNull)
+  linkedFromBooking PrestaBooking? @relation("PrestaProposalBooking")
 
   @@unique([needId, providerId])
   @@index([needId, status, createdAt])

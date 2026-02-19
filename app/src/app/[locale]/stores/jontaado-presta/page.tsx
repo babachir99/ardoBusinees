@@ -57,6 +57,8 @@ export default async function PrestaPage({
           locale={locale}
           isLoggedIn={Boolean(session?.user?.id)}
           canPublish={canPublish}
+          currentUserId={session?.user?.id ?? null}
+          currentUserRole={session?.user?.role ?? null}
         />
       </main>
 

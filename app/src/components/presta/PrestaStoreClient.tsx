@@ -3,7 +3,9 @@
 import Image from "next/image";
 import { type FormEvent, useEffect, useState } from "react";
 import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
+import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
+import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
 
 type PrestaService = {
   id: string;
@@ -43,15 +45,17 @@ type PrestaNeed = {
   };
 };
 
+type BookingTarget = {
+  id: string;
+  title: string;
+};
+
 type Props = {
   locale: string;
   isLoggedIn: boolean;
   canPublish: boolean;
-};
-
-type BookingTarget = {
-  id: string;
-  title: string;
+  currentUserId?: string | null;
+  currentUserRole?: string | null;
 };
 
 const paymentMethods = ["WAVE", "ORANGE_MONEY", "CARD", "CASH"] as const;
@@ -75,7 +79,20 @@ function formatDateLabel(value: string | null, locale: string) {
   return parsed.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US");
 }
 
-export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Props) {
+function toErrorMessage(data: unknown, fallback: string) {
+  const asRecord = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (typeof asRecord?.message === "string") return asRecord.message;
+  if (typeof asRecord?.error === "string") return asRecord.error;
+  return fallback;
+}
+
+export default function PrestaStoreClient({
+  locale,
+  isLoggedIn,
+  canPublish,
+  currentUserId,
+  currentUserRole,
+}: Props) {
   const [tab, setTab] = useState<"offers" | "needs" | "provider">("offers");
 
   const [services, setServices] = useState<PrestaService[]>([]);
@@ -111,6 +128,8 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
+  const isAdmin = currentUserRole === "ADMIN";
+
   async function loadServices() {
     setLoading(true);
     setError(null);
@@ -124,7 +143,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       const data = await response.json().catch(() => []);
 
       if (!response.ok) {
-        setError(typeof data?.error === "string" ? data.error : "Unable to load services");
+        setError(toErrorMessage(data, "Unable to load services"));
         return;
       }
 
@@ -149,7 +168,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       const data = await response.json().catch(() => []);
 
       if (!response.ok) {
-        setError(typeof data?.error === "string" ? data.error : "Unable to load needs");
+        setError(toErrorMessage(data, "Unable to load needs"));
         return;
       }
 
@@ -176,6 +195,11 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  function goToLogin() {
+    const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
+  }
 
   function togglePaymentMethod(method: string) {
     setFormMethods((current) => {
@@ -221,7 +245,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setFormError(typeof data?.error === "string" ? data.error : "Creation failed");
+        setFormError(toErrorMessage(data, "Creation failed"));
         return;
       }
 
@@ -290,7 +314,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setNeedError(typeof data?.error === "string" ? data.error : "Need publish failed");
+        setNeedError(toErrorMessage(data, "Need publish failed"));
         return;
       }
 
@@ -309,11 +333,6 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     } finally {
       setSubmittingNeed(false);
     }
-  }
-
-  function goToLogin() {
-    const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
   }
 
   function openNeedComposer() {
@@ -348,14 +367,14 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setBookingError(typeof data?.error === "string" ? data.error : "Booking failed");
+        setBookingError(toErrorMessage(data, "Booking failed"));
         return;
       }
 
       setBookingService(null);
       setBookingMessage("");
       setBookingMethod("WAVE");
-      setFormSuccess(`Booking cree: ${data?.booking?.id ?? "OK"}`);
+      setFormSuccess(`Booking cree: ${(data as { booking?: { id?: string } })?.booking?.id ?? "OK"}`);
       await loadServices();
     } catch {
       setBookingError("Booking failed");
@@ -474,9 +493,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
 
           {!isLoggedIn && (
             <p className="mt-3 text-xs text-zinc-400">
-              {locale === "fr"
-                ? "Connecte-toi pour publier un besoin."
-                : "Sign in to publish a need."}
+              {locale === "fr" ? "Connecte-toi pour publier un besoin." : "Sign in to publish a need."}
             </p>
           )}
 
@@ -484,57 +501,27 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
             <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateNeed}>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 Titre
-                <input
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needTitle}
-                  onChange={(event) => setNeedTitle(event.target.value)}
-                  required
-                  maxLength={140}
-                />
+                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needTitle} onChange={(event) => setNeedTitle(event.target.value)} required maxLength={140} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 Budget
-                <input
-                  type="number"
-                  min={0}
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needBudget}
-                  onChange={(event) => setNeedBudget(event.target.value)}
-                />
+                <input type="number" min={0} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needBudget} onChange={(event) => setNeedBudget(event.target.value)} />
               </label>
               <label className="md:col-span-2 flex flex-col gap-1 text-xs text-zinc-300">
                 Description
-                <textarea
-                  className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
-                  value={needDescription}
-                  onChange={(event) => setNeedDescription(event.target.value)}
-                  required
-                  maxLength={3000}
-                />
+                <textarea className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white" value={needDescription} onChange={(event) => setNeedDescription(event.target.value)} required maxLength={3000} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 Ville
-                <input
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needCity}
-                  onChange={(event) => setNeedCity(event.target.value)}
-                />
+                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCity} onChange={(event) => setNeedCity(event.target.value)} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 Zone
-                <input
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needArea}
-                  onChange={(event) => setNeedArea(event.target.value)}
-                />
+                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needArea} onChange={(event) => setNeedArea(event.target.value)} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 Devise
-                <select
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needCurrency}
-                  onChange={(event) => setNeedCurrency(event.target.value)}
-                >
+                <select className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCurrency} onChange={(event) => setNeedCurrency(event.target.value)}>
                   <option value="XOF">XOF</option>
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -542,19 +529,10 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
                 {locale === "fr" ? "Date souhaitee" : "Preferred date"}
-                <input
-                  type="date"
-                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-                  value={needPreferredDate}
-                  onChange={(event) => setNeedPreferredDate(event.target.value)}
-                />
+                <input type="date" className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needPreferredDate} onChange={(event) => setNeedPreferredDate(event.target.value)} />
               </label>
               <div className="md:col-span-2 flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={submittingNeed}
-                  className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-                >
+                <button type="submit" disabled={submittingNeed} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
                   {submittingNeed ? "Envoi..." : locale === "fr" ? "Publier" : "Publish"}
                 </button>
                 {needError && <p className="text-sm text-rose-300">{needError}</p>}
@@ -575,8 +553,8 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   ? "Besoins PRESTA"
                   : "PRESTA needs"
                 : locale === "fr"
-                  ? "Matching prestataire"
-                  : "Provider matching"}
+                  ? "Espace prestataire"
+                  : "Provider space"}
           </h2>
           {tab !== "provider" && (
             <button
@@ -617,11 +595,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   <p className="mt-2 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => openBooking({ id: service.id, title: service.title })}
-                  className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
-                >
+                <button type="button" onClick={() => openBooking({ id: service.id, title: service.title })} className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
                   Reserver
                 </button>
               </article>
@@ -656,6 +630,16 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
                   onRequireLogin={goToLogin}
                   onOpenBooking={openBooking}
                 />
+
+                <PrestaNeedProposalsPanel
+                  locale={locale}
+                  needId={need.id}
+                  needStatus={need.status}
+                  isLoggedIn={isLoggedIn}
+                  isOwner={Boolean(currentUserId && currentUserId === need.customerId) || isAdmin}
+                  onRequireLogin={goToLogin}
+                  onAccepted={loadNeeds}
+                />
               </article>
             ))}
 
@@ -666,12 +650,10 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
             )}
           </div>
         ) : (
-          <PrestaProviderMatchingPanel
-            locale={locale}
-            isLoggedIn={isLoggedIn}
-            enabled={canPublish}
-            onRequireLogin={goToLogin}
-          />
+          <div className="space-y-4">
+            <PrestaProviderMatchingPanel locale={locale} isLoggedIn={isLoggedIn} enabled={canPublish} onRequireLogin={goToLogin} />
+            <PrestaProviderProposalsPanel locale={locale} enabled={canPublish} />
+          </div>
         )}
       </section>
 
@@ -680,11 +662,7 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-white">Reserver: {bookingService.title}</h3>
-              <button
-                type="button"
-                className="rounded-full border border-white/20 px-2 py-1 text-xs text-zinc-200"
-                onClick={() => setBookingService(null)}
-              >
+              <button type="button" className="rounded-full border border-white/20 px-2 py-1 text-xs text-zinc-200" onClick={() => setBookingService(null)}>
                 Fermer
               </button>
             </div>
@@ -717,3 +695,4 @@ export default function PrestaStoreClient({ locale, isLoggedIn, canPublish }: Pr
     </div>
   );
 }
+

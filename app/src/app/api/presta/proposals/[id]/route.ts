@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { PrestaNeedStatus, PrestaProposalStatus } from "@prisma/client";
+import {
+  PaymentMethod,
+  PrestaBookingStatus,
+  PrestaNeedStatus,
+  PrestaProposalStatus,
+  Prisma,
+} from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -18,6 +24,7 @@ const proposalSelect = {
   needId: true,
   serviceId: true,
   providerId: true,
+  bookingId: true,
   message: true,
   status: true,
   createdAt: true,
@@ -43,6 +50,13 @@ const proposalSelect = {
       basePriceCents: true,
       currency: true,
       city: true,
+      provider: {
+        select: {
+          sellerProfile: {
+            select: { id: true },
+          },
+        },
+      },
     },
   },
 } as const;
@@ -51,14 +65,24 @@ function hasPrestaProposalDelegates() {
   const runtimePrisma = prisma as unknown as {
     prestaNeed?: unknown;
     prestaProposal?: unknown;
+    prestaBooking?: unknown;
   };
 
-  return Boolean(runtimePrisma.prestaNeed && runtimePrisma.prestaProposal);
+  return Boolean(runtimePrisma.prestaNeed && runtimePrisma.prestaProposal && runtimePrisma.prestaBooking);
 }
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
+}
+
+function parsePaymentMethod(value: unknown): PaymentMethod {
+  const raw = normalizeString(value).toUpperCase();
+  const allowed = new Set<PaymentMethod>(Object.values(PaymentMethod));
+  if (allowed.has(raw as PaymentMethod)) {
+    return raw as PaymentMethod;
+  }
+  return PaymentMethod.CASH;
 }
 
 function errorResponse(status: number, error: string, message: string) {
@@ -70,13 +94,31 @@ type ProposalView = {
   needId: string;
   serviceId: string;
   providerId: string;
+  bookingId: string | null;
   message: string | null;
   status: PrestaProposalStatus;
   createdAt: Date;
   updatedAt: Date;
   need: { id: string; status: PrestaNeedStatus; customerId: string };
   provider: { id: string; name: string | null; image: string | null };
-  service: { id: string; title: string; basePriceCents: number; currency: string; city: string | null };
+  service: {
+    id: string;
+    title: string;
+    basePriceCents: number;
+    currency: string;
+    city: string | null;
+    provider: { sellerProfile: { id: string } | null };
+  };
+};
+
+type BookingView = {
+  id: string;
+  status: PrestaBookingStatus;
+  serviceId: string;
+  customerId: string;
+  providerId: string;
+  createdAt: Date;
+  orderId: string | null;
 };
 
 function serializeProposal(proposal: ProposalView) {
@@ -85,27 +127,50 @@ function serializeProposal(proposal: ProposalView) {
     needId: proposal.needId,
     serviceId: proposal.serviceId,
     providerId: proposal.providerId,
+    bookingId: proposal.bookingId,
     message: proposal.message,
     status: proposal.status,
     createdAt: proposal.createdAt,
     updatedAt: proposal.updatedAt,
     need: proposal.need,
     provider: proposal.provider,
-    service: proposal.service,
+    service: {
+      id: proposal.service.id,
+      title: proposal.service.title,
+      basePriceCents: proposal.service.basePriceCents,
+      currency: proposal.service.currency,
+      city: proposal.service.city,
+    },
   };
 }
 
-function okResponse(
-  proposal: ProposalView,
-  needStatus: PrestaNeedStatus,
-  rejectedCount: number,
-  options?: { includeAcceptRaceNotes?: boolean }
-) {
+function serializeBooking(booking: BookingView) {
+  return {
+    id: booking.id,
+    status: booking.status,
+    serviceId: booking.serviceId,
+    customerId: booking.customerId,
+    providerId: booking.providerId,
+    createdAt: booking.createdAt,
+    orderId: booking.orderId,
+  };
+}
+
+function okResponse(params: {
+  proposal: ProposalView;
+  needStatus: PrestaNeedStatus;
+  rejectedCount: number;
+  booking: BookingView | null;
+  paymentInitialization?: unknown;
+  includeAcceptRaceNotes?: boolean;
+}) {
   return NextResponse.json({
-    proposal: serializeProposal(proposal),
-    needStatus,
-    rejectedCount,
-    ...(options?.includeAcceptRaceNotes ? { acceptRaceNotes } : {}),
+    proposal: serializeProposal(params.proposal),
+    needStatus: params.needStatus,
+    rejectedCount: params.rejectedCount,
+    booking: params.booking ? serializeBooking(params.booking) : null,
+    ...(params.paymentInitialization !== undefined ? { paymentInitialization: params.paymentInitialization } : {}),
+    ...(params.includeAcceptRaceNotes ? { acceptRaceNotes } : {}),
   });
 }
 
@@ -133,6 +198,10 @@ export async function PATCH(
     return errorResponse(400, "INVALID_STATUS", "Unsupported proposal status transition.");
   }
 
+  const targetStatus = nextStatus as PrestaProposalStatus;
+  const paymentMethod = parsePaymentMethod((body as { paymentMethod?: unknown })?.paymentMethod);
+  const paymentProvider = normalizeString((body as { provider?: unknown })?.provider) || "provider_pending";
+
   const { id } = await params;
 
   const existing = await prisma.prestaProposal.findUnique({
@@ -147,7 +216,6 @@ export async function PATCH(
   const isAdmin = session.user.role === "ADMIN";
   const isNeedOwner = session.user.id === existing.need.customerId;
   const isProvider = session.user.id === existing.providerId;
-  const targetStatus = nextStatus as PrestaProposalStatus;
 
   if (targetStatus === PrestaProposalStatus.WITHDRAWN) {
     if (!isProvider && !isAdmin) {
@@ -179,7 +247,12 @@ export async function PATCH(
       return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
     }
 
-    return okResponse(proposal, proposal.need.status, 0);
+    return okResponse({
+      proposal,
+      needStatus: proposal.need.status,
+      rejectedCount: 0,
+      booking: null,
+    });
   }
 
   if (!isNeedOwner && !isAdmin) {
@@ -197,7 +270,44 @@ export async function PATCH(
       select: proposalSelect,
     });
 
-    return okResponse(proposal, proposal.need.status, 0);
+    return okResponse({
+      proposal,
+      needStatus: proposal.need.status,
+      rejectedCount: 0,
+      booking: null,
+    });
+  }
+
+  if (existing.status === PrestaProposalStatus.ACCEPTED && existing.bookingId) {
+    const currentBooking = await prisma.prestaBooking.findUnique({
+      where: { id: existing.bookingId },
+      select: {
+        id: true,
+        status: true,
+        serviceId: true,
+        customerId: true,
+        providerId: true,
+        createdAt: true,
+        orderId: true,
+      },
+    });
+
+    const currentProposal = await prisma.prestaProposal.findUnique({
+      where: { id: existing.id },
+      select: proposalSelect,
+    });
+
+    if (!currentProposal) {
+      return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
+    }
+
+    return okResponse({
+      proposal: currentProposal,
+      needStatus: currentProposal.need.status,
+      rejectedCount: 0,
+      booking: currentBooking,
+      includeAcceptRaceNotes: true,
+    });
   }
 
   if (existing.status !== PrestaProposalStatus.PENDING) {
@@ -247,6 +357,87 @@ export async function PATCH(
         data: { status: PrestaProposalStatus.REJECTED },
       });
 
+      let booking = await tx.prestaBooking.findFirst({
+        where: {
+          OR: [{ proposalId: existing.id }, { id: existing.bookingId ?? "" }],
+        },
+        select: {
+          id: true,
+          status: true,
+          serviceId: true,
+          customerId: true,
+          providerId: true,
+          createdAt: true,
+          orderId: true,
+        },
+      });
+
+      if (!booking) {
+        try {
+          booking = await tx.prestaBooking.create({
+            data: {
+              serviceId: existing.serviceId,
+              customerId: existing.need.customerId,
+              providerId: existing.providerId,
+              status: PrestaBookingStatus.CONFIRMED,
+              quantity: 1,
+              totalCents: existing.service.basePriceCents,
+              currency: existing.service.currency,
+              paymentMethod,
+              confirmedAt: new Date(),
+              proposalId: existing.id,
+            },
+            select: {
+              id: true,
+              status: true,
+              serviceId: true,
+              customerId: true,
+              providerId: true,
+              createdAt: true,
+              orderId: true,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            booking = await tx.prestaBooking.findFirst({
+              where: { proposalId: existing.id },
+              select: {
+                id: true,
+                status: true,
+                serviceId: true,
+                customerId: true,
+                providerId: true,
+                createdAt: true,
+                orderId: true,
+              },
+            });
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!booking) {
+        throw new Error("BOOKING_NOT_FOUND");
+      }
+
+      if (!existing.bookingId || existing.bookingId !== booking.id) {
+        await tx.prestaProposal.update({
+          where: { id: existing.id },
+          data: { bookingId: booking.id },
+        });
+      }
+
+      if (!existing.bookingId || existing.bookingId !== booking.id) {
+        await tx.prestaBooking.updateMany({
+          where: { id: booking.id, proposalId: null },
+          data: { proposalId: existing.id },
+        });
+      }
+
       const proposal = await tx.prestaProposal.findUnique({
         where: { id: existing.id },
         select: proposalSelect,
@@ -260,10 +451,122 @@ export async function PATCH(
         proposal,
         needStatus: PrestaNeedStatus.ACCEPTED,
         rejectedCount: rejected.count,
+        booking,
       };
     });
 
-    return okResponse(result.proposal, result.needStatus, result.rejectedCount, {
+    let booking = result.booking;
+    let paymentInitialization: unknown | undefined;
+
+    if (paymentMethod !== PaymentMethod.CASH && !booking.orderId) {
+      const order = await prisma.order.create({
+        data: {
+          userId: result.proposal.need.customerId,
+          sellerId: result.proposal.service.provider.sellerProfile?.id ?? null,
+          buyerName: null,
+          buyerEmail: null,
+          buyerPhone: null,
+          paymentMethod,
+          subtotalCents: result.proposal.service.basePriceCents,
+          shippingCents: 0,
+          feesCents: 0,
+          totalCents: result.proposal.service.basePriceCents,
+          currency: result.proposal.service.currency,
+          status: "PENDING",
+          paymentStatus: "PENDING",
+        },
+        select: { id: true },
+      });
+
+      booking = await prisma.prestaBooking.update({
+        where: { id: booking.id },
+        data: {
+          orderId: order.id,
+          paymentMethod,
+        },
+        select: {
+          id: true,
+          status: true,
+          serviceId: true,
+          customerId: true,
+          providerId: true,
+          createdAt: true,
+          orderId: true,
+        },
+      });
+
+      const initializeUrl = new URL("/api/payments/initialize", request.url);
+      const initializeResponse = await fetch(initializeUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: request.headers.get("cookie") ?? "",
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          provider: paymentProvider,
+        }),
+        cache: "no-store",
+      });
+
+      paymentInitialization = await initializeResponse.json().catch(() => null);
+
+      if (!initializeResponse.ok) {
+        return errorResponse(
+          502,
+          "PAYMENT_INITIALIZE_FAILED",
+          "Booking accepted but payment initialization failed."
+        );
+      }
+
+      await prisma.orderEvent.create({
+        data: {
+          orderId: order.id,
+          status: "CONFIRMED",
+          note: "PRESTA_PROPOSAL_ACCEPTED",
+        },
+      });
+    } else if (booking.orderId) {
+      await prisma.orderEvent.create({
+        data: {
+          orderId: booking.orderId,
+          status: "CONFIRMED",
+          note: "PRESTA_PROPOSAL_ACCEPTED",
+        },
+      });
+    } else {
+      await prisma.activityLog.createMany({
+        data: [
+          {
+            userId: result.proposal.need.customerId,
+            action: "PRESTA_PROPOSAL_ACCEPTED",
+            entityType: "PrestaProposal",
+            entityId: result.proposal.id,
+            metadata: {
+              needId: result.proposal.needId,
+              bookingId: booking.id,
+            },
+          },
+          {
+            userId: result.proposal.providerId,
+            action: "PRESTA_PROPOSAL_ACCEPTED",
+            entityType: "PrestaProposal",
+            entityId: result.proposal.id,
+            metadata: {
+              needId: result.proposal.needId,
+              bookingId: booking.id,
+            },
+          },
+        ],
+      });
+    }
+
+    return okResponse({
+      proposal: result.proposal,
+      needStatus: result.needStatus,
+      rejectedCount: result.rejectedCount,
+      booking,
+      paymentInitialization,
       includeAcceptRaceNotes: true,
     });
   } catch (error) {
@@ -279,6 +582,10 @@ export async function PATCH(
       );
     }
 
+    if (error instanceof Error && error.message === "BOOKING_NOT_FOUND") {
+      return errorResponse(404, "BOOKING_NOT_FOUND", "Booking not found for accepted proposal.");
+    }
+
     if (error instanceof Error && error.message === "PROPOSAL_NOT_FOUND") {
       return errorResponse(404, "PROPOSAL_NOT_FOUND", "Proposal not found.");
     }
@@ -286,3 +593,4 @@ export async function PATCH(
     throw error;
   }
 }
+

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Prisma, PrestaProposalStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -242,3 +242,4 @@ export async function POST(
     throw error;
   }
 }
+
