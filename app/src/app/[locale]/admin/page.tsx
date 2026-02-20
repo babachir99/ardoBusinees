@@ -1,8 +1,9 @@
-import { Link } from "@/i18n/navigation";
+﻿import { Link } from "@/i18n/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 import AdminTrendsPanel from "@/components/admin/AdminTrendsPanel";
+import AdminOpsHub from "@/components/admin/AdminOpsHub";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -40,6 +41,8 @@ export default async function AdminPage() {
   todayStart.setHours(0, 0, 0, 0);
   const last30Days = new Date(now);
   last30Days.setDate(last30Days.getDate() - 30);
+  const last7Days = new Date(now);
+  last7Days.setDate(last7Days.getDate() - 7);
   const trendDays = 30;
   const trendStart = new Date(todayStart);
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
@@ -201,6 +204,207 @@ export default async function AdminPage() {
     1
   );
 
+  const [
+    prestaPayoutReadyCount,
+    tiakPayoutReadyCount,
+    disputesOpenCount,
+    paymentLedgerFailed7dCount,
+    disputesOpenItems,
+    prestaPayoutReadyItems,
+    tiakPayoutReadyItems,
+    paymentFailedItems,
+    kycPendingItems,
+  ] = await Promise.all([
+    prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
+    prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
+    prisma.dispute.count({ where: { status: "OPEN" } }).catch(() => null),
+    prisma.paymentLedger
+      .count({ where: { status: "FAILED", createdAt: { gte: last7Days } } })
+      .catch(() => null),
+    prisma.dispute
+      .findMany({
+        where: { status: "OPEN" },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          contextType: true,
+          contextId: true,
+          status: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+    prisma.prestaPayout
+      .findMany({
+        where: { status: "READY" },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          bookingId: true,
+          status: true,
+          amountTotalCents: true,
+          currency: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+    prisma.tiakPayout
+      .findMany({
+        where: { status: "READY" },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          deliveryId: true,
+          status: true,
+          amountTotalCents: true,
+          currency: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+    prisma.paymentLedger
+      .findMany({
+        where: { status: "FAILED", createdAt: { gte: last7Days } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          contextType: true,
+          contextId: true,
+          status: true,
+          amountTotalCents: true,
+          currency: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+    prisma.kycSubmission
+      .findMany({
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          targetRole: true,
+          status: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+  ]);
+
+  const formatAgeLabel = (date: Date) => {
+    const diff = Math.max(0, now.getTime() - date.getTime());
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `${Math.max(1, minutes)}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}j`;
+  };
+
+  type OpsQueueItem = {
+    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "KYC";
+    id: string;
+    refLabel: string;
+    status: string;
+    ageLabel: string;
+    amountLabel?: string;
+    action:
+      | { kind: "release"; label: string; releaseType: "PRESTA" | "TIAK" }
+      | { kind: "link"; label: string; href: string };
+    createdAtMs: number;
+  };
+
+  const queueWithSort: OpsQueueItem[] = [
+    ...((disputesOpenItems ?? []).map((item) => ({
+      type: "DISPUTE" as const,
+      id: item.id,
+      refLabel: `${item.contextType} - ${item.contextId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      action: { kind: "link" as const, label: "Ouvrir", href: `/admin?ops=DISPUTE&focus=${item.id}` },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+    ...((prestaPayoutReadyItems ?? []).map((item) => ({
+      type: "PAYOUT" as const,
+      id: item.id,
+      refLabel: `PRESTA - ${item.bookingId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
+      action: { kind: "release" as const, label: "Release", releaseType: "PRESTA" as const },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+    ...((tiakPayoutReadyItems ?? []).map((item) => ({
+      type: "PAYOUT" as const,
+      id: item.id,
+      refLabel: `TIAK - ${item.deliveryId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
+      action: { kind: "release" as const, label: "Release", releaseType: "TIAK" as const },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+    ...((paymentFailedItems ?? []).map((item) => ({
+      type: "PAYMENT_FAILED" as const,
+      id: item.id,
+      refLabel: `${item.contextType} - ${item.contextId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
+      action: {
+        kind: "link" as const,
+        label: "Voir",
+        href: `/admin?ops=PAYMENT_FAILED&focus=${item.id}`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+    ...((kycPendingItems ?? []).map((item) => ({
+      type: "KYC" as const,
+      id: item.id,
+      refLabel: `KYC - ${item.targetRole}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      action: { kind: "link" as const, label: "Voir", href: `/admin/kyc?focus=${item.id}` },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+  ];
+
+  const queuePriority: Record<OpsQueueItem["type"], number> = {
+    DISPUTE: 0,
+    PAYOUT: 1,
+    PAYMENT_FAILED: 2,
+    KYC: 3,
+  };
+
+  const opsQueueItems = queueWithSort
+    .sort((a, b) => {
+      if (queuePriority[a.type] !== queuePriority[b.type]) {
+        return queuePriority[a.type] - queuePriority[b.type];
+      }
+      if (a.type === "PAYMENT_FAILED") {
+        return b.createdAtMs - a.createdAtMs;
+      }
+      return a.createdAtMs - b.createdAtMs;
+    })
+    .slice(0, 20)
+    .map(({ createdAtMs, ...item }) => item);
+
+  const opsKpis = {
+    payoutsReady:
+      typeof prestaPayoutReadyCount === "number" && typeof tiakPayoutReadyCount === "number"
+        ? prestaPayoutReadyCount + tiakPayoutReadyCount
+        : null,
+    disputesOpen: typeof disputesOpenCount === "number" ? disputesOpenCount : null,
+    paymentsFailed7d:
+      typeof paymentLedgerFailed7dCount === "number" ? paymentLedgerFailed7dCount : null,
+    kycPending: typeof pendingKycCount === "number" ? pendingKycCount : null,
+  };
+
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
@@ -263,7 +467,9 @@ export default async function AdminPage() {
             </div>
           ))}
         </section>
-        
+
+        <AdminOpsHub kpis={opsKpis} queueItems={opsQueueItems} />
+
         <AdminTrendsPanel
           dates={trendDates}
           revenueSeries={revenueSeries}
