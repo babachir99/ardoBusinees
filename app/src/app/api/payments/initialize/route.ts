@@ -102,6 +102,20 @@ export async function POST(request: NextRequest) {
     return errorResponse(403, "FORBIDDEN", `Forbidden for order ${forbiddenOrder.id}.`);
   }
 
+  const paidOrder = orders.find((order) => order.paymentStatus === "PAID");
+  if (paidOrder) {
+    return errorResponse(409, "ORDER_ALREADY_PAID", `Order ${paidOrder.id} is already paid.`);
+  }
+
+  const nonPendingOrder = orders.find((order) => order.paymentStatus !== "PENDING");
+  if (nonPendingOrder) {
+    return errorResponse(
+      409,
+      "ORDER_NOT_PENDING",
+      `Order ${nonPendingOrder.id} payment must be PENDING for initialization.`
+    );
+  }
+
   const intentId = randomUUID();
   const providerNormalized = provider.toUpperCase();
 
@@ -151,13 +165,6 @@ export async function POST(request: NextRequest) {
             },
           },
         });
-
-        if (order.paymentStatus !== "PENDING") {
-          await tx.order.update({
-            where: { id: order.id },
-            data: { paymentStatus: "PENDING" },
-          });
-        }
 
         await tx.orderEvent.create({
           data: {

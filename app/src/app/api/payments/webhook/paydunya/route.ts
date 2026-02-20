@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { PrestaBookingStatus, PrestaPayoutStatus, TiakPayoutStatus } from "@prisma/client";
+import {
+  PaymentLedgerStatus,
+  PrestaBookingStatus,
+  PrestaPayoutStatus,
+  TiakPayoutStatus,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function errorResponse(status: number, error: string, message: string) {
@@ -80,7 +85,10 @@ export async function POST(request: NextRequest) {
       (body as { intent_id?: unknown }).intent_id ??
       (body as { transaction_id?: unknown }).transaction_id
   );
-  const orderId = normalizeString((body as { orderId?: unknown; order_id?: unknown }).orderId ?? (body as { order_id?: unknown }).order_id);
+  const orderId = normalizeString(
+    (body as { orderId?: unknown; order_id?: unknown }).orderId ??
+      (body as { order_id?: unknown }).order_id
+  );
 
   if (!webhookStatus || (!intentId && !orderId)) {
     return errorResponse(400, "INVALID_PAYLOAD", "status + intentId or orderId are required.");
@@ -124,32 +132,59 @@ export async function POST(request: NextRequest) {
   }
 
   const transition = await prisma.$transaction(async (tx) => {
-    const ledgerStatus = webhookStatus === "CONFIRMED" ? "CONFIRMED" : "FAILED";
+    const desiredLedgerStatus =
+      webhookStatus === "CONFIRMED" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
 
-    const updatedLedger = await tx.paymentLedger.update({
+    const currentLedger = await tx.paymentLedger.findUnique({
       where: { id: resolvedLedger.id },
-      data: {
-        provider: providerName,
-        providerIntentId: resolvedLedger.providerIntentId ?? (intentId || null),
-        status: ledgerStatus,
-      },
       select: {
         id: true,
         status: true,
         contextType: true,
         contextId: true,
         orderId: true,
+        providerIntentId: true,
       },
     });
+
+    if (!currentLedger) {
+      throw new Error("LEDGER_NOT_FOUND");
+    }
+
+    let effectiveLedgerStatus = currentLedger.status;
+
+    if (currentLedger.status === PaymentLedgerStatus.INITIATED) {
+      const moved = await tx.paymentLedger.updateMany({
+        where: {
+          id: currentLedger.id,
+          status: PaymentLedgerStatus.INITIATED,
+        },
+        data: {
+          provider: providerName,
+          providerIntentId: currentLedger.providerIntentId ?? (intentId || null),
+          status: desiredLedgerStatus,
+        },
+      });
+
+      if (moved.count === 1) {
+        effectiveLedgerStatus = desiredLedgerStatus;
+      } else {
+        const refreshed = await tx.paymentLedger.findUnique({
+          where: { id: currentLedger.id },
+          select: { status: true },
+        });
+        effectiveLedgerStatus = refreshed?.status ?? currentLedger.status;
+      }
+    }
 
     let prestaPayoutReadyCount = 0;
     let tiakPayoutReadyCount = 0;
 
-    if (webhookStatus === "CONFIRMED") {
-      if (updatedLedger.contextType === "PRESTA_BOOKING") {
+    if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
+      if (currentLedger.contextType === "PRESTA_BOOKING") {
         const updated = await tx.prestaPayout.updateMany({
           where: {
-            bookingId: updatedLedger.contextId,
+            bookingId: currentLedger.contextId,
             status: { in: [PrestaPayoutStatus.PENDING] },
           },
           data: { status: PrestaPayoutStatus.READY },
@@ -157,10 +192,10 @@ export async function POST(request: NextRequest) {
         prestaPayoutReadyCount = updated.count;
       }
 
-      if (updatedLedger.contextType === "TIAK_DELIVERY") {
+      if (currentLedger.contextType === "TIAK_DELIVERY") {
         const updated = await tx.tiakPayout.updateMany({
           where: {
-            deliveryId: updatedLedger.contextId,
+            deliveryId: currentLedger.contextId,
             status: { in: [TiakPayoutStatus.PENDING] },
           },
           data: { status: TiakPayoutStatus.READY },
@@ -168,12 +203,12 @@ export async function POST(request: NextRequest) {
         tiakPayoutReadyCount = updated.count;
       }
 
-      if (updatedLedger.orderId) {
+      if (currentLedger.orderId) {
         const paidAt = new Date();
 
         await tx.payment.updateMany({
           where: {
-            orderId: updatedLedger.orderId,
+            orderId: currentLedger.orderId,
             status: { not: "PAID" },
           },
           data: {
@@ -182,7 +217,7 @@ export async function POST(request: NextRequest) {
         });
 
         const order = await tx.order.findUnique({
-          where: { id: updatedLedger.orderId },
+          where: { id: currentLedger.orderId },
           select: { id: true, status: true, paymentStatus: true },
         });
 
@@ -207,7 +242,7 @@ export async function POST(request: NextRequest) {
 
         await tx.prestaBooking.updateMany({
           where: {
-            orderId: updatedLedger.orderId,
+            orderId: currentLedger.orderId,
             status: {
               in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
             },
@@ -220,7 +255,7 @@ export async function POST(request: NextRequest) {
 
         await tx.tiakDelivery.updateMany({
           where: {
-            orderId: updatedLedger.orderId,
+            orderId: currentLedger.orderId,
             OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
           },
           data: {
@@ -229,10 +264,10 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-    } else if (updatedLedger.orderId) {
+    } else if (effectiveLedgerStatus === PaymentLedgerStatus.FAILED && currentLedger.orderId) {
       await tx.payment.updateMany({
         where: {
-          orderId: updatedLedger.orderId,
+          orderId: currentLedger.orderId,
           status: { not: "FAILED" },
         },
         data: { status: "FAILED" },
@@ -240,7 +275,7 @@ export async function POST(request: NextRequest) {
 
       await tx.order.updateMany({
         where: {
-          id: updatedLedger.orderId,
+          id: currentLedger.orderId,
           paymentStatus: { not: "FAILED" },
         },
         data: { paymentStatus: "FAILED" },
@@ -248,7 +283,7 @@ export async function POST(request: NextRequest) {
 
       await tx.tiakDelivery.updateMany({
         where: {
-          orderId: updatedLedger.orderId,
+          orderId: currentLedger.orderId,
           OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
         },
         data: {
@@ -258,10 +293,11 @@ export async function POST(request: NextRequest) {
     }
 
     return {
-      ledgerId: updatedLedger.id,
-      ledgerStatus: updatedLedger.status,
-      contextType: updatedLedger.contextType,
-      contextId: updatedLedger.contextId,
+      ledgerId: currentLedger.id,
+      requestedWebhookStatus: webhookStatus,
+      ledgerStatus: effectiveLedgerStatus,
+      contextType: currentLedger.contextType,
+      contextId: currentLedger.contextId,
       prestaPayoutReadyCount,
       tiakPayoutReadyCount,
     };
@@ -271,6 +307,7 @@ export async function POST(request: NextRequest) {
     "[paydunya-webhook]",
     JSON.stringify({
       ledgerId: transition.ledgerId,
+      requestedWebhookStatus: transition.requestedWebhookStatus,
       ledgerStatus: transition.ledgerStatus,
       contextType: transition.contextType,
       contextId: transition.contextId,

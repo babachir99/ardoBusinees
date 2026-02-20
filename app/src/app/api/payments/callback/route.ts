@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PrestaBookingStatus } from "@prisma/client";
+import { PaymentLedgerStatus, PrestaBookingStatus } from "@prisma/client";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -57,24 +57,8 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const paymentUpdateData: {
-      status: "PAID" | "FAILED";
-      providerRef?: string;
-    } = {
-      status: callbackStatus,
-    };
-
-    if (providerRef) {
-      paymentUpdateData.providerRef = providerRef;
-    }
-
-    const updatedPayment = await tx.payment.update({
-      where: { id: payment.id },
-      data: paymentUpdateData,
-    });
-
     const order = await tx.order.findUnique({
-      where: { id: updatedPayment.orderId },
+      where: { id: payment.orderId },
       select: {
         id: true,
         sellerId: true,
@@ -90,7 +74,68 @@ export async function POST(request: NextRequest) {
       throw new Error("ORDER_NOT_FOUND");
     }
 
-    if (callbackStatus === "PAID") {
+    const desiredLedgerStatus =
+      callbackStatus === "PAID" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
+
+    const latestLedger = await tx.paymentLedger.findFirst({
+      where: { orderId: order.id },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    let effectiveCallbackStatus: "PAID" | "FAILED" = callbackStatus;
+
+    if (latestLedger) {
+      if (latestLedger.status === PaymentLedgerStatus.INITIATED) {
+        const moved = await tx.paymentLedger.updateMany({
+          where: {
+            id: latestLedger.id,
+            status: PaymentLedgerStatus.INITIATED,
+          },
+          data: {
+            status: desiredLedgerStatus,
+          },
+        });
+
+        if (moved.count === 0) {
+          const refreshedLedger = await tx.paymentLedger.findUnique({
+            where: { id: latestLedger.id },
+            select: { status: true },
+          });
+
+          if (refreshedLedger?.status === PaymentLedgerStatus.CONFIRMED) {
+            effectiveCallbackStatus = "PAID";
+          } else if (refreshedLedger?.status === PaymentLedgerStatus.FAILED) {
+            effectiveCallbackStatus = "FAILED";
+          }
+        }
+      } else if (latestLedger.status === PaymentLedgerStatus.CONFIRMED) {
+        effectiveCallbackStatus = "PAID";
+      } else if (latestLedger.status === PaymentLedgerStatus.FAILED) {
+        effectiveCallbackStatus = "FAILED";
+      }
+    }
+
+    const paymentUpdateData: {
+      status: "PAID" | "FAILED";
+      providerRef?: string;
+    } = {
+      status: effectiveCallbackStatus,
+    };
+
+    if (providerRef) {
+      paymentUpdateData.providerRef = providerRef;
+    }
+
+    const updatedPayment = await tx.payment.update({
+      where: { id: payment.id },
+      data: paymentUpdateData,
+    });
+
+    if (effectiveCallbackStatus === "PAID") {
       const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
       const paidAt = new Date();
 

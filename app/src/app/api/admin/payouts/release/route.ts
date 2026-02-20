@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import {
   DisputeContextType,
   PrestaPayoutStatus,
+  Prisma,
   TiakPayoutStatus,
 } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -40,14 +41,10 @@ function hasActivityLogDelegate() {
   return Boolean(runtimePrisma.activityLog);
 }
 
-async function hasActiveDispute(
+async function hasActiveDisputeInTx(
+  tx: Prisma.TransactionClient,
   contexts: Array<{ contextType: DisputeContextType; contextId: string }>
 ) {
-  if (!hasDisputeDelegate()) {
-    // TODO: add hard guard when dispute model is always available in all environments.
-    return false;
-  }
-
   const cleanedContexts = contexts
     .map((entry) => ({
       contextType: entry.contextType,
@@ -59,7 +56,7 @@ async function hasActiveDispute(
     return false;
   }
 
-  const dispute = await prisma.dispute.findFirst({
+  const dispute = await tx.dispute.findFirst({
     where: {
       status: "OPEN",
       OR: cleanedContexts.map((entry) => ({
@@ -95,6 +92,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!hasDisputeDelegate()) {
+    return errorResponse(
+      503,
+      "DELEGATE_UNAVAILABLE",
+      "Dispute delegate unavailable. Run npx prisma generate and restart dev server."
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "ADMIN") {
     return errorResponse(401, "UNAUTHORIZED", "Admin access required.");
@@ -116,102 +121,196 @@ export async function POST(request: NextRequest) {
   }
 
   if (type === "PRESTA") {
-    const payout = await prisma.prestaPayout.findUnique({
-      where: { id: payoutId },
-      select: {
-        id: true,
-        status: true,
-        bookingId: true,
-        booking: {
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const payout = await tx.prestaPayout.findUnique({
+            where: { id: payoutId },
+            select: {
+              id: true,
+              status: true,
+              bookingId: true,
+              booking: {
+                select: {
+                  orderId: true,
+                },
+              },
+            },
+          });
+
+          if (!payout) {
+            throw new Error("PAYOUT_NOT_FOUND");
+          }
+
+          if (payout.status === PrestaPayoutStatus.PAID) {
+            return {
+              payout: { id: payout.id, status: payout.status },
+              released: false,
+            };
+          }
+
+          if (payout.status !== PrestaPayoutStatus.READY) {
+            throw new Error("INVALID_PAYOUT_STATE");
+          }
+
+          const blocked = await hasActiveDisputeInTx(tx, [
+            { contextType: DisputeContextType.PRESTA_BOOKING, contextId: payout.bookingId },
+            {
+              contextType: DisputeContextType.SHOP_ORDER,
+              contextId: payout.booking?.orderId ?? "",
+            },
+          ]);
+
+          if (blocked) {
+            throw new Error("PAYOUT_BLOCKED_BY_DISPUTE");
+          }
+
+          const updated = await tx.prestaPayout.updateMany({
+            where: {
+              id: payout.id,
+              status: PrestaPayoutStatus.READY,
+            },
+            data: { status: PrestaPayoutStatus.PAID },
+          });
+
+          if (updated.count === 0) {
+            throw new Error("INVALID_PAYOUT_STATE");
+          }
+
+          const finalPayout = await tx.prestaPayout.findUnique({
+            where: { id: payout.id },
+            select: { id: true, status: true },
+          });
+
+          if (!finalPayout) {
+            throw new Error("PAYOUT_NOT_FOUND");
+          }
+
+          return {
+            payout: finalPayout,
+            released: true,
+          };
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        }
+      );
+
+      if (result.released) {
+        await logRelease(session.user.id, "PRESTA", result.payout.id);
+      }
+
+      return NextResponse.json({ payout: result.payout });
+    } catch (error) {
+      if (error instanceof Error && error.message === "PAYOUT_NOT_FOUND") {
+        return errorResponse(404, "PAYOUT_NOT_FOUND", "PRESTA payout not found.");
+      }
+
+      if (error instanceof Error && error.message === "INVALID_PAYOUT_STATE") {
+        return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
+      }
+
+      if (error instanceof Error && error.message === "PAYOUT_BLOCKED_BY_DISPUTE") {
+        return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
+      }
+
+      return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    }
+  }
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const payout = await tx.tiakPayout.findUnique({
+          where: { id: payoutId },
           select: {
             id: true,
-            orderId: true,
+            status: true,
+            deliveryId: true,
+            delivery: {
+              select: {
+                orderId: true,
+              },
+            },
           },
-        },
+        });
+
+        if (!payout) {
+          throw new Error("PAYOUT_NOT_FOUND");
+        }
+
+        if (payout.status === TiakPayoutStatus.PAID) {
+          return {
+            payout: { id: payout.id, status: payout.status },
+            released: false,
+          };
+        }
+
+        if (payout.status !== TiakPayoutStatus.READY) {
+          throw new Error("INVALID_PAYOUT_STATE");
+        }
+
+        const blocked = await hasActiveDisputeInTx(tx, [
+          { contextType: DisputeContextType.TIAK_DELIVERY, contextId: payout.deliveryId },
+          {
+            contextType: DisputeContextType.SHOP_ORDER,
+            contextId: payout.delivery?.orderId ?? "",
+          },
+        ]);
+
+        if (blocked) {
+          throw new Error("PAYOUT_BLOCKED_BY_DISPUTE");
+        }
+
+        const updated = await tx.tiakPayout.updateMany({
+          where: {
+            id: payout.id,
+            status: TiakPayoutStatus.READY,
+          },
+          data: { status: TiakPayoutStatus.PAID },
+        });
+
+        if (updated.count === 0) {
+          throw new Error("INVALID_PAYOUT_STATE");
+        }
+
+        const finalPayout = await tx.tiakPayout.findUnique({
+          where: { id: payout.id },
+          select: { id: true, status: true },
+        });
+
+        if (!finalPayout) {
+          throw new Error("PAYOUT_NOT_FOUND");
+        }
+
+        return {
+          payout: finalPayout,
+          released: true,
+        };
       },
-    });
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
 
-    if (!payout) {
-      return errorResponse(404, "PAYOUT_NOT_FOUND", "PRESTA payout not found.");
+    if (result.released) {
+      await logRelease(session.user.id, "TIAK", result.payout.id);
     }
 
-    if (payout.status === PrestaPayoutStatus.PAID) {
-      return NextResponse.json({ payout: { id: payout.id, status: payout.status } });
+    return NextResponse.json({ payout: result.payout });
+  } catch (error) {
+    if (error instanceof Error && error.message === "PAYOUT_NOT_FOUND") {
+      return errorResponse(404, "PAYOUT_NOT_FOUND", "TIAK payout not found.");
     }
 
-    if (payout.status !== PrestaPayoutStatus.READY) {
+    if (error instanceof Error && error.message === "INVALID_PAYOUT_STATE") {
       return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
     }
 
-    const blocked = await hasActiveDispute([
-      { contextType: DisputeContextType.PRESTA_BOOKING, contextId: payout.bookingId },
-      {
-        contextType: DisputeContextType.SHOP_ORDER,
-        contextId: payout.booking?.orderId ?? "",
-      },
-    ]);
-
-    if (blocked) {
+    if (error instanceof Error && error.message === "PAYOUT_BLOCKED_BY_DISPUTE") {
       return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
     }
 
-    const updated = await prisma.prestaPayout.update({
-      where: { id: payout.id },
-      data: { status: PrestaPayoutStatus.PAID },
-      select: { id: true, status: true },
-    });
-
-    await logRelease(session.user.id, "PRESTA", updated.id);
-
-    return NextResponse.json({ payout: updated });
+    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
   }
-
-  const payout = await prisma.tiakPayout.findUnique({
-    where: { id: payoutId },
-    select: {
-      id: true,
-      status: true,
-      deliveryId: true,
-      delivery: {
-        select: {
-          id: true,
-          orderId: true,
-        },
-      },
-    },
-  });
-
-  if (!payout) {
-    return errorResponse(404, "PAYOUT_NOT_FOUND", "TIAK payout not found.");
-  }
-
-  if (payout.status === TiakPayoutStatus.PAID) {
-    return NextResponse.json({ payout: { id: payout.id, status: payout.status } });
-  }
-
-  if (payout.status !== TiakPayoutStatus.READY) {
-    return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
-  }
-
-  const blocked = await hasActiveDispute([
-    { contextType: DisputeContextType.TIAK_DELIVERY, contextId: payout.deliveryId },
-    {
-      contextType: DisputeContextType.SHOP_ORDER,
-      contextId: payout.delivery?.orderId ?? "",
-    },
-  ]);
-
-  if (blocked) {
-    return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
-  }
-
-  const updated = await prisma.tiakPayout.update({
-    where: { id: payout.id },
-    data: { status: TiakPayoutStatus.PAID },
-    select: { id: true, status: true },
-  });
-
-  await logRelease(session.user.id, "TIAK", updated.id);
-
-  return NextResponse.json({ payout: updated });
 }
