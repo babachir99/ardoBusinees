@@ -156,7 +156,15 @@ export async function GET(
       },
       events,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "CAS_CONFLICT") {
+      return errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry.");
+    }
+
+    if (error instanceof Error && error.message === "SHIPMENT_NOT_FOUND") {
+      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+    }
+
     return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
   }
 }
@@ -186,6 +194,10 @@ export async function POST(
 
   if (parsedProof.invalid) {
     return errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path.");
+  }
+
+  if (!parsedProof.value) {
+    return errorResponse(400, "PROOF_REQUIRED", "proofUrl is required for tracking events.");
   }
 
   if (!orderedStatuses.includes(requestedStatus as (typeof orderedStatuses)[number])) {
@@ -222,7 +234,8 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const txRuntime = tx as unknown as {
         gpShipment: {
-          update: (args: unknown) => Promise<{ id: string; code: string; status: string }>;
+          updateMany: (args: unknown) => Promise<{ count: number }>;
+          findUnique: (args: unknown) => Promise<{ id: string; code: string; status: string } | null>;
         };
         gpShipmentEvent: {
           create: (args: unknown) => Promise<{
@@ -236,11 +249,26 @@ export async function POST(
         };
       };
 
-      const shipment = await txRuntime.gpShipment.update({
-        where: { id: loaded.shipment!.id },
+      const moved = await txRuntime.gpShipment.updateMany({
+        where: {
+          id: loaded.shipment!.id,
+          status: loaded.shipment!.status,
+        },
         data: { status: requestedStatus },
+      });
+
+      if (moved.count === 0) {
+        throw new Error("CAS_CONFLICT");
+      }
+
+      const shipment = await txRuntime.gpShipment.findUnique({
+        where: { id: loaded.shipment!.id },
         select: { id: true, code: true, status: true },
       });
+
+      if (!shipment) {
+        throw new Error("SHIPMENT_NOT_FOUND");
+      }
 
       const event = await txRuntime.gpShipmentEvent.create({
         data: {
@@ -265,7 +293,15 @@ export async function POST(
     });
 
     return NextResponse.json(result, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "CAS_CONFLICT") {
+      return errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry.");
+    }
+
+    if (error instanceof Error && error.message === "SHIPMENT_NOT_FOUND") {
+      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+    }
+
     return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
   }
 }
