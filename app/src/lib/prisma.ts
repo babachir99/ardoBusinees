@@ -37,7 +37,11 @@ function hasRequiredDelegates(client: PrismaClient) {
     "tiakDelivery" in runtimeClient &&
     "tiakDeliveryEvent" in runtimeClient &&
     "tiakPayout" in runtimeClient &&
-    "paymentLedger" in runtimeClient
+    "paymentLedger" in runtimeClient &&
+    "userRoleAssignment" in runtimeClient &&
+    "immoListing" in runtimeClient &&
+    "immoPublisher" in runtimeClient &&
+    "immoPublisherMember" in runtimeClient
   );
 }
 

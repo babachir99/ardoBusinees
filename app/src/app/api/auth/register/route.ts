@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import crypto from "crypto";
+import { mapLegacyRoleToUserRoleType } from "@/lib/userRoles";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60);
 
+  const roleType = mapLegacyRoleToUserRoleType("CUSTOMER");
+
   const user = await prisma.user.create({
     data: {
       email,
@@ -47,6 +50,23 @@ export async function POST(request: NextRequest) {
       },
     },
   });
+
+  await prisma.userRoleAssignment
+    .upsert({
+      where: {
+        userId_role: {
+          userId: user.id,
+          role: roleType,
+        },
+      },
+      update: { status: "ACTIVE" },
+      create: {
+        userId: user.id,
+        role: roleType,
+        status: "ACTIVE",
+      },
+    })
+    .catch(() => null);
 
   await prisma.verificationToken.create({
     data: {

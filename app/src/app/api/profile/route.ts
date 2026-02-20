@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getUserRoles } from "@/lib/userRoles";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -22,7 +23,15 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(user);
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const roles = await getUserRoles(user.id).catch(() => []);
+  return NextResponse.json({
+    ...user,
+    roles,
+  });
 }
 
 export async function PUT(request: NextRequest) {
@@ -60,5 +69,9 @@ export async function PUT(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(user);
+  const roles = await getUserRoles(user.id).catch(() => []);
+  return NextResponse.json({
+    ...user,
+    roles,
+  });
 }

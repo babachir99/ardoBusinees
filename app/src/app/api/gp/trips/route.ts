@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { GpBookingStatus, GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const allowedStatuses = new Set<GpTripStatus>(Object.values(GpTripStatus));
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "ADMIN") {
+    if (hasUserRole(session.user, "ADMIN")) {
       if (transporterIdFilter) {
         where.transporterId = transporterIdFilter;
       }
@@ -221,7 +222,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const isAdmin = session?.user?.role === UserRole.ADMIN;
+  const isAdmin = hasUserRole(session?.user, "ADMIN");
   const viewerId = session?.user?.id ?? null;
 
   let unlockedTripIds = new Set<string>();
@@ -253,8 +254,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isAdmin = session.user.role === UserRole.ADMIN;
-  const isTransporter = session.user.role === UserRole.TRANSPORTER;
+  const isAdmin = hasUserRole(session.user, "ADMIN");
+  const isTransporter = hasAnyUserRole(session.user, ["TRANSPORTER", "GP_CARRIER", "ADMIN"]);
 
   if (!isAdmin && !isTransporter) {
     return NextResponse.json(
@@ -279,14 +280,28 @@ export async function POST(request: NextRequest) {
 
   const transporter = await prisma.user.findUnique({
     where: { id: transporterId },
-    select: { id: true, role: true, phone: true },
+    select: {
+      id: true,
+      role: true,
+      phone: true,
+      roleAssignments: {
+        where: { status: "ACTIVE" },
+        select: { role: true },
+      },
+    },
   });
 
   if (!transporter) {
     return NextResponse.json({ error: "Transporter not found" }, { status: 404 });
   }
 
-  if (!isAdmin && transporter.role !== UserRole.TRANSPORTER) {
+  const transporterCanPublish =
+    transporter.role === UserRole.TRANSPORTER ||
+    transporter.roleAssignments.some(
+      (roleEntry) => roleEntry.role === "GP_CARRIER" || roleEntry.role === "ADMIN"
+    );
+
+  if (!isAdmin && !transporterCanPublish) {
     return NextResponse.json({ error: "Invalid transporter profile" }, { status: 403 });
   }
 

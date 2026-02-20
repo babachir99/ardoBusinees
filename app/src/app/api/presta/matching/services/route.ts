@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
     return errorResponse(404, "NEED_NOT_FOUND", "Need not found.");
   }
 
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = hasUserRole(session?.user, "ADMIN");
   const isOwner = Boolean(session?.user?.id && session.user.id === need.customerId);
 
   if (need.status !== "OPEN" && !isAdmin && !isOwner) {
@@ -198,8 +199,6 @@ export async function GET(request: NextRequest) {
       : [];
 
   const proposalByProvider = new Set(proposalRows.map((proposal) => proposal.providerId));
-  const providerRoles = new Set(rules.publishRoles);
-
   return NextResponse.json({
     need: {
       id: need.id,
@@ -222,7 +221,7 @@ export async function GET(request: NextRequest) {
         session?.user?.id &&
           session.user.id === service.providerId &&
           session.user.id !== need.customerId &&
-          providerRoles.has(session.user.role as (typeof rules.publishRoles)[number]) &&
+          hasAnyUserRole(session.user, rules.publishRoles) &&
           need.status === "OPEN" &&
           !alreadyProposed
       );

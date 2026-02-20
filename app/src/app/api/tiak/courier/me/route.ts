@@ -2,6 +2,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasAnyUserRole } from "@/lib/userRoles";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -53,7 +54,7 @@ export async function GET(_request: NextRequest) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
-  if (session.user.role !== "COURIER") {
+  if (!hasAnyUserRole(session.user, ["COURIER", "TIAK_COURIER", "ADMIN"])) {
     return errorResponse(403, "FORBIDDEN", "Courier role required.");
   }
 
@@ -88,7 +89,7 @@ export async function PATCH(request: NextRequest) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
-  if (session.user.role !== "COURIER") {
+  if (!hasAnyUserRole(session.user, ["COURIER", "TIAK_COURIER", "ADMIN"])) {
     return errorResponse(403, "FORBIDDEN", "Courier role required.");
   }
 

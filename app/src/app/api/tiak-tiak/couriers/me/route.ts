@@ -4,6 +4,7 @@ import { KycRole, KycStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
@@ -74,7 +75,7 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.user.role !== "COURIER" && session.user.role !== "ADMIN") {
+  if (!hasAnyUserRole(session.user, ["COURIER", "TIAK_COURIER", "ADMIN"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -95,11 +96,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.user.role !== "COURIER" && session.user.role !== "ADMIN") {
+  if (!hasAnyUserRole(session.user, ["COURIER", "TIAK_COURIER", "ADMIN"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (rules.kycRequiredForPublishing && session.user.role !== "ADMIN") {
+  if (rules.kycRequiredForPublishing && !hasUserRole(session.user, "ADMIN")) {
     const approvedKyc = await prisma.kycSubmission.findFirst({
       where: {
         userId: session.user.id,

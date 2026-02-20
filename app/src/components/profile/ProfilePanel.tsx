@@ -13,6 +13,7 @@ type Profile = {
   image?: string | null;
   phone?: string | null;
   role: string;
+  roles?: string[];
   createdAt: string;
 };
 
@@ -21,6 +22,37 @@ type Activity = {
   action: string;
   createdAt: string;
 };
+
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "Admin",
+  CLIENT: "Client",
+  CUSTOMER: "Client",
+  SELLER: "Seller",
+  PRESTA_PROVIDER: "Presta",
+  GP_CARRIER: "GP",
+  TRANSPORTER: "GP",
+  TIAK_COURIER: "Tiak",
+  COURIER: "Tiak",
+  IMMO_AGENT: "Immo",
+};
+
+const ROLE_SHORTCUTS: Array<{ key: string; href: string; label: string }> = [
+  { key: "SELLER", href: "/seller", label: "roles.goSeller" },
+  { key: "PRESTA_PROVIDER", href: "/stores/jontaado-presta", label: "PRESTA" },
+  { key: "TIAK_COURIER", href: "/stores/jontaado-tiak-tiak", label: "roles.goCourier" },
+  { key: "COURIER", href: "/stores/jontaado-tiak-tiak", label: "roles.goCourier" },
+  { key: "GP_CARRIER", href: "/stores/jontaado-gp", label: "roles.goTransporter" },
+  { key: "TRANSPORTER", href: "/stores/jontaado-gp", label: "roles.goTransporter" },
+  { key: "IMMO_AGENT", href: "/immo/my", label: "IMMO" },
+];
+
+function normalizeRoleKey(role: string): string {
+  if (role === "TRANSPORTER") return "GP_CARRIER";
+  if (role === "COURIER") return "TIAK_COURIER";
+  if (role === "CUSTOMER") return "CLIENT";
+  return role;
+}
 
 type Favorite = {
   id: string;
@@ -233,6 +265,20 @@ export default function ProfilePanel() {
     );
   }
 
+  const rolesFromApi = Array.isArray(profile.roles) ? profile.roles : [];
+  const normalizedRoles = Array.from(
+    new Set(
+      [...rolesFromApi, profile.role]
+        .filter((role): role is string => Boolean(role))
+        .map((role) => normalizeRoleKey(role))
+    )
+  );
+
+  const roleLabels = normalizedRoles.map((role) => ROLE_LABELS[role] ?? role);
+  const activeRoleShortcuts = ROLE_SHORTCUTS.filter((shortcut) =>
+    normalizedRoles.includes(normalizeRoleKey(shortcut.key))
+  );
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
       <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
@@ -271,7 +317,7 @@ export default function ProfilePanel() {
             {t("fields.email")}: {profile.email}
           </div>
           <div className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-300">
-            {t("fields.role")}: {profile.role}
+            {t("fields.role")}: {roleLabels.join(", ")}
           </div>
         </div>
 
@@ -511,34 +557,19 @@ export default function ProfilePanel() {
           )}
         </div>
 
-        {["SELLER", "COURIER", "TRANSPORTER"].includes(profile.role) && (
+        {activeRoleShortcuts.length > 0 && (
           <div className="mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-xs text-emerald-100">
             <p>{t("roles.active")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {profile.role === "SELLER" && (
+              {activeRoleShortcuts.map((shortcut) => (
                 <Link
-                  href="/seller"
+                  key={`${shortcut.key}-${shortcut.href}`}
+                  href={shortcut.href}
                   className="rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
                 >
-                  {t("roles.goSeller")}
+                  {shortcut.label.startsWith("roles.") ? t(shortcut.label) : shortcut.label}
                 </Link>
-              )}
-              {profile.role === "COURIER" && (
-                <Link
-                  href="/stores/jontaado-tiak-tiak"
-                  className="rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
-                >
-                  {t("roles.goCourier")}
-                </Link>
-              )}
-              {profile.role === "TRANSPORTER" && (
-                <Link
-                  href="/transporter"
-                  className="rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
-                >
-                  {t("roles.goTransporter")}
-                </Link>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -764,3 +795,4 @@ export default function ProfilePanel() {
     </div>
   );
 }
+

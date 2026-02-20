@@ -3,6 +3,7 @@ export const Vertical = {
   PRESTA: "PRESTA",
   GP: "GP",
   TIAK_TIAK: "TIAK_TIAK",
+  IMMO: "IMMO",
 } as const;
 
 export type VerticalId = (typeof Vertical)[keyof typeof Vertical];
@@ -12,7 +13,12 @@ export type VerticalUserRole =
   | "SELLER"
   | "CUSTOMER"
   | "TRANSPORTER"
-  | "COURIER";
+  | "COURIER"
+  | "CLIENT"
+  | "PRESTA_PROVIDER"
+  | "GP_CARRIER"
+  | "TIAK_COURIER"
+  | "IMMO_AGENT";
 
 export type VerticalAccessRules = {
   publishRoles: readonly VerticalUserRole[];
@@ -29,6 +35,7 @@ export const STORE_SLUG_TO_VERTICAL: Record<string, VerticalId> = {
   "jontaado-presta": Vertical.PRESTA,
   "jontaado-gp": Vertical.GP,
   "jontaado-tiak-tiak": Vertical.TIAK_TIAK,
+  "jontaado-immo": Vertical.IMMO,
 };
 
 export const VERTICAL_ACCESS_RULES: Record<VerticalId, VerticalAccessRules> = {
@@ -41,7 +48,7 @@ export const VERTICAL_ACCESS_RULES: Record<VerticalId, VerticalAccessRules> = {
     },
   },
   [Vertical.PRESTA]: {
-    publishRoles: ["SELLER", "ADMIN"],
+    publishRoles: ["SELLER", "PRESTA_PROVIDER", "ADMIN"],
     kycRequiredForPublishing: true,
     contact: {
       lockedByDefault: true,
@@ -49,7 +56,7 @@ export const VERTICAL_ACCESS_RULES: Record<VerticalId, VerticalAccessRules> = {
     },
   },
   [Vertical.GP]: {
-    publishRoles: ["TRANSPORTER", "ADMIN"],
+    publishRoles: ["TRANSPORTER", "GP_CARRIER", "ADMIN"],
     kycRequiredForPublishing: true,
     contact: {
       lockedByDefault: true,
@@ -57,11 +64,19 @@ export const VERTICAL_ACCESS_RULES: Record<VerticalId, VerticalAccessRules> = {
     },
   },
   [Vertical.TIAK_TIAK]: {
-    publishRoles: ["COURIER", "ADMIN"],
+    publishRoles: ["COURIER", "TIAK_COURIER", "ADMIN"],
     kycRequiredForPublishing: true,
     contact: {
       lockedByDefault: true,
       unlockStatusHint: "ACCEPTED|PICKED_UP|DELIVERED|COMPLETED",
+    },
+  },
+  [Vertical.IMMO]: {
+    publishRoles: ["SELLER", "IMMO_AGENT", "ADMIN"],
+    kycRequiredForPublishing: false,
+    contact: {
+      lockedByDefault: true,
+      unlockStatusHint: "INTERNAL_MESSAGE",
     },
   },
 };

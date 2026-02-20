@@ -4,6 +4,7 @@ import { KycRole, KycStatus, PaymentMethod } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 
 const vertical = Vertical.PRESTA;
@@ -169,12 +170,11 @@ export async function POST(request: NextRequest) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
-  const allowedRoles = new Set(rules.publishRoles);
-  if (!allowedRoles.has(session.user.role as (typeof rules.publishRoles)[number])) {
+  if (!hasAnyUserRole(session.user, rules.publishRoles)) {
     return errorResponse(403, "FORBIDDEN", "Role is not allowed to publish PRESTA services.");
   }
 
-  if (rules.kycRequiredForPublishing && session.user.role !== "ADMIN") {
+  if (rules.kycRequiredForPublishing && !hasUserRole(session.user, "ADMIN")) {
     const approvedKyc = await prisma.kycSubmission.findFirst({
       where: {
         userId: session.user.id,

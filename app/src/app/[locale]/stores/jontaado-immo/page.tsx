@@ -3,8 +3,15 @@ import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 
-export default async function ImmoPage() {
-  const t = await getTranslations("Verticals.immo");
+export default async function ImmoPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const [{ locale }, t] = await Promise.all([
+    params,
+    getTranslations("Verticals.immo"),
+  ]);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -36,6 +43,23 @@ export default async function ImmoPage() {
             {t("title")}
           </h1>
           <p className="mt-3 text-sm text-zinc-300">{t("subtitle")}</p>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 fade-up">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/immo"
+              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
+            >
+              {locale === "fr" ? "Explorer les annonces" : "Browse listings"}
+            </Link>
+            <Link
+              href="/immo/my"
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+            >
+              {locale === "fr" ? "Mes annonces" : "My listings"}
+            </Link>
+          </div>
         </section>
 
         <section className="grid gap-6 md:grid-cols-3 fade-up">

@@ -5,6 +5,7 @@ import Footer from "@/components/layout/Footer";
 import { authOptions } from "@/lib/auth";
 import PrestaStoreClient from "@/components/presta/PrestaStoreClient";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole } from "@/lib/userRoles";
 
 export default async function PrestaPage({
   params,
@@ -15,9 +16,7 @@ export default async function PrestaPage({
   const session = await getServerSession(authOptions);
 
   const rules = getVerticalRules(Vertical.PRESTA);
-  const canPublish = Boolean(
-    session?.user?.role && rules.publishRoles.includes(session.user.role as (typeof rules.publishRoles)[number])
-  );
+  const canPublish = hasAnyUserRole(session?.user, rules.publishRoles);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">

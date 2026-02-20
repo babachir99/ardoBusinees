@@ -21,6 +21,22 @@ enum UserRole {
   COURIER
 }
 
+enum UserRoleType {
+  CLIENT
+  SELLER
+  PRESTA_PROVIDER
+  GP_CARRIER
+  TIAK_COURIER
+  IMMO_AGENT
+  ADMIN
+}
+
+enum UserRoleStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
 enum SellerStatus {
   PENDING
   APPROVED
@@ -212,6 +228,45 @@ enum DisputeContextType {
   GP_SHIPMENT
 }
 
+enum ImmoListingType {
+  SALE
+  RENT
+}
+
+enum ImmoPropertyType {
+  APARTMENT
+  HOUSE
+  LAND
+  COMMERCIAL
+  OTHER
+}
+
+enum ImmoListingStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum ImmoContactMode {
+  INTERNAL_MESSAGE
+}
+
+enum ImmoPublisherType {
+  INDIVIDUAL
+  AGENCY
+}
+
+enum ImmoPublisherMemberRole {
+  OWNER
+  AGENT
+}
+
+enum ImmoPublisherStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -230,6 +285,7 @@ model User {
 
   accounts                   Account[]
   sessions                   Session[]
+  roleAssignments            UserRoleAssignment[]
   activityLogs               ActivityLog[]
   kycSubmissions             KycSubmission[]         @relation("KycSubmissionUser")
   kycReviewedSubmissions     KycSubmission[]         @relation("KycReviewedBy")
@@ -268,6 +324,8 @@ model User {
   tiakCourierProfile         TiakCourierProfile?
   tiakDeliveryEvents         TiakDeliveryEvent[]     @relation("TiakDeliveryEventActor")
   tiakPayouts               TiakPayout[]
+  immoListings               ImmoListing[]
+  immoPublisherMemberships    ImmoPublisherMember[]
 }
 
 model UserAddress {
@@ -282,6 +340,86 @@ model UserAddress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model UserRoleAssignment {
+  id        String         @id @default(cuid())
+  userId    String
+  role      UserRoleType
+  status    UserRoleStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId, status])
+}
+
+model ImmoListing {
+  id           String            @id @default(cuid())
+  ownerId      String
+  publisherId   String?
+  title        String
+  description  String
+  listingType  ImmoListingType
+  propertyType ImmoPropertyType
+  priceCents   Int
+  currency     String            @default("EUR")
+  surfaceM2    Int
+  rooms        Int?
+  city         String
+  country      String            @default("SN")
+  addressHidden Boolean          @default(true)
+  contactMode  ImmoContactMode   @default(INTERNAL_MESSAGE)
+  status       ImmoListingStatus @default(DRAFT)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  publisher ImmoPublisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+
+  @@index([status, country, city])
+  @@index([status, priceCents])
+  @@index([status, surfaceM2])
+  @@index([status, propertyType])
+  @@index([ownerId, status, createdAt])
+  @@index([publisherId, status])
+}
+
+model ImmoPublisher {
+  id        String             @id @default(cuid())
+  type      ImmoPublisherType
+  name      String
+  slug      String             @unique
+  status    ImmoPublisherStatus @default(ACTIVE)
+  verified  Boolean            @default(false)
+  country   String?
+  city      String?
+  logoUrl   String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  members  ImmoPublisherMember[]
+  listings ImmoListing[]
+
+  @@index([status, type, createdAt])
+  @@index([status, country, city])
+}
+
+model ImmoPublisherMember {
+  id          String                @id @default(cuid())
+  publisherId String
+  userId      String
+  role        ImmoPublisherMemberRole @default(AGENT)
+  status      UserRoleStatus        @default(ACTIVE)
+  createdAt   DateTime              @default(now())
+
+  publisher ImmoPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publisherId, userId])
+  @@index([publisherId, status])
+  @@index([userId, status])
 }
 
 model SellerProfile {

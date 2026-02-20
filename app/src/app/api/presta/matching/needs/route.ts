@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole } from "@/lib/userRoles";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
@@ -52,8 +53,7 @@ export async function GET(request: NextRequest) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
-  const allowedRoles = new Set(rules.publishRoles);
-  if (!allowedRoles.has(session.user.role as (typeof rules.publishRoles)[number])) {
+  if (!hasAnyUserRole(session.user, rules.publishRoles)) {
     return errorResponse(403, "FORBIDDEN", "Role is not allowed to access PRESTA need matching.");
   }
 
