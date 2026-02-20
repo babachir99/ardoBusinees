@@ -71,6 +71,7 @@ export default function TiakDeliveryCard({
 
   const statusClass = useMemo(() => {
     if (delivery.status === "REQUESTED") return "border-sky-300/40 bg-sky-300/10 text-sky-200";
+    if (delivery.status === "ASSIGNED") return "border-cyan-300/40 bg-cyan-300/10 text-cyan-200";
     if (delivery.status === "ACCEPTED") return "border-emerald-300/40 bg-emerald-300/10 text-emerald-200";
     if (delivery.status === "PICKED_UP") return "border-amber-300/40 bg-amber-300/10 text-amber-200";
     if (delivery.status === "DELIVERED") return "border-violet-300/40 bg-violet-300/10 text-violet-200";
@@ -156,6 +157,7 @@ export default function TiakDeliveryCard({
       onTrackDelivery(delivery.id);
       onDeliveryUpdated({
         ...delivery,
+        status: "ASSIGNED",
         courierId: typeof assignedCourierId === "string" ? assignedCourierId : delivery.courierId,
         assignedAt: new Date().toISOString(),
         assignExpiresAt: typeof assignExpiresAt === "string" ? assignExpiresAt : delivery.assignExpiresAt,
@@ -254,7 +256,7 @@ export default function TiakDeliveryCard({
 
       {customerActionError && <p className="mt-2 text-xs text-rose-300">{customerActionError}</p>}
       {autoAssignError && <p className="mt-2 text-xs text-rose-300">{autoAssignError}</p>}
-      {delivery.assignExpiresAt && delivery.status === "REQUESTED" && delivery.courierId && (
+      {delivery.assignExpiresAt && delivery.status === "ASSIGNED" && delivery.courierId && (
         <p className="mt-1 text-[11px] text-amber-200">
           {locale === "fr" ? "Assignation en attente - expire le" : "Assignment pending - expires at"}{" "}
           {new Date(delivery.assignExpiresAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US")}

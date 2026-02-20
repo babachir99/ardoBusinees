@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -43,40 +43,87 @@ export async function POST(
       return errorResponse(403, "FORBIDDEN", "Only assigned courier or admin can decline.");
     }
 
-    const updated = await prisma.tiakDelivery.updateMany({
-      where: {
-        id: job.id,
-        status: "REQUESTED",
-        courierId: job.courierId,
-      },
-      data: {
-        courierId: null,
-        assignedAt: null,
-        assignExpiresAt: null,
-      },
-    });
-
-    if (updated.count === 0) {
-      return errorResponse(409, "JOB_NOT_OPEN", "Job is no longer assignable.");
+    const expectedCourierId = isAdmin ? job.courierId : session.user.id;
+    if (!expectedCourierId) {
+      return errorResponse(409, "JOB_NOT_ASSIGNED", "Job has no assigned courier.");
     }
 
-    await prisma.tiakDeliveryEvent.create({
-      data: {
-        deliveryId: job.id,
-        status: "REQUESTED",
-        note: "Courier declined assignment",
-        actorId: session.user.id,
-      },
+    const now = new Date();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const expired = await tx.tiakDelivery.updateMany({
+        where: {
+          id: job.id,
+          status: "ASSIGNED",
+          courierId: expectedCourierId,
+          assignExpiresAt: { lte: now },
+        },
+        data: {
+          status: "REQUESTED",
+          courierId: null,
+          assignedAt: null,
+          assignExpiresAt: null,
+        },
+      });
+
+      if (expired.count > 0) {
+        await tx.tiakDeliveryEvent.create({
+          data: {
+            deliveryId: job.id,
+            status: "REQUESTED",
+            note: "Assignment expired",
+            actorId: session.user.id,
+          },
+        });
+
+        return { state: "expired" as const };
+      }
+
+      const declined = await tx.tiakDelivery.updateMany({
+        where: {
+          id: job.id,
+          status: "ASSIGNED",
+          courierId: expectedCourierId,
+        },
+        data: {
+          status: "REQUESTED",
+          courierId: null,
+          assignedAt: null,
+          assignExpiresAt: null,
+        },
+      });
+
+      if (declined.count === 0) {
+        return { state: "conflict" as const };
+      }
+
+      await tx.tiakDeliveryEvent.create({
+        data: {
+          deliveryId: job.id,
+          status: "REJECTED",
+          note: "Courier declined assignment",
+          actorId: session.user.id,
+        },
+      });
+
+      return { state: "declined" as const };
     });
+
+    if (result.state === "expired") {
+      return errorResponse(409, "ASSIGNMENT_EXPIRED", "Assignment has expired.");
+    }
+
+    if (result.state === "conflict") {
+      return errorResponse(409, "JOB_NOT_OPEN", "Job is no longer assignable.");
+    }
 
     return NextResponse.json({
       job: {
         id: job.id,
-        status: "OPEN",
+        status: "REQUESTED",
       },
     });
   } catch {
     return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
   }
 }
-

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -40,6 +40,7 @@ export async function POST(
         customerId: true,
         status: true,
         courierId: true,
+        assignExpiresAt: true,
       },
     });
 
@@ -53,10 +54,6 @@ export async function POST(
       return errorResponse(403, "FORBIDDEN", "Only owner or admin can auto-assign courier.");
     }
 
-    if (job.status !== "REQUESTED") {
-      return errorResponse(409, "JOB_NOT_OPEN", "Job is not open for assignment.");
-    }
-
     const shortlist = await scoreCouriersForDelivery(job.id, 1);
     const winner = shortlist[0];
 
@@ -66,46 +63,80 @@ export async function POST(
 
     const assignedAt = new Date();
     const assignExpiresAt = addMinutes(assignedAt, 5);
+    const now = new Date();
 
-    const updated = await prisma.tiakDelivery.updateMany({
-      where: {
-        id: job.id,
-        status: "REQUESTED",
-        courierId: null,
-      },
-      data: {
-        courierId: winner.courierId,
-        assignedAt,
-        assignExpiresAt,
-      },
-    });
-
-    if (updated.count === 0) {
-      const refreshed = await prisma.tiakDelivery.findUnique({
-        where: { id: job.id },
-        select: {
-          id: true,
-          status: true,
-          courierId: true,
-          assignExpiresAt: true,
+    const result = await prisma.$transaction(async (tx) => {
+      const expired = await tx.tiakDelivery.updateMany({
+        where: {
+          id: job.id,
+          status: "ASSIGNED",
+          assignExpiresAt: { lte: now },
+        },
+        data: {
+          status: "REQUESTED",
+          courierId: null,
+          assignedAt: null,
+          assignExpiresAt: null,
         },
       });
 
-      return errorResponse(409, "JOB_NOT_OPEN", "Job already assigned or no longer open.");
-    }
+      if (expired.count > 0) {
+        await tx.tiakDeliveryEvent.create({
+          data: {
+            deliveryId: job.id,
+            status: "REQUESTED",
+            note: "Assignment expired",
+            actorId: session.user.id,
+          },
+        });
+      }
 
-    await prisma.activityLog.create({
-      data: {
-        userId: winner.courierId,
-        action: "TIAK_AUTO_ASSIGNED",
-        entityType: "TiakDelivery",
-        entityId: job.id,
-        metadata: {
-          assignedById: session.user.id,
+      const updated = await tx.tiakDelivery.updateMany({
+        where: {
+          id: job.id,
+          status: "REQUESTED",
+          courierId: null,
+        },
+        data: {
+          status: "ASSIGNED",
+          courierId: winner.courierId,
+          assignedAt,
           assignExpiresAt,
         },
-      },
+      });
+
+      if (updated.count === 0) {
+        return { updated: false as const };
+      }
+
+      await tx.tiakDeliveryEvent.create({
+        data: {
+          deliveryId: job.id,
+          status: "ASSIGNED",
+          note: "Courier assigned",
+          actorId: session.user.id,
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId: winner.courierId,
+          action: "TIAK_AUTO_ASSIGNED",
+          entityType: "TiakDelivery",
+          entityId: job.id,
+          metadata: {
+            assignedById: session.user.id,
+            assignExpiresAt,
+          },
+        },
+      });
+
+      return { updated: true as const };
     });
+
+    if (!result.updated) {
+      return errorResponse(409, "JOB_NOT_OPEN", "Job already assigned or no longer open.");
+    }
 
     return NextResponse.json({
       job: {
@@ -119,4 +150,3 @@ export async function POST(
     return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
   }
 }
-

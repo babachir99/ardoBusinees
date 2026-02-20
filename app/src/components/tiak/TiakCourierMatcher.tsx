@@ -135,7 +135,7 @@ export default function TiakCourierMatcher({
 
       onAssigned({
         ...delivery,
-        status: (typeof assignedStatus === "string" ? assignedStatus : "ACCEPTED") as TiakDelivery["status"],
+        status: (typeof assignedStatus === "string" ? assignedStatus : "ASSIGNED") as TiakDelivery["status"],
         courierId: typeof assignedCourierId === "string" ? assignedCourierId : courierId,
         courier: courierLite,
       });

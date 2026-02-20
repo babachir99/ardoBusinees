@@ -37,8 +37,8 @@ export default function TiakCourierActions({
   const isCourierRole = currentUserRole === "COURIER" || isAdmin;
   const isAssignedCourier = Boolean(currentUserId && currentUserId === delivery.courierId);
 
-  const canAcceptDirect = isCourierRole && delivery.status === "REQUESTED" && !delivery.courierId;
-  const canAcceptAssigned = (isAssignedCourier || isAdmin) && delivery.status === "REQUESTED" && !!delivery.courierId;
+  const canAcceptDirect = false;
+  const canAcceptAssigned = (isAssignedCourier || isAdmin) && delivery.status === "ASSIGNED" && !!delivery.courierId;
   const canDeclineAssigned = canAcceptAssigned;
   const canPickUp = (isAssignedCourier || isAdmin) && delivery.status === "ACCEPTED";
   const canDeliver = (isAssignedCourier || isAdmin) && delivery.status === "PICKED_UP";

@@ -1,5 +1,6 @@
 export type TiakDeliveryStatus =
   | "REQUESTED"
+  | "ASSIGNED"
   | "ACCEPTED"
   | "PICKED_UP"
   | "DELIVERED"

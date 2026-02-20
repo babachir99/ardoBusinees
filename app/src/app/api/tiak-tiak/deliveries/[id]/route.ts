@@ -14,7 +14,7 @@ import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
-const allStatuses = ["REQUESTED", "ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED", "CANCELED", "REJECTED"] as const;
+const allStatuses = ["REQUESTED", "ASSIGNED", "ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED", "CANCELED", "REJECTED"] as const;
 const contactUnlockStatuses = ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED"] as const;
 const PLATFORM_FEE_BPS = 1000;
 type TiakStatus = (typeof allStatuses)[number];
@@ -289,11 +289,13 @@ export async function PATCH(
     if (!isCourierRole && !isAdmin) {
       return NextResponse.json({ error: "Only courier can accept" }, { status: 403 });
     }
-    if (delivery.status !== "REQUESTED") {
-      return NextResponse.json({ error: "Delivery is not requestable" }, { status: 400 });
+
+    if (!isAssignedCourier && !isAdmin) {
+      return NextResponse.json({ error: "Only assigned courier can accept" }, { status: 403 });
     }
-    if (delivery.courierId && delivery.courierId !== session.user.id && !isAdmin) {
-      return NextResponse.json({ error: "Delivery already assigned" }, { status: 409 });
+
+    if (delivery.status !== "ASSIGNED") {
+      return NextResponse.json({ error: "Delivery must be ASSIGNED before ACCEPTED" }, { status: 400 });
     }
 
     if (delivery.assignExpiresAt && new Date(delivery.assignExpiresAt).getTime() < Date.now()) {
@@ -358,11 +360,8 @@ export async function PATCH(
       where: { id: delivery.id },
       data: {
         status: nextStatus,
-        courierId:
-          nextStatus === "ACCEPTED"
-            ? (delivery.courierId ?? session.user.id)
-            : delivery.courierId,
-        assignedAt: nextStatus === "ACCEPTED" ? (delivery.assignedAt ?? new Date()) : delivery.assignedAt,
+        courierId: delivery.courierId,
+        assignedAt: delivery.assignedAt,
         assignExpiresAt: nextStatus === "ACCEPTED" ? null : delivery.assignExpiresAt,
         events: {
           create: [

@@ -29,6 +29,8 @@ function parseContextType(value: unknown): DisputeContextType | null {
   return null;
 }
 
+const activeDisputeStatuses = ["OPEN", "IN_REVIEW"] as const;
+
 function hasRequiredDelegates() {
   const runtimePrisma = prisma as unknown as {
     dispute?: unknown;
@@ -369,56 +371,62 @@ export async function POST(request: NextRequest) {
     return errorResponse(resolved.status, resolved.error, resolved.message);
   }
 
-  const existingOpen = await prisma.dispute.findFirst({
-    where: {
-      contextType: resolved.contextType,
-      contextId: resolved.contextId,
-      status: "OPEN",
-    },
-    select: { id: true },
-  });
-
-  if (existingOpen) {
-    return errorResponse(409, "DISPUTE_ALREADY_OPEN", "An OPEN dispute already exists for this context.");
-  }
-
   try {
-    const dispute = await prisma.dispute.create({
-      data: {
-        contextType: resolved.contextType,
-        contextId: resolved.contextId,
-        vertical: resolved.vertical,
-        referenceId: resolved.referenceId,
-        reason,
-        description,
-        status: "OPEN",
-        openedById: session.user.id,
-      },
-      select: {
-        id: true,
-        contextType: true,
-        contextId: true,
-        reason: true,
-        description: true,
-        status: true,
-        openedById: true,
-        assignedAdminId: true,
-        resolutionNote: true,
-        resolvedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const dispute = await prisma.$transaction(async (tx) => {
+      const existingActive = await tx.dispute.findFirst({
+        where: {
+          contextType: resolved.contextType,
+          contextId: resolved.contextId,
+          status: { in: [...activeDisputeStatuses] },
+        },
+        select: { id: true },
+      });
+
+      if (existingActive) {
+        throw new Error("DISPUTE_ALREADY_ACTIVE");
+      }
+
+      return tx.dispute.create({
+        data: {
+          contextType: resolved.contextType,
+          contextId: resolved.contextId,
+          vertical: resolved.vertical,
+          referenceId: resolved.referenceId,
+          reason,
+          description,
+          status: "OPEN",
+          openedById: session.user.id,
+        },
+        select: {
+          id: true,
+          contextType: true,
+          contextId: true,
+          reason: true,
+          description: true,
+          status: true,
+          openedById: true,
+          assignedAdminId: true,
+          resolutionNote: true,
+          resolvedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
     });
 
     return NextResponse.json({ dispute: serializeDispute(dispute) }, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "DISPUTE_ALREADY_ACTIVE") {
+      return errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context.");
+    }
+
     if (
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
       (error as { code?: string }).code === "P2002"
     ) {
-      return errorResponse(409, "DISPUTE_ALREADY_OPEN", "An OPEN dispute already exists for this context.");
+      return errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context.");
     }
 
     return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");

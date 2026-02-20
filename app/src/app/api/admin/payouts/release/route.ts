@@ -58,7 +58,7 @@ async function hasActiveDisputeInTx(
 
   const dispute = await tx.dispute.findFirst({
     where: {
-      status: "OPEN",
+      status: { in: ["OPEN", "IN_REVIEW"] },
       OR: cleanedContexts.map((entry) => ({
         contextType: entry.contextType,
         contextId: entry.contextId,

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,10 @@ function errorResponse(status: number, error: string, message: string) {
 
 function normalizeCourierId(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
 export async function PATCH(
@@ -49,6 +53,7 @@ export async function PATCH(
         customerId: true,
         status: true,
         courierId: true,
+        assignExpiresAt: true,
       },
     });
 
@@ -84,15 +89,47 @@ export async function PATCH(
       return errorResponse(404, "COURIER_NOT_FOUND", "Courier profile not found or inactive.");
     }
 
+    const assignedAt = new Date();
+    const assignExpiresAt = addMinutes(assignedAt, 5);
+    const now = new Date();
+
     const result = await prisma.$transaction(async (tx) => {
+      const expired = await tx.tiakDelivery.updateMany({
+        where: {
+          id: job.id,
+          status: "ACCEPTED",
+          assignExpiresAt: { lte: now },
+        },
+        data: {
+          status: "REQUESTED",
+          courierId: null,
+          assignedAt: null,
+          assignExpiresAt: null,
+        },
+      });
+
+      if (expired.count > 0) {
+        await tx.tiakDeliveryEvent.create({
+          data: {
+            deliveryId: job.id,
+            status: "REQUESTED",
+            note: "Assignment expired",
+            actorId: session.user.id,
+          },
+        });
+      }
+
       const updated = await tx.tiakDelivery.updateMany({
         where: {
           id: job.id,
           status: "REQUESTED",
+          courierId: null,
         },
         data: {
-          status: "ACCEPTED",
+          status: "ASSIGNED",
           courierId: courier.courierId,
+          assignedAt,
+          assignExpiresAt,
         },
       });
 
@@ -103,8 +140,8 @@ export async function PATCH(
       await tx.tiakDeliveryEvent.create({
         data: {
           deliveryId: job.id,
-          status: "ACCEPTED",
-          note: "Auto-assigned courier",
+          status: "ASSIGNED",
+          note: "Courier assigned",
           actorId: session.user.id,
         },
       });
@@ -117,6 +154,7 @@ export async function PATCH(
           entityId: job.id,
           metadata: {
             assignedById: session.user.id,
+            assignExpiresAt,
           },
         },
       });
@@ -131,8 +169,9 @@ export async function PATCH(
     return NextResponse.json({
       job: {
         id: job.id,
-        status: "ACCEPTED",
+        status: "ASSIGNED",
         assignedCourierId: courier.courierId,
+        assignExpiresAt,
       },
       courier: courier.courier,
     });

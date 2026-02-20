@@ -176,6 +176,7 @@ enum PaymentLedgerStatus {
 
 enum TiakDeliveryStatus {
   REQUESTED
+  ASSIGNED
   ACCEPTED
   PICKED_UP
   DELIVERED
