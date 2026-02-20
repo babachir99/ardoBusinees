@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma/client";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -19,20 +20,43 @@ function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const action = "payments.callback";
+
   const session = await getServerSession(authOptions);
   const callbackToken = request.headers.get("x-payments-callback-token");
   const expectedToken = process.env.PAYMENTS_CALLBACK_TOKEN;
 
   const hasTokenAccess = Boolean(expectedToken && callbackToken === expectedToken);
   const isAdmin = session?.user?.role === "ADMIN";
+  const actor = isAdmin
+    ? { userId: session?.user?.id ?? null, role: session?.user?.role ?? null }
+    : { system: true as const };
 
   if (!hasTokenAccess && !isAdmin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment" },
+      outcome: "DENIED",
+      reason: "UNAUTHORIZED",
+    });
+    return respond(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
   }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment" },
+      outcome: "CONFLICT",
+      reason: "INVALID_PAYLOAD",
+    });
+    return respond(NextResponse.json({ error: "Invalid payload" }, { status: 400 }));
   }
 
   const paymentId = typeof body.paymentId === "string" ? body.paymentId.trim() : "";
@@ -41,7 +65,15 @@ export async function POST(request: NextRequest) {
   const callbackStatus = normalizeCallbackStatus(body.status);
 
   if (!callbackStatus) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment", id: paymentId || null },
+      outcome: "CONFLICT",
+      reason: "INVALID_STATUS",
+    });
+    return respond(NextResponse.json({ error: "Invalid status" }, { status: 400 }));
   }
 
   const payment = paymentId
@@ -53,7 +85,15 @@ export async function POST(request: NextRequest) {
     : null;
 
   if (!payment) {
-    return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment", id: paymentId || providerRef || orderId || null },
+      outcome: "CONFLICT",
+      reason: "PAYMENT_NOT_FOUND",
+    });
+    return respond(NextResponse.json({ error: "Payment not found" }, { status: 404 }));
   }
 
   let result: {
@@ -298,40 +338,92 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "LEDGER_REQUIRED_FOR_ONLINE") {
-        return NextResponse.json(
-          {
-            error: "LEDGER_REQUIRED_FOR_ONLINE",
-            message: "Payment ledger is required for online callbacks.",
-          },
-          { status: 409 }
+        auditLog({
+          correlationId,
+          actor,
+          action,
+          entity: { type: "Payment", id: payment.id },
+          outcome: "CONFLICT",
+          reason: "LEDGER_REQUIRED_FOR_ONLINE",
+          metadata: { orderId: payment.orderId },
+        });
+        return respond(
+          NextResponse.json(
+            {
+              error: "LEDGER_REQUIRED_FOR_ONLINE",
+              message: "Payment ledger is required for online callbacks.",
+            },
+            { status: 409 }
+          )
         );
       }
 
       if (error.message === "ORDER_NOT_FOUND") {
-        return NextResponse.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
+        auditLog({
+          correlationId,
+          actor,
+          action,
+          entity: { type: "Order", id: payment.orderId },
+          outcome: "CONFLICT",
+          reason: "ORDER_NOT_FOUND",
+        });
+        return respond(
+          NextResponse.json(
+            { error: "ORDER_NOT_FOUND", message: "Order not found for this payment." },
+            { status: 404 }
+          )
+        );
       }
     }
 
-    return NextResponse.json(
-      {
-        error: "PRISMA_ERROR",
-        message: "Database unavailable.",
-      },
-      { status: 503 }
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment", id: payment.id },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+    });
+    return respond(
+      NextResponse.json(
+        {
+          error: "PRISMA_ERROR",
+          message: "Database unavailable.",
+        },
+        { status: 503 }
+      )
     );
   }
 
-  return NextResponse.json({
-    success: true,
-    payment: {
-      id: result.updatedPayment.id,
+  auditLog({
+    correlationId,
+    actor,
+    action,
+    entity: { type: "Payment", id: result.updatedPayment.id },
+    outcome: "SUCCESS",
+    reason: "CALLBACK_PROCESSED",
+    metadata: {
       orderId: result.updatedPayment.orderId,
-      provider: result.updatedPayment.provider,
-      providerRef: result.updatedPayment.providerRef,
-      status: result.updatedPayment.status,
+      paymentStatus: result.updatedPayment.status,
+      orderPaymentStatus: result.finalOrder.paymentStatus,
       amountCents: result.updatedPayment.amountCents,
       currency: result.updatedPayment.currency,
     },
-    order: result.finalOrder,
   });
+
+  return respond(
+    NextResponse.json({
+      success: true,
+      payment: {
+        id: result.updatedPayment.id,
+        orderId: result.updatedPayment.orderId,
+        provider: result.updatedPayment.provider,
+        providerRef: result.updatedPayment.providerRef,
+        status: result.updatedPayment.status,
+        amountCents: result.updatedPayment.amountCents,
+        currency: result.updatedPayment.currency,
+      },
+      order: result.finalOrder,
+    })
+  );
 }

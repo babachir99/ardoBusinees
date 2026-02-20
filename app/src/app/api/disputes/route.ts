@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical } from "@/lib/verticals";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 type ContextResolution = {
   contextType: DisputeContextType;
@@ -328,22 +329,53 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const action = "dispute.create";
+
   if (!hasRequiredDelegates()) {
-    return errorResponse(
-      503,
-      "DELEGATE_UNAVAILABLE",
-      "Dispute delegates unavailable. Run npx prisma generate and restart dev server."
+    auditLog({
+      correlationId,
+      actor: { system: true },
+      action,
+      entity: { type: "Dispute" },
+      outcome: "ERROR",
+      reason: "DELEGATE_UNAVAILABLE",
+    });
+    return respond(
+      errorResponse(
+        503,
+        "DELEGATE_UNAVAILABLE",
+        "Dispute delegates unavailable. Run npx prisma generate and restart dev server."
+      )
     );
   }
 
   const session = await getServerSession(authOptions);
+  const actor = { userId: session?.user?.id ?? null, role: session?.user?.role ?? null };
   if (!session?.user?.id) {
-    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute" },
+      outcome: "DENIED",
+      reason: "UNAUTHORIZED",
+    });
+    return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
   }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return errorResponse(400, "INVALID_BODY", "JSON body is required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute" },
+      outcome: "CONFLICT",
+      reason: "INVALID_BODY",
+    });
+    return respond(errorResponse(400, "INVALID_BODY", "JSON body is required."));
   }
 
   const contextType = parseContextType((body as { contextType?: unknown }).contextType);
@@ -353,10 +385,20 @@ export async function POST(request: NextRequest) {
   const description = descriptionRaw ? descriptionRaw.slice(0, 2000) : null;
 
   if (!contextType || !contextId || !reason) {
-    return errorResponse(
-      400,
-      "INVALID_INPUT",
-      "contextType, contextId and reason are required."
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute" },
+      outcome: "CONFLICT",
+      reason: "INVALID_INPUT",
+    });
+    return respond(
+      errorResponse(
+        400,
+        "INVALID_INPUT",
+        "contextType, contextId and reason are required."
+      )
     );
   }
 
@@ -368,7 +410,16 @@ export async function POST(request: NextRequest) {
   });
 
   if ("error" in resolved) {
-    return errorResponse(resolved.status, resolved.error, resolved.message);
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute", id: contextId },
+      outcome: resolved.status === 403 || resolved.status === 401 ? "DENIED" : "CONFLICT",
+      reason: resolved.error,
+      metadata: { contextType },
+    });
+    return respond(errorResponse(resolved.status, resolved.error, resolved.message));
   }
 
   try {
@@ -414,10 +465,29 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({ dispute: serializeDispute(dispute) }, { status: 201 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute", id: dispute.id },
+      outcome: "SUCCESS",
+      reason: "CREATED",
+      metadata: { contextType: dispute.contextType, contextId: dispute.contextId },
+    });
+
+    return respond(NextResponse.json({ dispute: serializeDispute(dispute) }, { status: 201 }));
   } catch (error) {
     if (error instanceof Error && error.message === "DISPUTE_ALREADY_ACTIVE") {
-      return errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Dispute", id: resolved.contextId },
+        outcome: "CONFLICT",
+        reason: "DISPUTE_ALREADY_ACTIVE",
+        metadata: { contextType: resolved.contextType },
+      });
+      return respond(errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context."));
     }
 
     if (
@@ -426,9 +496,27 @@ export async function POST(request: NextRequest) {
       "code" in error &&
       (error as { code?: string }).code === "P2002"
     ) {
-      return errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Dispute", id: resolved.contextId },
+        outcome: "CONFLICT",
+        reason: "DISPUTE_ALREADY_ACTIVE",
+        metadata: { contextType: resolved.contextType },
+      });
+      return respond(errorResponse(409, "DISPUTE_ALREADY_ACTIVE", "An active dispute already exists for this context."));
     }
 
-    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Dispute", id: resolved.contextId },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+      metadata: { contextType: resolved.contextType },
+    });
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
 }

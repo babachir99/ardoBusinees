@@ -7,6 +7,7 @@ import {
   TiakPayoutStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -57,9 +58,22 @@ function verifySignature(rawBody: string, request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const actor = { system: true as const };
+  const action = "payments.webhook";
+
   const rawBody = await request.text();
   if (!verifySignature(rawBody, request)) {
-    return errorResponse(400, "INVALID_SIGNATURE", "Invalid webhook signature.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger" },
+      outcome: "DENIED",
+      reason: "INVALID_SIGNATURE",
+    });
+    return respond(errorResponse(400, "INVALID_SIGNATURE", "Invalid webhook signature."));
   }
 
   const body = (() => {
@@ -71,7 +85,15 @@ export async function POST(request: NextRequest) {
   })();
 
   if (!body || typeof body !== "object") {
-    return errorResponse(400, "INVALID_PAYLOAD", "Invalid JSON payload.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger" },
+      outcome: "CONFLICT",
+      reason: "INVALID_PAYLOAD",
+    });
+    return respond(errorResponse(400, "INVALID_PAYLOAD", "Invalid JSON payload."));
   }
 
   const webhookStatus = normalizeWebhookStatus(
@@ -91,7 +113,16 @@ export async function POST(request: NextRequest) {
   );
 
   if (!webhookStatus || (!intentId && !orderId)) {
-    return errorResponse(400, "INVALID_PAYLOAD", "status + intentId or orderId are required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger" },
+      outcome: "CONFLICT",
+      reason: "INVALID_PAYLOAD",
+      metadata: { hasIntentId: Boolean(intentId), hasOrderId: Boolean(orderId) },
+    });
+    return respond(errorResponse(400, "INVALID_PAYLOAD", "status + intentId or orderId are required."));
   }
 
   const providerName = normalizeString((body as { provider?: unknown }).provider).toUpperCase() || "PAYDUNYA";
@@ -128,129 +159,167 @@ export async function POST(request: NextRequest) {
       : null);
 
   if (!resolvedLedger) {
-    return errorResponse(400, "LEDGER_NOT_FOUND", "Payment ledger not found for webhook payload.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger", id: orderId || null },
+      outcome: "CONFLICT",
+      reason: "LEDGER_NOT_FOUND",
+      metadata: { hasIntentId: Boolean(intentId) },
+    });
+    return respond(errorResponse(400, "LEDGER_NOT_FOUND", "Payment ledger not found for webhook payload."));
   }
 
-  const transition = await prisma.$transaction(async (tx) => {
-    const desiredLedgerStatus =
-      webhookStatus === "CONFIRMED" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
+  try {
+    const transition = await prisma.$transaction(async (tx) => {
+      const desiredLedgerStatus =
+        webhookStatus === "CONFIRMED" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
 
-    const currentLedger = await tx.paymentLedger.findUnique({
-      where: { id: resolvedLedger.id },
-      select: {
-        id: true,
-        status: true,
-        contextType: true,
-        contextId: true,
-        orderId: true,
-        providerIntentId: true,
-      },
-    });
-
-    if (!currentLedger) {
-      throw new Error("LEDGER_NOT_FOUND");
-    }
-
-    let effectiveLedgerStatus = currentLedger.status;
-
-    if (currentLedger.status === PaymentLedgerStatus.INITIATED) {
-      const moved = await tx.paymentLedger.updateMany({
-        where: {
-          id: currentLedger.id,
-          status: PaymentLedgerStatus.INITIATED,
-        },
-        data: {
-          provider: providerName,
-          providerIntentId: currentLedger.providerIntentId ?? (intentId || null),
-          status: desiredLedgerStatus,
+      const currentLedger = await tx.paymentLedger.findUnique({
+        where: { id: resolvedLedger.id },
+        select: {
+          id: true,
+          status: true,
+          contextType: true,
+          contextId: true,
+          orderId: true,
+          providerIntentId: true,
         },
       });
 
-      if (moved.count === 1) {
-        effectiveLedgerStatus = desiredLedgerStatus;
-      } else {
-        const refreshed = await tx.paymentLedger.findUnique({
-          where: { id: currentLedger.id },
-          select: { status: true },
-        });
-        effectiveLedgerStatus = refreshed?.status ?? currentLedger.status;
-      }
-    }
-
-    let prestaPayoutReadyCount = 0;
-    let tiakPayoutReadyCount = 0;
-
-    if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
-      if (currentLedger.contextType === "PRESTA_BOOKING") {
-        const updated = await tx.prestaPayout.updateMany({
-          where: {
-            bookingId: currentLedger.contextId,
-            status: { in: [PrestaPayoutStatus.PENDING] },
-          },
-          data: { status: PrestaPayoutStatus.READY },
-        });
-        prestaPayoutReadyCount = updated.count;
+      if (!currentLedger) {
+        throw new Error("LEDGER_NOT_FOUND");
       }
 
-      if (currentLedger.contextType === "TIAK_DELIVERY") {
-        const updated = await tx.tiakPayout.updateMany({
-          where: {
-            deliveryId: currentLedger.contextId,
-            status: { in: [TiakPayoutStatus.PENDING] },
-          },
-          data: { status: TiakPayoutStatus.READY },
-        });
-        tiakPayoutReadyCount = updated.count;
-      }
+      let effectiveLedgerStatus = currentLedger.status;
 
-      if (currentLedger.orderId) {
-        const paidAt = new Date();
-
-        await tx.payment.updateMany({
+      if (currentLedger.status === PaymentLedgerStatus.INITIATED) {
+        const moved = await tx.paymentLedger.updateMany({
           where: {
-            orderId: currentLedger.orderId,
-            status: { not: "PAID" },
+            id: currentLedger.id,
+            status: PaymentLedgerStatus.INITIATED,
           },
           data: {
-            status: "PAID",
+            provider: providerName,
+            providerIntentId: currentLedger.providerIntentId ?? (intentId || null),
+            status: desiredLedgerStatus,
           },
         });
 
-        const order = await tx.order.findUnique({
-          where: { id: currentLedger.orderId },
-          select: { id: true, status: true, paymentStatus: true },
-        });
+        if (moved.count === 1) {
+          effectiveLedgerStatus = desiredLedgerStatus;
+        } else {
+          const refreshed = await tx.paymentLedger.findUnique({
+            where: { id: currentLedger.id },
+            select: { status: true },
+          });
+          effectiveLedgerStatus = refreshed?.status ?? currentLedger.status;
+        }
+      }
 
-        if (order && order.paymentStatus !== "PAID") {
-          const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
-          await tx.order.update({
-            where: { id: order.id },
+      let prestaPayoutReadyCount = 0;
+      let tiakPayoutReadyCount = 0;
+
+      if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
+        if (currentLedger.contextType === "PRESTA_BOOKING") {
+          const updated = await tx.prestaPayout.updateMany({
+            where: {
+              bookingId: currentLedger.contextId,
+              status: { in: [PrestaPayoutStatus.PENDING] },
+            },
+            data: { status: PrestaPayoutStatus.READY },
+          });
+          prestaPayoutReadyCount = updated.count;
+        }
+
+        if (currentLedger.contextType === "TIAK_DELIVERY") {
+          const updated = await tx.tiakPayout.updateMany({
+            where: {
+              deliveryId: currentLedger.contextId,
+              status: { in: [TiakPayoutStatus.PENDING] },
+            },
+            data: { status: TiakPayoutStatus.READY },
+          });
+          tiakPayoutReadyCount = updated.count;
+        }
+
+        if (currentLedger.orderId) {
+          const paidAt = new Date();
+
+          await tx.payment.updateMany({
+            where: {
+              orderId: currentLedger.orderId,
+              status: { not: "PAID" },
+            },
             data: {
-              status: nextOrderStatus,
-              paymentStatus: "PAID",
-              events: {
-                create: [
-                  {
-                    status: nextOrderStatus,
-                    note: `PayDunya webhook confirmed (${providerName})`,
-                  },
-                ],
+              status: "PAID",
+            },
+          });
+
+          const order = await tx.order.findUnique({
+            where: { id: currentLedger.orderId },
+            select: { id: true, status: true, paymentStatus: true },
+          });
+
+          if (order && order.paymentStatus !== "PAID") {
+            const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
+            await tx.order.update({
+              where: { id: order.id },
+              data: {
+                status: nextOrderStatus,
+                paymentStatus: "PAID",
+                events: {
+                  create: [
+                    {
+                      status: nextOrderStatus,
+                      note: `PayDunya webhook confirmed (${providerName})`,
+                    },
+                  ],
+                },
               },
+            });
+          }
+
+          await tx.prestaBooking.updateMany({
+            where: {
+              orderId: currentLedger.orderId,
+              status: {
+                in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
+              },
+            },
+            data: {
+              status: PrestaBookingStatus.PAID,
+              paidAt,
+            },
+          });
+
+          await tx.tiakDelivery.updateMany({
+            where: {
+              orderId: currentLedger.orderId,
+              OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+            },
+            data: {
+              paymentStatus: "PAID",
+              paidAt,
             },
           });
         }
-
-        await tx.prestaBooking.updateMany({
+      } else if (effectiveLedgerStatus === PaymentLedgerStatus.FAILED && currentLedger.orderId) {
+        await tx.payment.updateMany({
           where: {
             orderId: currentLedger.orderId,
-            status: {
-              in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
-            },
+            status: { not: "FAILED" },
           },
-          data: {
-            status: PrestaBookingStatus.PAID,
-            paidAt,
+          data: { status: "FAILED" },
+        });
+
+        await tx.order.updateMany({
+          where: {
+            id: currentLedger.orderId,
+            paymentStatus: { not: "FAILED" },
           },
+          data: { paymentStatus: "FAILED" },
         });
 
         await tx.tiakDelivery.updateMany({
@@ -259,62 +328,61 @@ export async function POST(request: NextRequest) {
             OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
           },
           data: {
-            paymentStatus: "PAID",
-            paidAt,
+            paymentStatus: "FAILED",
           },
         });
       }
-    } else if (effectiveLedgerStatus === PaymentLedgerStatus.FAILED && currentLedger.orderId) {
-      await tx.payment.updateMany({
-        where: {
-          orderId: currentLedger.orderId,
-          status: { not: "FAILED" },
-        },
-        data: { status: "FAILED" },
-      });
 
-      await tx.order.updateMany({
-        where: {
-          id: currentLedger.orderId,
-          paymentStatus: { not: "FAILED" },
-        },
-        data: { paymentStatus: "FAILED" },
-      });
+      return {
+        ledgerId: currentLedger.id,
+        requestedWebhookStatus: webhookStatus,
+        ledgerStatus: effectiveLedgerStatus,
+        contextType: currentLedger.contextType,
+        contextId: currentLedger.contextId,
+        prestaPayoutReadyCount,
+        tiakPayoutReadyCount,
+      };
+    });
 
-      await tx.tiakDelivery.updateMany({
-        where: {
-          orderId: currentLedger.orderId,
-          OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
-        },
-        data: {
-          paymentStatus: "FAILED",
-        },
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger", id: transition.ledgerId },
+      outcome: "SUCCESS",
+      reason: "WEBHOOK_PROCESSED",
+      metadata: {
+        requestedWebhookStatus: transition.requestedWebhookStatus,
+        ledgerStatus: transition.ledgerStatus,
+        contextType: transition.contextType,
+        contextId: transition.contextId,
+        prestaPayoutReadyCount: transition.prestaPayoutReadyCount,
+        tiakPayoutReadyCount: transition.tiakPayoutReadyCount,
+      },
+    });
+
+    return respond(NextResponse.json({ success: true, transition }, { status: 200 }));
+  } catch (error) {
+    if (error instanceof Error && error.message === "LEDGER_NOT_FOUND") {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "PaymentLedger", id: resolvedLedger.id },
+        outcome: "CONFLICT",
+        reason: "LEDGER_NOT_FOUND",
       });
+      return respond(errorResponse(400, "LEDGER_NOT_FOUND", "Payment ledger not found for webhook payload."));
     }
 
-    return {
-      ledgerId: currentLedger.id,
-      requestedWebhookStatus: webhookStatus,
-      ledgerStatus: effectiveLedgerStatus,
-      contextType: currentLedger.contextType,
-      contextId: currentLedger.contextId,
-      prestaPayoutReadyCount,
-      tiakPayoutReadyCount,
-    };
-  });
-
-  console.info(
-    "[paydunya-webhook]",
-    JSON.stringify({
-      ledgerId: transition.ledgerId,
-      requestedWebhookStatus: transition.requestedWebhookStatus,
-      ledgerStatus: transition.ledgerStatus,
-      contextType: transition.contextType,
-      contextId: transition.contextId,
-      prestaPayoutReadyCount: transition.prestaPayoutReadyCount,
-      tiakPayoutReadyCount: transition.tiakPayoutReadyCount,
-    })
-  );
-
-  return NextResponse.json({ success: true, transition }, { status: 200 });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger", id: resolvedLedger.id },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+    });
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
+  }
 }

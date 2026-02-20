@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 const orderedStatuses = ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED", "DELIVERED"] as const;
 
@@ -102,31 +103,34 @@ function canWriteTimeline(params: {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
-    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
+    return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
   }
 
   if (!isAllowedRole(session.user.role)) {
-    return errorResponse(403, "FORBIDDEN", "Access denied.");
+    return respond(errorResponse(403, "FORBIDDEN", "Access denied."));
   }
 
   const { id } = await params;
 
   try {
     const loaded = await loadShipment(id);
-    if (loaded.error) return loaded.error;
+    if (loaded.error) return respond(loaded.error);
 
     if (!loaded.shipment) {
-      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+      return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
 
     if (!canReadTimeline({ role: session.user.role, userId: session.user.id, shipment: loaded.shipment })) {
-      return errorResponse(403, "FORBIDDEN", "Access denied.");
+      return respond(errorResponse(403, "FORBIDDEN", "Access denied."));
     }
 
     const runtimePrisma = prisma as unknown as {
@@ -148,24 +152,26 @@ export async function GET(
       },
     });
 
-    return NextResponse.json({
-      shipment: {
-        id: loaded.shipment.id,
-        code: loaded.shipment.code,
-        status: loaded.shipment.status,
-      },
-      events,
-    });
+    return respond(
+      NextResponse.json({
+        shipment: {
+          id: loaded.shipment.id,
+          code: loaded.shipment.code,
+          status: loaded.shipment.status,
+        },
+        events,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "CAS_CONFLICT") {
-      return errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry.");
+      return respond(errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry."));
     }
 
     if (error instanceof Error && error.message === "SHIPMENT_NOT_FOUND") {
-      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+      return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
 
-    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
 }
 
@@ -173,17 +179,40 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const actorBase = async () => {
+    const session = await getServerSession(authOptions);
+    return { session, actor: { userId: session?.user?.id ?? null, role: session?.user?.role ?? null } };
+  };
+
+  const { session, actor } = await actorBase();
 
   if (!session?.user?.id) {
-    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment" },
+      outcome: "DENIED",
+      reason: "UNAUTHORIZED",
+    });
+    return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
   }
 
   const { id } = await params;
 
   const body = await request.json().catch(() => null);
   if (!body) {
-    return errorResponse(400, "INVALID_BODY", "Invalid JSON body.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id },
+      outcome: "CONFLICT",
+      reason: "INVALID_BODY",
+    });
+    return respond(errorResponse(400, "INVALID_BODY", "Invalid JSON body."));
   }
 
   const requestedStatus = String((body as { status?: unknown }).status ?? "").toUpperCase();
@@ -193,42 +222,106 @@ export async function POST(
   const proofType = normalizeProofType((body as { proofType?: unknown }).proofType);
 
   if (parsedProof.invalid) {
-    return errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id },
+      outcome: "CONFLICT",
+      reason: "INVALID_PROOF_URL",
+    });
+    return respond(errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path."));
   }
 
   if (!parsedProof.value) {
-    return errorResponse(400, "PROOF_REQUIRED", "proofUrl is required for tracking events.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id },
+      outcome: "CONFLICT",
+      reason: "PROOF_REQUIRED",
+    });
+    return respond(errorResponse(400, "PROOF_REQUIRED", "proofUrl is required for tracking events."));
   }
 
   if (!orderedStatuses.includes(requestedStatus as (typeof orderedStatuses)[number])) {
-    return errorResponse(400, "INVALID_STATUS", "Invalid tracking status.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id },
+      outcome: "CONFLICT",
+      reason: "INVALID_STATUS",
+    });
+    return respond(errorResponse(400, "INVALID_STATUS", "Invalid tracking status."));
   }
 
   try {
     const loaded = await loadShipment(id);
-    if (loaded.error) return loaded.error;
+    if (loaded.error) return respond(loaded.error);
 
     if (!loaded.shipment) {
-      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id },
+        outcome: "CONFLICT",
+        reason: "SHIPMENT_NOT_FOUND",
+      });
+      return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
 
     if (!canWriteTimeline({ role: session.user.role, userId: session.user.id, shipment: loaded.shipment })) {
-      return errorResponse(403, "FORBIDDEN", "Only assigned transporter can add events.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id: loaded.shipment.id },
+        outcome: "DENIED",
+        reason: "FORBIDDEN",
+      });
+      return respond(errorResponse(403, "FORBIDDEN", "Only assigned transporter can add events."));
     }
 
     if (!providedCode || providedCode !== loaded.shipment.code) {
-      return errorResponse(400, "INVALID_CODE", "Shipment code mismatch.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id: loaded.shipment.id },
+        outcome: "DENIED",
+        reason: "INVALID_CODE",
+      });
+      return respond(errorResponse(400, "INVALID_CODE", "Shipment code mismatch."));
     }
 
     const currentRank = statusRank(loaded.shipment.status);
     const nextRank = statusRank(requestedStatus);
 
     if (nextRank === currentRank) {
-      return errorResponse(409, "DUPLICATE_EVENT", "This status is already recorded.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id: loaded.shipment.id },
+        outcome: "CONFLICT",
+        reason: "DUPLICATE_EVENT",
+      });
+      return respond(errorResponse(409, "DUPLICATE_EVENT", "This status is already recorded."));
     }
 
     if (nextRank < currentRank || nextRank > currentRank + 1) {
-      return errorResponse(409, "INVALID_TRANSITION", "Status transition not allowed.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id: loaded.shipment.id },
+        outcome: "CONFLICT",
+        reason: "INVALID_TRANSITION",
+      });
+      return respond(errorResponse(409, "INVALID_TRANSITION", "Status transition not allowed."));
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -292,16 +385,60 @@ export async function POST(
       return { shipment, event };
     });
 
-    return NextResponse.json(result, { status: 201 });
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id: result.shipment.id },
+      outcome: "SUCCESS",
+      reason: "STATUS_UPDATED",
+      metadata: { status: result.shipment.status },
+    });
+
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.eventCreate",
+      entity: { type: "GpShipmentEvent", id: result.event.id },
+      outcome: "SUCCESS",
+      reason: "EVENT_CREATED",
+      metadata: { shipmentId: result.shipment.id, status: result.event.status },
+    });
+
+    return respond(NextResponse.json(result, { status: 201 }));
   } catch (error) {
     if (error instanceof Error && error.message === "CAS_CONFLICT") {
-      return errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id },
+        outcome: "CONFLICT",
+        reason: "CAS_CONFLICT",
+      });
+      return respond(errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry."));
     }
 
     if (error instanceof Error && error.message === "SHIPMENT_NOT_FOUND") {
-      return errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found.");
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.statusTransition",
+        entity: { type: "GpShipment", id },
+        outcome: "CONFLICT",
+        reason: "SHIPMENT_NOT_FOUND",
+      });
+      return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
 
-    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.statusTransition",
+      entity: { type: "GpShipment", id },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+    });
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
 }

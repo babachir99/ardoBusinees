@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 type ReleaseType = "PRESTA" | "TIAK";
 
@@ -84,30 +85,71 @@ async function logRelease(userId: string, type: ReleaseType, payoutId: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const action = "payout.release";
+
   if (!hasPayoutDelegates()) {
-    return errorResponse(
-      503,
-      "DELEGATE_UNAVAILABLE",
-      "Payout delegates unavailable. Run npx prisma generate and restart dev server."
+    auditLog({
+      correlationId,
+      actor: { system: true },
+      action,
+      entity: { type: "Payout" },
+      outcome: "ERROR",
+      reason: "DELEGATE_UNAVAILABLE",
+    });
+    return respond(
+      errorResponse(
+        503,
+        "DELEGATE_UNAVAILABLE",
+        "Payout delegates unavailable. Run npx prisma generate and restart dev server."
+      )
     );
   }
 
   if (!hasDisputeDelegate()) {
-    return errorResponse(
-      503,
-      "DELEGATE_UNAVAILABLE",
-      "Dispute delegate unavailable. Run npx prisma generate and restart dev server."
+    auditLog({
+      correlationId,
+      actor: { system: true },
+      action,
+      entity: { type: "Payout" },
+      outcome: "ERROR",
+      reason: "DELEGATE_UNAVAILABLE",
+    });
+    return respond(
+      errorResponse(
+        503,
+        "DELEGATE_UNAVAILABLE",
+        "Dispute delegate unavailable. Run npx prisma generate and restart dev server."
+      )
     );
   }
 
   const session = await getServerSession(authOptions);
+  const actor = { userId: session?.user?.id ?? null, role: session?.user?.role ?? null };
   if (!session?.user?.id || session.user.role !== "ADMIN") {
-    return errorResponse(401, "UNAUTHORIZED", "Admin access required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payout" },
+      outcome: "DENIED",
+      reason: "UNAUTHORIZED",
+    });
+    return respond(errorResponse(401, "UNAUTHORIZED", "Admin access required."));
   }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
-    return errorResponse(400, "INVALID_BODY", "JSON body is required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payout" },
+      outcome: "CONFLICT",
+      reason: "INVALID_BODY",
+    });
+    return respond(errorResponse(400, "INVALID_BODY", "JSON body is required."));
   }
 
   const type = parseType((body as { type?: unknown }).type);
@@ -117,7 +159,15 @@ export async function POST(request: NextRequest) {
       : "";
 
   if (!type || !payoutId) {
-    return errorResponse(400, "INVALID_INPUT", "type and payoutId are required.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payout", id: payoutId || null },
+      outcome: "CONFLICT",
+      reason: "INVALID_INPUT",
+    });
+    return respond(errorResponse(400, "INVALID_INPUT", "type and payoutId are required."));
   }
 
   if (type === "PRESTA") {
@@ -200,21 +250,63 @@ export async function POST(request: NextRequest) {
         await logRelease(session.user.id, "PRESTA", result.payout.id);
       }
 
-      return NextResponse.json({ payout: result.payout });
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "PrestaPayout", id: result.payout.id },
+        outcome: "SUCCESS",
+        reason: result.released ? "RELEASED" : "ALREADY_PAID",
+        metadata: { type, status: result.payout.status },
+      });
+
+      return respond(NextResponse.json({ payout: result.payout }));
     } catch (error) {
       if (error instanceof Error && error.message === "PAYOUT_NOT_FOUND") {
-        return errorResponse(404, "PAYOUT_NOT_FOUND", "PRESTA payout not found.");
+        auditLog({
+          correlationId,
+          actor,
+          action,
+          entity: { type: "PrestaPayout", id: payoutId },
+          outcome: "CONFLICT",
+          reason: "PAYOUT_NOT_FOUND",
+        });
+        return respond(errorResponse(404, "PAYOUT_NOT_FOUND", "PRESTA payout not found."));
       }
 
       if (error instanceof Error && error.message === "INVALID_PAYOUT_STATE") {
-        return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
+        auditLog({
+          correlationId,
+          actor,
+          action,
+          entity: { type: "PrestaPayout", id: payoutId },
+          outcome: "CONFLICT",
+          reason: "INVALID_PAYOUT_STATE",
+        });
+        return respond(errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release."));
       }
 
       if (error instanceof Error && error.message === "PAYOUT_BLOCKED_BY_DISPUTE") {
-        return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
+        auditLog({
+          correlationId,
+          actor,
+          action,
+          entity: { type: "PrestaPayout", id: payoutId },
+          outcome: "DENIED",
+          reason: "PAYOUT_BLOCKED_BY_DISPUTE",
+        });
+        return respond(errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction."));
       }
 
-      return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "PrestaPayout", id: payoutId },
+        outcome: "ERROR",
+        reason: "PRISMA_ERROR",
+      });
+      return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
     }
   }
 
@@ -297,20 +389,62 @@ export async function POST(request: NextRequest) {
       await logRelease(session.user.id, "TIAK", result.payout.id);
     }
 
-    return NextResponse.json({ payout: result.payout });
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "TiakPayout", id: result.payout.id },
+      outcome: "SUCCESS",
+      reason: result.released ? "RELEASED" : "ALREADY_PAID",
+      metadata: { type, status: result.payout.status },
+    });
+
+    return respond(NextResponse.json({ payout: result.payout }));
   } catch (error) {
     if (error instanceof Error && error.message === "PAYOUT_NOT_FOUND") {
-      return errorResponse(404, "PAYOUT_NOT_FOUND", "TIAK payout not found.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "TiakPayout", id: payoutId },
+        outcome: "CONFLICT",
+        reason: "PAYOUT_NOT_FOUND",
+      });
+      return respond(errorResponse(404, "PAYOUT_NOT_FOUND", "TIAK payout not found."));
     }
 
     if (error instanceof Error && error.message === "INVALID_PAYOUT_STATE") {
-      return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "TiakPayout", id: payoutId },
+        outcome: "CONFLICT",
+        reason: "INVALID_PAYOUT_STATE",
+      });
+      return respond(errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release."));
     }
 
     if (error instanceof Error && error.message === "PAYOUT_BLOCKED_BY_DISPUTE") {
-      return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "TiakPayout", id: payoutId },
+        outcome: "DENIED",
+        reason: "PAYOUT_BLOCKED_BY_DISPUTE",
+      });
+      return respond(errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction."));
     }
 
-    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "TiakPayout", id: payoutId },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+    });
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
 }

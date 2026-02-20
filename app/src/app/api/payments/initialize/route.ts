@@ -4,6 +4,7 @@ import { PaymentLedgerContextType, PaymentLedgerStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 const PLATFORM_FEE_BPS = 1000;
 
@@ -57,69 +58,136 @@ function normalizeProvider(value: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!hasPaymentLedgerDelegate()) {
-    return errorResponse(
-      503,
-      "DELEGATE_UNAVAILABLE",
-      "Payment ledger delegate unavailable. Run npx prisma generate and restart dev server."
-    );
-  }
-
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
-  }
-
-  const body = await request.json().catch(() => null);
-  const orderIds = getRequestedOrderIds(body);
-
-  if (orderIds.length === 0) {
-    return errorResponse(400, "INVALID_INPUT", "orderId or orderIds is required.");
-  }
-
-  const provider = normalizeProvider((body as { provider?: unknown } | null)?.provider);
-  const returnUrl = typeof (body as { returnUrl?: unknown } | null)?.returnUrl === "string"
-    ? ((body as { returnUrl?: string }).returnUrl as string)
-    : null;
-  const cancelUrl = typeof (body as { cancelUrl?: unknown } | null)?.cancelUrl === "string"
-    ? ((body as { cancelUrl?: string }).cancelUrl as string)
-    : null;
-
-  const orders = await prisma.order.findMany({
-    where: { id: { in: orderIds } },
-    include: { seller: { select: { userId: true } } },
-  });
-
-  if (orders.length !== orderIds.length) {
-    return errorResponse(404, "ORDER_NOT_FOUND", "One or more orders were not found.");
-  }
-
-  const forbiddenOrder = orders.find(
-    (order) => !canAccessOrder(order as OrderWithSeller, session.user.id, session.user.role)
-  );
-
-  if (forbiddenOrder) {
-    return errorResponse(403, "FORBIDDEN", `Forbidden for order ${forbiddenOrder.id}.`);
-  }
-
-  const paidOrder = orders.find((order) => order.paymentStatus === "PAID");
-  if (paidOrder) {
-    return errorResponse(409, "ORDER_ALREADY_PAID", `Order ${paidOrder.id} is already paid.`);
-  }
-
-  const nonPendingOrder = orders.find((order) => order.paymentStatus !== "PENDING");
-  if (nonPendingOrder) {
-    return errorResponse(
-      409,
-      "ORDER_NOT_PENDING",
-      `Order ${nonPendingOrder.id} payment must be PENDING for initialization.`
-    );
-  }
-
-  const intentId = randomUUID();
-  const providerNormalized = provider.toUpperCase();
+  const correlationId = getCorrelationId(request);
+  const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
+  const action = "payments.initialize";
 
   try {
+    if (!hasPaymentLedgerDelegate()) {
+      auditLog({
+        correlationId,
+        actor: { system: true },
+        action,
+        entity: { type: "PaymentLedger" },
+        outcome: "ERROR",
+        reason: "DELEGATE_UNAVAILABLE",
+      });
+      return respond(
+        errorResponse(
+          503,
+          "DELEGATE_UNAVAILABLE",
+          "Payment ledger delegate unavailable. Run npx prisma generate and restart dev server."
+        )
+      );
+    }
+
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      auditLog({
+        correlationId,
+        actor: { system: true },
+        action,
+        entity: { type: "Order" },
+        outcome: "DENIED",
+        reason: "UNAUTHORIZED",
+      });
+      return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
+    }
+
+    const actor = { userId: session.user.id, role: session.user.role };
+
+    const body = await request.json().catch(() => null);
+    const orderIds = getRequestedOrderIds(body);
+
+    if (orderIds.length === 0) {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Order" },
+        outcome: "CONFLICT",
+        reason: "INVALID_INPUT",
+      });
+      return respond(errorResponse(400, "INVALID_INPUT", "orderId or orderIds is required."));
+    }
+
+    const provider = normalizeProvider((body as { provider?: unknown } | null)?.provider);
+    const returnUrl = typeof (body as { returnUrl?: unknown } | null)?.returnUrl === "string"
+      ? ((body as { returnUrl?: string }).returnUrl as string)
+      : null;
+    const cancelUrl = typeof (body as { cancelUrl?: unknown } | null)?.cancelUrl === "string"
+      ? ((body as { cancelUrl?: string }).cancelUrl as string)
+      : null;
+
+    const orders = await prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      include: { seller: { select: { userId: true } } },
+    });
+
+    if (orders.length !== orderIds.length) {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Order" },
+        outcome: "CONFLICT",
+        reason: "ORDER_NOT_FOUND",
+        metadata: { requestedCount: orderIds.length, foundCount: orders.length },
+      });
+      return respond(errorResponse(404, "ORDER_NOT_FOUND", "One or more orders were not found."));
+    }
+
+    const forbiddenOrder = orders.find(
+      (order) => !canAccessOrder(order as OrderWithSeller, session.user.id, session.user.role)
+    );
+
+    if (forbiddenOrder) {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Order", id: forbiddenOrder.id },
+        outcome: "DENIED",
+        reason: "FORBIDDEN",
+      });
+      return respond(errorResponse(403, "FORBIDDEN", `Forbidden for order ${forbiddenOrder.id}.`));
+    }
+
+    const paidOrder = orders.find((order) => order.paymentStatus === "PAID");
+    if (paidOrder) {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Order", id: paidOrder.id },
+        outcome: "CONFLICT",
+        reason: "ORDER_ALREADY_PAID",
+      });
+      return respond(errorResponse(409, "ORDER_ALREADY_PAID", `Order ${paidOrder.id} is already paid.`));
+    }
+
+    const nonPendingOrder = orders.find((order) => order.paymentStatus !== "PENDING");
+    if (nonPendingOrder) {
+      auditLog({
+        correlationId,
+        actor,
+        action,
+        entity: { type: "Order", id: nonPendingOrder.id },
+        outcome: "CONFLICT",
+        reason: "ORDER_NOT_PENDING",
+      });
+      return respond(
+        errorResponse(
+          409,
+          "ORDER_NOT_PENDING",
+          `Order ${nonPendingOrder.id} payment must be PENDING for initialization.`
+        )
+      );
+    }
+
+    const intentId = randomUUID();
+    const providerNormalized = provider.toUpperCase();
+
     const initializedPayments = await prisma.$transaction(async (tx) => {
       const records: Array<{
         orderId: string;
@@ -240,19 +308,43 @@ export async function POST(request: NextRequest) {
       return records;
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        intentId,
-        provider,
-        callbackUrl: "/api/payments/callback",
-        redirectUrl: null,
-        orderIds: initializedPayments.map((payment) => payment.orderId),
-        payments: initializedPayments,
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger", id: intentId },
+      outcome: "SUCCESS",
+      reason: "INITIALIZED",
+      metadata: {
+        orderCount: initializedPayments.length,
+        amountTotalCents: initializedPayments.reduce((sum, item) => sum + item.amountCents, 0),
+        currency: initializedPayments[0]?.currency ?? null,
       },
-      { status: 201 }
+    });
+
+    return respond(
+      NextResponse.json(
+        {
+          success: true,
+          intentId,
+          provider,
+          callbackUrl: "/api/payments/callback",
+          redirectUrl: null,
+          orderIds: initializedPayments.map((payment) => payment.orderId),
+          payments: initializedPayments,
+        },
+        { status: 201 }
+      )
     );
   } catch {
-    return errorResponse(503, "PRISMA_ERROR", "Database unavailable.");
+    auditLog({
+      correlationId,
+      actor: { system: true },
+      action,
+      entity: { type: "PaymentLedger" },
+      outcome: "ERROR",
+      reason: "PRISMA_ERROR",
+    });
+    return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
 }
