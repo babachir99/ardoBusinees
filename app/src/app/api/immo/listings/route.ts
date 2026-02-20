@@ -80,11 +80,14 @@ export async function GET(request: NextRequest) {
   const publisherSlug = normalizeString(searchParams.get("publisherSlug"));
   const publisherType = parsePublisherType(searchParams.get("publisherType"));
   const verifiedOnly = parseBoolean(searchParams.get("verifiedOnly"));
+  const proRankingRaw = parseBoolean(searchParams.get("proRanking"));
+  const proRanking = proRankingRaw !== false;
   const takeRaw = Number(searchParams.get("take") ?? "24");
   const skipRaw = Number(searchParams.get("skip") ?? "0");
   const take = Number.isFinite(takeRaw) ? Math.min(Math.max(Math.trunc(takeRaw), 1), 60) : 24;
   const skip = Number.isFinite(skipRaw) ? Math.max(Math.trunc(skipRaw), 0) : 0;
   const sort = parseSort(searchParams.get("sort"));
+  const now = new Date();
 
   const where: Record<string, unknown> = {
     status: "PUBLISHED",
@@ -112,14 +115,29 @@ export async function GET(request: NextRequest) {
   }
 
   if (verifiedOnly === true) {
-    where.publisher = {
-      is: {
-        ...(publisherSlug ? { slug: publisherSlug } : {}),
-        type: "AGENCY",
-        status: "ACTIVE",
-        verified: true,
-      },
-    };
+    if (publisherType === "AGENCY" || publisherSlug) {
+      where.publisher = {
+        is: {
+          ...(publisherSlug ? { slug: publisherSlug } : {}),
+          type: "AGENCY",
+          status: "ACTIVE",
+          verified: true,
+        },
+      };
+    } else if (publisherType !== "INDIVIDUAL") {
+      where.OR = [
+        { publisherId: null },
+        {
+          publisher: {
+            is: {
+              type: "AGENCY",
+              status: "ACTIVE",
+              verified: true,
+            },
+          },
+        },
+      ];
+    }
   }
 
   if (minPrice !== null || maxPrice !== null) {
@@ -141,7 +159,25 @@ export async function GET(request: NextRequest) {
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
       ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
+      : proRanking
+      ? [
+          { isFeatured: "desc" as const },
+          { featuredUntil: "desc" as const },
+          { boostUntil: "desc" as const },
+          { createdAt: "desc" as const },
+        ]
       : [{ createdAt: "desc" as const }];
+
+  if (proRanking) {
+    await prisma.immoListing.updateMany({
+      where: {
+        status: "PUBLISHED",
+        isFeatured: true,
+        featuredUntil: { lt: now },
+      },
+      data: { isFeatured: false },
+    }).catch(() => null);
+  }
 
   const listings = await prisma.immoListing.findMany({
     where,
@@ -162,6 +198,9 @@ export async function GET(request: NextRequest) {
       country: true,
       status: true,
       contactMode: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       publisher: {
@@ -170,7 +209,9 @@ export async function GET(request: NextRequest) {
           name: true,
           slug: true,
           verified: true,
-          type: true,
+          city: true,
+          country: true,
+          logoUrl: true,
         },
       },
     },
@@ -274,6 +315,10 @@ export async function POST(request: NextRequest) {
       country: true,
       status: true,
       contactMode: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
+      monetizationUpdatedAt: true,
       createdAt: true,
       updatedAt: true,
       ownerId: true,

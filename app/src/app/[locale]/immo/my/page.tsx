@@ -34,6 +34,9 @@ export default async function ImmoMyPage({
       city: true,
       country: true,
       status: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       publisherId: true,
       createdAt: true,
       publisher: {
@@ -95,6 +98,8 @@ export default async function ImmoMyPage({
           listings={listings.map((item) => ({
             ...item,
             createdAt: item.createdAt.toISOString(),
+            featuredUntil: item.featuredUntil?.toISOString() ?? null,
+            boostUntil: item.boostUntil?.toISOString() ?? null,
           }))}
           agencies={agencies.map((item) => item.publisher)}
         />

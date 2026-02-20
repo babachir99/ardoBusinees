@@ -10,10 +10,11 @@ type OpsKpis = {
   disputesActive: number | null;
   paymentsFailed7d: number | null;
   kycPending: number | null;
+  immoMonetizationIssues: number | null;
 };
 
 type OpsQueueItem = {
-  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED";
+  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION";
   id: string;
   refLabel: string;
   status: string;
@@ -62,10 +63,10 @@ type Props = {
   queueItems: OpsQueueItem[];
 };
 
-type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED";
+type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION";
 
 function normalizeFilter(value: string | null): QueueFilter {
-  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED") {
+  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED" || value === "IMMO_MONETIZATION") {
     return value;
   }
   return "ALL";
@@ -151,6 +152,13 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         href: "/admin/kyc",
         warn: warnFlags.kycPending,
       },
+      {
+        key: "immoMonetization",
+        label: "IMMO Monetization (PENDING/FAILED)",
+        value: kpis.immoMonetizationIssues,
+        href: { pathname: "/admin", query: { opsFilter: "IMMO_MONETIZATION" } },
+        warn: typeof kpis.immoMonetizationIssues === "number" && kpis.immoMonetizationIssues > 0,
+      },
     ].filter((card) => card.key !== "kyc" || typeof card.value === "number"),
     [kpis, t, warnFlags]
   );
@@ -160,12 +168,14 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     { key: "PAYOUT", label: t("filters.payouts") },
     { key: "DISPUTE", label: t("filters.disputes") },
     { key: "PAYMENT_FAILED", label: t("filters.paymentsFailed") },
+    { key: "IMMO_MONETIZATION", label: "IMMO monetization" },
   ];
 
   const typeLabels: Record<OpsQueueItem["type"], string> = {
     PAYOUT: t("queue.types.payout"),
     DISPUTE: t("queue.types.dispute"),
     PAYMENT_FAILED: t("queue.types.paymentFailed"),
+    IMMO_MONETIZATION: "IMMO monetization",
   };
 
   const statusLabels: Record<string, string> = {
@@ -183,6 +193,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     if (activeFilter === "ALL") return queueItems;
     if (activeFilter === "PAYOUT") return queueItems.filter((item) => item.type === "PAYOUT");
     if (activeFilter === "DISPUTE") return queueItems.filter((item) => item.type === "DISPUTE");
+    if (activeFilter === "IMMO_MONETIZATION") return queueItems.filter((item) => item.type === "IMMO_MONETIZATION");
     return queueItems.filter((item) => item.type === "PAYMENT_FAILED");
   }, [activeFilter, queueItems]);
 

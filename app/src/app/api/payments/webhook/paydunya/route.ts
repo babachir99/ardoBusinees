@@ -220,6 +220,8 @@ export async function POST(request: NextRequest) {
 
       let prestaPayoutReadyCount = 0;
       let tiakPayoutReadyCount = 0;
+      let immoPurchaseId: string | null = null;
+      let immoPurchaseStatus: string | null = null;
 
       if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
         if (currentLedger.contextType === "PRESTA_BOOKING") {
@@ -242,6 +244,70 @@ export async function POST(request: NextRequest) {
             data: { status: TiakPayoutStatus.READY },
           });
           tiakPayoutReadyCount = updated.count;
+        }
+
+        if (currentLedger.contextType === "IMMO_MONETIZATION") {
+          const purchase = await tx.immoMonetizationPurchase.findFirst({
+            where: { paymentLedgerId: currentLedger.id },
+            select: {
+              id: true,
+              listingId: true,
+              kind: true,
+              durationDays: true,
+              status: true,
+              listing: {
+                select: {
+                  featuredUntil: true,
+                  boostUntil: true,
+                },
+              },
+            },
+          });
+
+          if (purchase) {
+            const confirmed = await tx.immoMonetizationPurchase.updateMany({
+              where: {
+                id: purchase.id,
+                status: "PENDING",
+              },
+              data: {
+                status: "CONFIRMED",
+              },
+            });
+
+            if (confirmed.count === 1) {
+              const now = new Date();
+              if (purchase.kind === "FEATURED") {
+                const base = purchase.listing.featuredUntil && purchase.listing.featuredUntil > now ? purchase.listing.featuredUntil : now;
+                const featuredUntil = new Date(base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000);
+                await tx.immoListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    isFeatured: true,
+                    featuredUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              } else {
+                const base = purchase.listing.boostUntil && purchase.listing.boostUntil > now ? purchase.listing.boostUntil : now;
+                const boostUntil = new Date(base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000);
+                await tx.immoListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    boostUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              }
+            }
+
+            const resolved = await tx.immoMonetizationPurchase.findUnique({
+              where: { id: purchase.id },
+              select: { id: true, status: true },
+            });
+            immoPurchaseId = resolved?.id ?? purchase.id;
+            immoPurchaseStatus = resolved?.status ?? purchase.status;
+          }
         }
 
         if (currentLedger.orderId) {
@@ -305,8 +371,37 @@ export async function POST(request: NextRequest) {
             },
           });
         }
-      } else if (effectiveLedgerStatus === PaymentLedgerStatus.FAILED && currentLedger.orderId) {
-        await tx.payment.updateMany({
+      } else if (effectiveLedgerStatus === PaymentLedgerStatus.FAILED) {
+        if (currentLedger.contextType === "IMMO_MONETIZATION") {
+          const failed = await tx.immoMonetizationPurchase.updateMany({
+            where: {
+              paymentLedgerId: currentLedger.id,
+              status: "PENDING",
+            },
+            data: {
+              status: "FAILED",
+            },
+          });
+
+          if (failed.count === 0) {
+            const resolved = await tx.immoMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            immoPurchaseId = resolved?.id ?? null;
+            immoPurchaseStatus = resolved?.status ?? null;
+          } else {
+            const resolved = await tx.immoMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            immoPurchaseId = resolved?.id ?? null;
+            immoPurchaseStatus = resolved?.status ?? "FAILED";
+          }
+        }
+
+        if (currentLedger.orderId) {
+          await tx.payment.updateMany({
           where: {
             orderId: currentLedger.orderId,
             status: { not: "FAILED" },
@@ -331,6 +426,7 @@ export async function POST(request: NextRequest) {
             paymentStatus: "FAILED",
           },
         });
+        }
       }
 
       return {
@@ -341,6 +437,8 @@ export async function POST(request: NextRequest) {
         contextId: currentLedger.contextId,
         prestaPayoutReadyCount,
         tiakPayoutReadyCount,
+        immoPurchaseId,
+        immoPurchaseStatus,
       };
     });
 
@@ -358,8 +456,30 @@ export async function POST(request: NextRequest) {
         contextId: transition.contextId,
         prestaPayoutReadyCount: transition.prestaPayoutReadyCount,
         tiakPayoutReadyCount: transition.tiakPayoutReadyCount,
+        immoPurchaseId: transition.immoPurchaseId,
+        immoPurchaseStatus: transition.immoPurchaseStatus,
       },
     });
+
+    if (transition.contextType === "IMMO_MONETIZATION") {
+      auditLog({
+        correlationId,
+        actor,
+        action:
+          transition.ledgerStatus === "CONFIRMED"
+            ? "immo.monetizationConfirmed"
+            : transition.ledgerStatus === "FAILED"
+              ? "immo.monetizationFailed"
+              : "immo.monetizationPending",
+        entity: { type: "ImmoMonetizationPurchase", id: transition.immoPurchaseId ?? transition.contextId },
+        outcome: "SUCCESS",
+        reason: AuditReason.SUCCESS,
+        metadata: {
+          ledgerId: transition.ledgerId,
+          purchaseStatus: transition.immoPurchaseStatus,
+        },
+      });
+    }
 
     return respond(NextResponse.json({ success: true, transition }, { status: 200 }));
   } catch (error) {

@@ -16,6 +16,7 @@ type SearchParams = {
   publisherType?: string;
   verifiedOnly?: string;
   sort?: string;
+  proRanking?: string;
 };
 
 function parseIntQuery(value: string | undefined) {
@@ -43,6 +44,7 @@ export default async function ImmoListingsPage({
     : undefined;
 
   const where: Record<string, unknown> = { status: "PUBLISHED" };
+  const now = new Date();
   const minPrice = parseIntQuery(filters.minPrice);
   const maxPrice = parseIntQuery(filters.maxPrice);
   const minSurface = parseIntQuery(filters.minSurface);
@@ -79,22 +81,56 @@ export default async function ImmoListingsPage({
   }
 
   if (verifiedOnly) {
-    where.publisher = {
-      is: {
-        type: "AGENCY",
-        status: "ACTIVE",
-        verified: true,
-      },
-    };
+    if (publisherType === "AGENCY") {
+      where.publisher = {
+        is: {
+          type: "AGENCY",
+          status: "ACTIVE",
+          verified: true,
+        },
+      };
+    } else if (publisherType !== "INDIVIDUAL") {
+      where.OR = [
+        { publisherId: null },
+        {
+          publisher: {
+            is: {
+              type: "AGENCY",
+              status: "ACTIVE",
+              verified: true,
+            },
+          },
+        },
+      ];
+    }
   }
 
   const sort = filters.sort === "price_asc" || filters.sort === "price_desc" ? filters.sort : "newest";
+  const proRanking = ["0", "false"].includes((filters.proRanking ?? "").toLowerCase()) ? false : true;
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
       ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
+      : proRanking
+      ? [
+          { isFeatured: "desc" as const },
+          { featuredUntil: "desc" as const },
+          { boostUntil: "desc" as const },
+          { createdAt: "desc" as const },
+        ]
       : [{ createdAt: "desc" as const }];
+
+  if (proRanking) {
+    await prisma.immoListing.updateMany({
+      where: {
+        status: "PUBLISHED",
+        isFeatured: true,
+        featuredUntil: { lt: now },
+      },
+      data: { isFeatured: false },
+    }).catch(() => null);
+  }
 
   const listings = await prisma.immoListing.findMany({
     where,
@@ -112,6 +148,9 @@ export default async function ImmoListingsPage({
       rooms: true,
       city: true,
       country: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       createdAt: true,
       publisher: {
         select: {
@@ -119,7 +158,9 @@ export default async function ImmoListingsPage({
           name: true,
           slug: true,
           verified: true,
-          type: true,
+          city: true,
+          country: true,
+          logoUrl: true,
         },
       },
     },
@@ -214,7 +255,19 @@ export default async function ImmoListingsPage({
           ) : (
             listings.map((listing) => (
               <article key={listing.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5">
-                <p className="text-xs text-zinc-400">{listing.listingType} ? {listing.propertyType}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-zinc-400">{listing.listingType} ? {listing.propertyType}</p>
+                  {listing.featuredUntil && new Date(listing.featuredUntil) > now ? (
+                    <span className="rounded-full border border-amber-300/40 bg-amber-300/15 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                      {locale === "fr" ? "Mis en avant" : "Featured"}
+                    </span>
+                  ) : null}
+                  {listing.boostUntil && new Date(listing.boostUntil) > now ? (
+                    <span className="rounded-full border border-sky-300/40 bg-sky-300/15 px-2 py-0.5 text-[10px] font-semibold text-sky-100">
+                      Boost
+                    </span>
+                  ) : null}
+                </div>
                 <h2 className="mt-2 text-lg font-semibold text-white">{listing.title}</h2>
                 <p className="mt-2 text-sm text-zinc-300 line-clamp-3">{listing.description}</p>
                 <p className="mt-3 text-sm text-emerald-200">{formatMoney(listing.priceCents, listing.currency, locale)}</p>

@@ -213,6 +213,8 @@ export default async function AdminPage() {
     prestaPayoutReadyItems,
     tiakPayoutReadyItems,
     paymentFailedItems,
+    immoMonetizationIssueCount,
+    immoMonetizationItems,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -280,6 +282,39 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
+    prisma.immoMonetizationPurchase
+      .count({
+        where: {
+          status: { in: ["PENDING", "FAILED"] },
+          createdAt: { gte: last7Days },
+        },
+      })
+      .catch(() => null),
+    prisma.immoMonetizationPurchase
+      .findMany({
+        where: {
+          status: { in: ["PENDING", "FAILED", "CONFIRMED"] },
+          createdAt: { gte: last7Days },
+        },
+        orderBy: [{ createdAt: "asc" }],
+        take: 20,
+        select: {
+          id: true,
+          listingId: true,
+          status: true,
+          amountCents: true,
+          currency: true,
+          createdAt: true,
+          kind: true,
+          paymentLedger: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      })
+      .catch(() => null),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -293,7 +328,7 @@ export default async function AdminPage() {
   };
 
   type OpsQueueItem = {
-    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED";
+    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION";
     id: string;
     refLabel: string;
     status: string;
@@ -353,12 +388,27 @@ export default async function AdminPage() {
       },
       createdAtMs: item.createdAt.getTime(),
     }))),
+    ...((immoMonetizationItems ?? []).map((item) => ({
+      type: "IMMO_MONETIZATION" as const,
+      id: item.id,
+      refLabel: `${item.kind} - ${item.listingId}`,
+      status: item.paymentLedger?.status ?? item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      amountLabel: formatMoney(item.amountCents, item.currency, locale),
+      action: {
+        kind: "link" as const,
+        label: t("opsHub.actions.inspect"),
+        href: `/admin?opsFilter=IMMO_MONETIZATION&focus=${item.id}#ops-queue`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
   ];
 
   const queuePriority: Record<OpsQueueItem["type"], number> = {
     PAYOUT: 0,
     DISPUTE: 1,
-    PAYMENT_FAILED: 2,
+    IMMO_MONETIZATION: 2,
+    PAYMENT_FAILED: 3,
   };
 
   const opsQueueItems = queueWithSort
@@ -367,6 +417,9 @@ export default async function AdminPage() {
         return queuePriority[a.type] - queuePriority[b.type];
       }
       if (a.type === "PAYMENT_FAILED") {
+        return b.createdAtMs - a.createdAtMs;
+      }
+      if (a.type === "IMMO_MONETIZATION") {
         return b.createdAtMs - a.createdAtMs;
       }
       return a.createdAtMs - b.createdAtMs;
@@ -383,6 +436,8 @@ export default async function AdminPage() {
     paymentsFailed7d:
       typeof paymentLedgerFailed7dCount === "number" ? paymentLedgerFailed7dCount : null,
     kycPending: typeof pendingKycCount === "number" ? pendingKycCount : null,
+    immoMonetizationIssues:
+      typeof immoMonetizationIssueCount === "number" ? immoMonetizationIssueCount : null,
   };
 
   return (

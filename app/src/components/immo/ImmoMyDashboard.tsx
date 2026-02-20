@@ -17,6 +17,9 @@ type ImmoListingRow = {
   city: string;
   country: string;
   status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED";
+  isFeatured: boolean;
+  featuredUntil: string | null;
+  boostUntil: string | null;
   publisherId?: string | null;
   publisher?: {
     id: string;
@@ -84,6 +87,12 @@ const actionLabels = {
     rooms: "Pieces",
     city: "Ville",
     agency: "Agence",
+    monetizationFeatured: "Mettre en avant (7j)",
+    monetizationBoost: "Booster (3j)",
+    featuredUntil: "Mise en avant jusqu'au",
+    boostUntil: "Boost jusqu'au",
+    monetizationCheckoutMissing: "Checkout indisponible pour le moment.",
+    monetizationStart: "Checkout de monetisation initialise.",
     empty: "Aucune annonce pour le moment.",
     successCreate: "Brouillon cree.",
     successUpdate: "Annonce mise a jour.",
@@ -103,6 +112,12 @@ const actionLabels = {
     rooms: "Rooms",
     city: "City",
     agency: "Agency",
+    monetizationFeatured: "Feature (7d)",
+    monetizationBoost: "Boost (3d)",
+    featuredUntil: "Featured until",
+    boostUntil: "Boost until",
+    monetizationCheckoutMissing: "Checkout unavailable right now.",
+    monetizationStart: "Monetization checkout initialized.",
     empty: "No listings yet.",
     successCreate: "Draft created.",
     successUpdate: "Listing updated.",
@@ -128,6 +143,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
 
   const [createForm, setCreateForm] = useState<DraftCreate>(defaultCreate);
   const [saving, setSaving] = useState<string | null>(null);
+  const [monetizationPending, setMonetizationPending] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -281,6 +297,41 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
     }
   }
 
+
+  async function startMonetization(listingId: string, kind: "FEATURED" | "BOOST") {
+    setMonetizationPending((prev) => ({ ...prev, [listingId]: true }));
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/immo/monetization/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, kind }),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | { message?: string; checkoutUrl?: string | null }
+        | null;
+
+      if (!response.ok) {
+        setError(body?.message ?? l.errorDefault);
+        return;
+      }
+
+      if (body?.checkoutUrl) {
+        window.location.href = body.checkoutUrl;
+        return;
+      }
+
+      setMessage(l.monetizationCheckoutMissing);
+    } catch {
+      setError(l.errorDefault);
+    } finally {
+      setMonetizationPending((prev) => ({ ...prev, [listingId]: false }));
+    }
+  }
+
   return (
     <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
       <h1 className="text-2xl font-semibold text-white">{l.heading}</h1>
@@ -409,6 +460,12 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
                 {listing.publisher?.name ? (
                   <p className="mt-1 text-xs text-zinc-400">{l.agency}: {listing.publisher.name}</p>
                 ) : null}
+                {listing.featuredUntil ? (
+                  <p className="mt-1 text-xs text-amber-200">{l.featuredUntil} {new Date(listing.featuredUntil).toLocaleDateString(locale)}</p>
+                ) : null}
+                {listing.boostUntil ? (
+                  <p className="mt-1 text-xs text-sky-200">{l.boostUntil} {new Date(listing.boostUntil).toLocaleDateString(locale)}</p>
+                ) : null}
                 {isEditable && draft ? (
                   <div className="mt-3 grid gap-2 md:grid-cols-2">
                     <input
@@ -498,6 +555,28 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
                       className="rounded-full border border-rose-300/40 px-3 py-1 text-xs font-semibold text-rose-100 disabled:opacity-60"
                     >
                       {saving === `archive:${listing.id}` ? "..." : l.archive}
+                    </button>
+                  ) : null}
+
+                  {listing.status === "PUBLISHED" && listing.publisherId ? (
+                    <button
+                      type="button"
+                      onClick={() => void startMonetization(listing.id, "FEATURED")}
+                      disabled={monetizationPending[listing.id] === true}
+                      className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
+                    >
+                      {monetizationPending[listing.id] ? "..." : l.monetizationFeatured}
+                    </button>
+                  ) : null}
+
+                  {listing.status === "PUBLISHED" && listing.publisherId ? (
+                    <button
+                      type="button"
+                      onClick={() => void startMonetization(listing.id, "BOOST")}
+                      disabled={monetizationPending[listing.id] === true}
+                      className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60"
+                    >
+                      {monetizationPending[listing.id] ? "..." : l.monetizationBoost}
                     </button>
                   ) : null}
                 </div>
