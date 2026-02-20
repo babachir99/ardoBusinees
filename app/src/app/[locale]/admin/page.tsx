@@ -207,23 +207,22 @@ export default async function AdminPage() {
   const [
     prestaPayoutReadyCount,
     tiakPayoutReadyCount,
-    disputesOpenCount,
+    disputesActiveCount,
     paymentLedgerFailed7dCount,
-    disputesOpenItems,
+    disputesActiveItems,
     prestaPayoutReadyItems,
     tiakPayoutReadyItems,
     paymentFailedItems,
-    kycPendingItems,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
-    prisma.dispute.count({ where: { status: "OPEN" } }).catch(() => null),
+    prisma.dispute.count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } }).catch(() => null),
     prisma.paymentLedger
       .count({ where: { status: "FAILED", createdAt: { gte: last7Days } } })
       .catch(() => null),
     prisma.dispute
       .findMany({
-        where: { status: "OPEN" },
+        where: { status: { in: ["OPEN", "IN_REVIEW"] } },
         orderBy: { createdAt: "asc" },
         take: 20,
         select: {
@@ -281,19 +280,6 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
-    prisma.kycSubmission
-      .findMany({
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          targetRole: true,
-          status: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -307,7 +293,7 @@ export default async function AdminPage() {
   };
 
   type OpsQueueItem = {
-    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "KYC";
+    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED";
     id: string;
     refLabel: string;
     status: string;
@@ -320,15 +306,6 @@ export default async function AdminPage() {
   };
 
   const queueWithSort: OpsQueueItem[] = [
-    ...((disputesOpenItems ?? []).map((item) => ({
-      type: "DISPUTE" as const,
-      id: item.id,
-      refLabel: `${item.contextType} - ${item.contextId}`,
-      status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
-      action: { kind: "link" as const, label: "Ouvrir", href: `/admin?ops=DISPUTE&focus=${item.id}` },
-      createdAtMs: item.createdAt.getTime(),
-    }))),
     ...((prestaPayoutReadyItems ?? []).map((item) => ({
       type: "PAYOUT" as const,
       id: item.id,
@@ -349,6 +326,19 @@ export default async function AdminPage() {
       action: { kind: "release" as const, label: "Release", releaseType: "TIAK" as const },
       createdAtMs: item.createdAt.getTime(),
     }))),
+    ...((disputesActiveItems ?? []).map((item) => ({
+      type: "DISPUTE" as const,
+      id: item.id,
+      refLabel: `${item.contextType} - ${item.contextId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      action: {
+        kind: "link" as const,
+        label: "Open dispute",
+        href: `/admin?opsFilter=DISPUTES&focus=${item.id}#ops-queue`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
     ...((paymentFailedItems ?? []).map((item) => ({
       type: "PAYMENT_FAILED" as const,
       id: item.id,
@@ -358,27 +348,17 @@ export default async function AdminPage() {
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
       action: {
         kind: "link" as const,
-        label: "Voir",
-        href: `/admin?ops=PAYMENT_FAILED&focus=${item.id}`,
+        label: "Inspect",
+        href: `/admin?opsFilter=PAYMENTS_FAILED&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
-    }))),
-    ...((kycPendingItems ?? []).map((item) => ({
-      type: "KYC" as const,
-      id: item.id,
-      refLabel: `KYC - ${item.targetRole}`,
-      status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
-      action: { kind: "link" as const, label: "Voir", href: `/admin/kyc?focus=${item.id}` },
       createdAtMs: item.createdAt.getTime(),
     }))),
   ];
 
   const queuePriority: Record<OpsQueueItem["type"], number> = {
-    DISPUTE: 0,
-    PAYOUT: 1,
+    PAYOUT: 0,
+    DISPUTE: 1,
     PAYMENT_FAILED: 2,
-    KYC: 3,
   };
 
   const opsQueueItems = queueWithSort
@@ -399,7 +379,7 @@ export default async function AdminPage() {
       typeof prestaPayoutReadyCount === "number" && typeof tiakPayoutReadyCount === "number"
         ? prestaPayoutReadyCount + tiakPayoutReadyCount
         : null,
-    disputesOpen: typeof disputesOpenCount === "number" ? disputesOpenCount : null,
+    disputesActive: typeof disputesActiveCount === "number" ? disputesActiveCount : null,
     paymentsFailed7d:
       typeof paymentLedgerFailed7dCount === "number" ? paymentLedgerFailed7dCount : null,
     kycPending: typeof pendingKycCount === "number" ? pendingKycCount : null,
