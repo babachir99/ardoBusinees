@@ -16,6 +16,9 @@ type SearchParams = {
   priceMax?: string;
   fuelType?: string;
   gearbox?: string;
+  publisherType?: string;
+  publisherSlug?: string;
+  verifiedOnly?: string;
   sort?: string;
 };
 
@@ -53,6 +56,9 @@ export default async function AutoListingsPage({
   const gearbox = ["MANUAL", "AUTO", "OTHER"].includes(filters.gearbox ?? "")
     ? (filters.gearbox as "MANUAL" | "AUTO" | "OTHER")
     : undefined;
+  const publisherType = filters.publisherType === "DEALER" || filters.publisherType === "INDIVIDUAL" ? filters.publisherType : "";
+  const publisherSlug = filters.publisherSlug?.trim() || "";
+  const verifiedOnly = ["1", "true"].includes((filters.verifiedOnly ?? "").toLowerCase());
 
   if (country) where.country = country;
   if (city) where.city = { contains: city, mode: "insensitive" };
@@ -77,6 +83,34 @@ export default async function AutoListingsPage({
       ...(priceMin !== null ? { gte: priceMin } : {}),
       ...(priceMax !== null ? { lte: priceMax } : {}),
     };
+  }
+
+  if (publisherType === "DEALER") {
+    where.publisherId = { not: null };
+  } else if (publisherType === "INDIVIDUAL") {
+    where.publisherId = null;
+  }
+
+  if (publisherSlug) {
+    where.publisher = {
+      is: {
+        slug: publisherSlug,
+        type: "DEALER",
+        status: "ACTIVE",
+      },
+    };
+  }
+
+  if (verifiedOnly && publisherType !== "INDIVIDUAL") {
+    where.publisher = {
+      is: {
+        ...(publisherSlug ? { slug: publisherSlug } : {}),
+        type: "DEALER",
+        status: "ACTIVE",
+        verified: true,
+      },
+    };
+    where.publisherId = { not: null };
   }
 
   const sort = filters.sort === "price_asc" || filters.sort === "price_desc" ? filters.sort : "newest";
@@ -106,6 +140,30 @@ export default async function AutoListingsPage({
       fuelType: true,
       gearbox: true,
       createdAt: true,
+      publisherId: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+          logoUrl: true,
+        },
+      },
+    },
+  });
+
+  const dealers = await prisma.autoPublisher.findMany({
+    where: { type: "DEALER", status: "ACTIVE" },
+    orderBy: [{ verified: "desc" }, { name: "asc" }],
+    take: 100,
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      verified: true,
     },
   });
 
@@ -113,8 +171,8 @@ export default async function AutoListingsPage({
     title: locale === "fr" ? "JONTAADO AUTO" : "JONTAADO AUTO",
     subtitle:
       locale === "fr"
-        ? "Annonces auto publiques avec filtres clairs et publication rapide."
-        : "Public auto listings with clear filters and fast publishing.",
+        ? "Annonces auto publiques avec filtres clairs et vitrines concessionnaires."
+        : "Public auto listings with clear filters and dealer storefronts.",
     filters: locale === "fr" ? "Filtres" : "Filters",
     country: locale === "fr" ? "Pays" : "Country",
     city: locale === "fr" ? "Ville" : "City",
@@ -127,6 +185,9 @@ export default async function AutoListingsPage({
     priceMax: locale === "fr" ? "Prix max" : "Max price",
     fuelType: locale === "fr" ? "Carburant" : "Fuel",
     gearbox: locale === "fr" ? "Boite" : "Gearbox",
+    dealerType: locale === "fr" ? "Particuliers / Concessionnaires" : "Individuals / Dealers",
+    dealerSlug: locale === "fr" ? "Concessionnaire" : "Dealer",
+    verifiedOnly: locale === "fr" ? "Concessionnaires verifies" : "Verified dealers",
     sort: locale === "fr" ? "Tri" : "Sort",
     newest: locale === "fr" ? "Plus recentes" : "Newest",
     priceAsc: locale === "fr" ? "Prix croissant" : "Price asc",
@@ -135,8 +196,13 @@ export default async function AutoListingsPage({
     myListings: locale === "fr" ? "Mes annonces" : "My listings",
     login: locale === "fr" ? "Se connecter" : "Sign in",
     immo: locale === "fr" ? "IMMO" : "IMMO",
+    dealers: locale === "fr" ? "Concessionnaires" : "Dealers",
     details: locale === "fr" ? "Voir" : "View",
     km: locale === "fr" ? "km" : "km",
+    individual: locale === "fr" ? "Particulier" : "Individual",
+    dealerBadge: locale === "fr" ? "Concessionnaire" : "Dealer",
+    individualBadge: locale === "fr" ? "Particulier" : "Individual",
+    verified: locale === "fr" ? "Verifie" : "Verified",
     empty:
       locale === "fr"
         ? "Aucune annonce auto publiee pour ces filtres."
@@ -152,6 +218,9 @@ export default async function AutoListingsPage({
           <div className="mt-4 flex gap-3 text-xs">
             <Link href="/immo" className="rounded-full border border-white/20 px-3 py-1">
               {t.immo}
+            </Link>
+            <Link href="/auto/dealers" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">
+              {t.dealers}
             </Link>
             {session?.user?.id ? (
               <Link href="/auto/my" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">
@@ -189,6 +258,21 @@ export default async function AutoListingsPage({
               <option value="AUTO">Auto</option>
               <option value="OTHER">Other</option>
             </select>
+            <select name="publisherType" defaultValue={publisherType} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.dealerType}</option>
+              <option value="INDIVIDUAL">{t.individual}</option>
+              <option value="DEALER">{t.dealers}</option>
+            </select>
+            <select name="publisherSlug" defaultValue={publisherSlug} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.dealerSlug}</option>
+              {dealers.map((dealer) => (
+                <option key={dealer.id} value={dealer.slug}>{dealer.name}</option>
+              ))}
+            </select>
+            <select name="verifiedOnly" defaultValue={verifiedOnly ? "true" : ""} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.verifiedOnly}</option>
+              <option value="true">{t.verifiedOnly}</option>
+            </select>
             <select name="sort" defaultValue={sort} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
               <option value="newest">{t.newest}</option>
               <option value="price_asc">{t.priceAsc}</option>
@@ -216,8 +300,16 @@ export default async function AutoListingsPage({
                 <p className="mt-3 text-sm text-cyan-200">{formatMoney(listing.priceCents, listing.currency, locale)}</p>
                 <p className="mt-1 text-xs text-zinc-400">{listing.year} - {listing.mileageKm.toLocaleString(locale)} {t.km}</p>
                 <p className="mt-1 text-xs text-zinc-400">{listing.city}, {listing.country}</p>
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-xs text-zinc-500">{listing.fuelType} - {listing.gearbox}</p>
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <p className="text-xs text-zinc-500">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-300">
+                        {listing.publisherId ? t.dealerBadge : t.individualBadge}
+                      </span>
+                      {listing.publisher ? <span>{listing.publisher.name}</span> : null}
+                      {listing.publisher?.verified ? <span className="text-cyan-300">{t.verified}</span> : null}
+                    </span>
+                  </p>
                   <Link href={`/auto/${listing.id}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
                     {t.details}
                   </Link>

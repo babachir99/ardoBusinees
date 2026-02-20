@@ -20,6 +20,15 @@ export function parseNullableInt(value: unknown) {
   return Math.max(0, Math.trunc(parsed));
 }
 
+export function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return null;
+}
+
 export function normalizeTake(value: unknown, fallback = 24, max = 60) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -38,4 +47,20 @@ export function canAccessAdmin(user: { role?: string | null; roles?: string[] | 
 
 export function canPublishAuto(user: { role?: string | null; roles?: string[] | null } | null | undefined) {
   return hasAnyUserRole(user, ["SELLER", "ADMIN"]);
+}
+
+export function canManageAutoPublisher(user: { role?: string | null; roles?: string[] | null } | null | undefined) {
+  return hasAnyUserRole(user, ["SELLER", "ADMIN"]);
+}
+
+export function slugifyAutoPublisher(input: string) {
+  const normalized = input
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+
+  return normalized || "dealer";
 }

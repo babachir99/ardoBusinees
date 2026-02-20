@@ -36,6 +36,17 @@ export default async function AutoListingDetailPage({
       status: true,
       createdAt: true,
       updatedAt: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+          logoUrl: true,
+        },
+      },
     },
   });
 
@@ -60,6 +71,10 @@ export default async function AutoListingDetailPage({
     gearbox: locale === "fr" ? "Boite" : "Gearbox",
     year: locale === "fr" ? "Annee" : "Year",
     status: locale === "fr" ? "Statut" : "Status",
+    dealer: locale === "fr" ? "Concessionnaire" : "Dealer",
+    individual: locale === "fr" ? "Particulier" : "Individual",
+    verified: locale === "fr" ? "Verifie" : "Verified",
+    viewDealer: locale === "fr" ? "Voir la vitrine" : "View storefront",
   };
 
   return (
@@ -75,6 +90,22 @@ export default async function AutoListingDetailPage({
           <p className="mt-3 text-lg font-semibold text-cyan-200">
             {formatMoney(listing.priceCents, listing.currency, locale)}
           </p>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+            <p className="text-xs text-zinc-400">{t.dealer}</p>
+            {listing.publisher ? (
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-sm text-zinc-200">
+                  {listing.publisher.name} {listing.publisher.verified ? `(${t.verified})` : ""}
+                </p>
+                <Link href={`/auto/dealers/${listing.publisher.slug}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
+                  {t.viewDealer}
+                </Link>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-200">{t.individual}</p>
+            )}
+          </div>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
             <p className="text-xs text-zinc-400">{t.spec}</p>

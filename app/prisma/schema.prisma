@@ -304,6 +304,21 @@ enum AutoGearbox {
   OTHER
 }
 
+enum AutoPublisherType {
+  INDIVIDUAL
+  DEALER
+}
+
+enum AutoPublisherMemberRole {
+  OWNER
+  AGENT
+}
+
+enum AutoPublisherStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -365,6 +380,7 @@ model User {
   immoPublisherMemberships    ImmoPublisherMember[]
   immoMonetizationPurchasesCreated ImmoMonetizationPurchase[] @relation("ImmoMonetizationCreatedBy")
   autoListings              AutoListing[]
+  autoPublisherMemberships  AutoPublisherMember[]
 }
 
 model UserAddress {
@@ -510,6 +526,7 @@ model ImmoMonetizationPurchase {
 model AutoListing {
   id          String            @id @default(cuid())
   ownerId     String
+  publisherId String?
   status      AutoListingStatus @default(DRAFT)
   title       String
   description String
@@ -526,12 +543,51 @@ model AutoListing {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  publisher AutoPublisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([country, city, status])
   @@index([make, model, year, status])
   @@index([ownerId, status, createdAt])
+  @@index([publisherId, status])
+}
+
+model AutoPublisher {
+  id        String              @id @default(cuid())
+  type      AutoPublisherType
+  name      String
+  slug      String              @unique
+  status    AutoPublisherStatus @default(ACTIVE)
+  verified  Boolean             @default(false)
+  country   String?
+  city      String?
+  logoUrl   String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  members  AutoPublisherMember[]
+  listings AutoListing[]
+
+  @@index([status, type, createdAt])
+  @@index([status, country, city])
+  @@index([verified, status])
+}
+
+model AutoPublisherMember {
+  id          String                @id @default(cuid())
+  publisherId String
+  userId      String
+  role        AutoPublisherMemberRole @default(AGENT)
+  status      UserRoleStatus        @default(ACTIVE)
+  createdAt   DateTime              @default(now())
+
+  publisher AutoPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publisherId, userId])
+  @@index([publisherId, status])
+  @@index([userId, status])
 }
 
 model SellerProfile {

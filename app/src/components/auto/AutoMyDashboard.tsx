@@ -3,6 +3,16 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format";
 
+type PublisherSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  verified: boolean;
+  city: string | null;
+  country: string | null;
+  logoUrl: string | null;
+};
+
 type AutoListingItem = {
   id: string;
   title: string;
@@ -20,11 +30,18 @@ type AutoListingItem = {
   status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED";
   createdAt: string;
   updatedAt: string;
+  publisherId: string | null;
+  publisher: PublisherSummary | null;
+};
+
+type DealerOption = PublisherSummary & {
+  role: "OWNER" | "AGENT";
 };
 
 type Props = {
   locale: string;
   listings: AutoListingItem[];
+  dealers: DealerOption[];
 };
 
 type ListingForm = {
@@ -40,6 +57,7 @@ type ListingForm = {
   mileageKm: string;
   fuelType: AutoListingItem["fuelType"];
   gearbox: AutoListingItem["gearbox"];
+  publisherId: string;
 };
 
 function emptyForm(): ListingForm {
@@ -56,10 +74,11 @@ function emptyForm(): ListingForm {
     mileageKm: "",
     fuelType: "GASOLINE",
     gearbox: "MANUAL",
+    publisherId: "",
   };
 }
 
-export default function AutoMyDashboard({ locale, listings: initialListings }: Props) {
+export default function AutoMyDashboard({ locale, listings: initialListings, dealers }: Props) {
   const [listings, setListings] = useState(initialListings);
   const [createForm, setCreateForm] = useState<ListingForm>(emptyForm());
   const [edits, setEdits] = useState<Record<string, ListingForm>>({});
@@ -96,12 +115,19 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
       mileageLabel: locale === "fr" ? "Kilometrage" : "Mileage",
       fuelLabel: locale === "fr" ? "Carburant" : "Fuel",
       gearboxLabel: locale === "fr" ? "Boite" : "Gearbox",
+      dealerLabel: locale === "fr" ? "Concessionnaire" : "Dealer",
+      individual: locale === "fr" ? "Particulier" : "Individual",
       draft: locale === "fr" ? "Brouillon" : "Draft",
       published: locale === "fr" ? "Publie" : "Published",
       paused: locale === "fr" ? "Pause" : "Paused",
       archived: locale === "fr" ? "Archive" : "Archived",
       createdAt: locale === "fr" ? "Cree le" : "Created",
       updateCard: locale === "fr" ? "Modifier" : "Update",
+      myDealers: locale === "fr" ? "Mes concessions" : "My dealers",
+      noDealerMember:
+        locale === "fr"
+          ? "Aucune adhesion concessionnaire active."
+          : "No active dealer membership.",
     }),
     [locale]
   );
@@ -127,6 +153,7 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
       mileageKm: String(item.mileageKm),
       fuelType: item.fuelType,
       gearbox: item.gearbox,
+      publisherId: item.publisherId ?? "",
     };
   }
 
@@ -144,6 +171,7 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
         priceCents: Number(createForm.priceCents),
         year: Number(createForm.year),
         mileageKm: Number(createForm.mileageKm),
+        publisherId: createForm.publisherId || null,
       }),
       cache: "no-store",
     }).catch(() => null);
@@ -171,7 +199,10 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
   }
 
   async function saveListing(id: string) {
-    const form = edits[id] ?? listingFormFromItem(listings.find((item) => item.id === id)!);
+    const current = listings.find((item) => item.id === id);
+    if (!current) return;
+    const form = edits[id] ?? listingFormFromItem(current);
+
     setStatusBusyId(id);
     setErrorMsg("");
     setMessage("");
@@ -184,6 +215,7 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
         priceCents: Number(form.priceCents),
         year: Number(form.year),
         mileageKm: Number(form.mileageKm),
+        publisherId: form.publisherId || null,
       }),
       cache: "no-store",
     }).catch(() => null);
@@ -257,6 +289,21 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.myDealers}</h2>
+        {dealers.length === 0 ? (
+          <p className="mt-2 text-xs text-zinc-400">{t.noDealerMember}</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {dealers.map((dealer) => (
+              <span key={dealer.id} className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+                {dealer.name} ({dealer.role})
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
         <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.create}</h2>
         <form onSubmit={createListing} className="mt-4 grid gap-2 md:grid-cols-3">
           <input value={createForm.title} onChange={(event) => setCreateForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={t.titleLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
@@ -280,6 +327,14 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
             <option value="AUTO">Auto</option>
             <option value="OTHER">Other</option>
           </select>
+          {dealers.length > 0 ? (
+            <select value={createForm.publisherId} onChange={(event) => setCreateForm((prev) => ({ ...prev, publisherId: event.target.value }))} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.individual}</option>
+              {dealers.map((dealer) => (
+                <option key={dealer.id} value={dealer.id}>{dealer.name}</option>
+              ))}
+            </select>
+          ) : null}
           <textarea value={createForm.description} onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))} placeholder={t.descriptionLabel} className="md:col-span-3 rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" rows={3} />
           <button disabled={isSubmitting} className="md:col-span-3 rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
             {isSubmitting ? "..." : t.create}
@@ -301,13 +356,22 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">{listing.make} {listing.model} - {formatMoney(listing.priceCents, listing.currency, locale)}</p>
                 <p className="mt-1 text-xs text-zinc-500">{t.createdAt}: {new Date(listing.createdAt).toLocaleDateString(locale)}</p>
+                <p className="mt-1 text-xs text-zinc-500">{t.dealerLabel}: {listing.publisher?.name ?? t.individual}</p>
 
                 {listing.status === "DRAFT" || listing.status === "PAUSED" ? (
                   <div className="mt-4 grid gap-2 md:grid-cols-3">
                     <input value={editForm.title} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, title: event.target.value } }))} placeholder={t.titleLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
                     <input value={editForm.priceCents} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, priceCents: event.target.value } }))} placeholder={t.priceLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
                     <input value={editForm.city} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, city: event.target.value } }))} placeholder={t.cityLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
-                    <textarea value={editForm.description} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, description: event.target.value } }))} placeholder={t.descriptionLabel} className="md:col-span-3 rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" rows={2} />
+                    {dealers.length > 0 ? (
+                      <select value={editForm.publisherId} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, publisherId: event.target.value } }))} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+                        <option value="">{t.individual}</option>
+                        {dealers.map((dealer) => (
+                          <option key={dealer.id} value={dealer.id}>{dealer.name}</option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <textarea value={editForm.description} onChange={(event) => setEdits((prev) => ({ ...prev, [listing.id]: { ...editForm, description: event.target.value } }))} placeholder={t.descriptionLabel} className="md:col-span-2 rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" rows={2} />
                     <button
                       type="button"
                       onClick={() => saveListing(listing.id)}
@@ -320,7 +384,7 @@ export default function AutoMyDashboard({ locale, listings: initialListings }: P
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {(listing.status === "DRAFT" || listing.status === "PAUSED") ? (
+                  {listing.status === "DRAFT" || listing.status === "PAUSED" ? (
                     <button type="button" disabled={statusBusyId === listing.id} onClick={() => changeStatus(listing.id, "publish")} className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 disabled:opacity-60">
                       {t.publish}
                     </button>

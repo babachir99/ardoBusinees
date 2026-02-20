@@ -9,6 +9,7 @@ import {
   normalizeString,
   normalizeTake,
   normalizeUpper,
+  parseBoolean,
   parseNullableInt,
 } from "@/app/api/auto/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
@@ -16,10 +17,12 @@ import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/li
 const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
 const GEARBOX_TYPES = ["MANUAL", "AUTO", "OTHER"] as const;
 const SORT_VALUES = ["newest", "price_asc", "price_desc"] as const;
+const PUBLISHER_TYPES = ["INDIVIDUAL", "DEALER"] as const;
 
 type FuelType = (typeof FUEL_TYPES)[number];
 type GearboxType = (typeof GEARBOX_TYPES)[number];
 type SortType = (typeof SORT_VALUES)[number];
+type PublisherType = (typeof PUBLISHER_TYPES)[number];
 
 function parseFuelType(value: unknown): FuelType | null {
   const normalized = normalizeUpper(value);
@@ -36,6 +39,42 @@ function parseSort(value: unknown): SortType {
   return SORT_VALUES.includes(normalized as SortType) ? (normalized as SortType) : "newest";
 }
 
+function parsePublisherType(value: unknown): PublisherType | null {
+  const normalized = normalizeUpper(value);
+  return PUBLISHER_TYPES.includes(normalized as PublisherType) ? (normalized as PublisherType) : null;
+}
+
+async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
+  const publisher = await prisma.autoPublisher.findUnique({
+    where: { id: publisherId },
+    select: { id: true, type: true, status: true },
+  });
+
+  if (!publisher || publisher.type !== "DEALER" || publisher.status !== "ACTIVE") {
+    return { error: "PUBLISHER_NOT_FOUND", message: "Dealer publisher not found." } as const;
+  }
+
+  if (isAdmin) {
+    return { publisher } as const;
+  }
+
+  const membership = await prisma.autoPublisherMember.findFirst({
+    where: {
+      publisherId,
+      userId,
+      status: "ACTIVE",
+      role: { in: ["OWNER", "AGENT"] },
+    },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    return { error: "FORBIDDEN", message: "You must be an active dealer member." } as const;
+  }
+
+  return { publisher } as const;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
@@ -50,6 +89,9 @@ export async function GET(request: NextRequest) {
   const priceMax = parseNullableInt(searchParams.get("priceMax"));
   const fuelType = parseFuelType(searchParams.get("fuelType"));
   const gearbox = parseGearbox(searchParams.get("gearbox"));
+  const publisherSlug = normalizeString(searchParams.get("publisherSlug"));
+  const publisherType = parsePublisherType(searchParams.get("publisherType"));
+  const verifiedOnly = parseBoolean(searchParams.get("verifiedOnly"));
   const sort = parseSort(searchParams.get("sort"));
   const take = normalizeTake(searchParams.get("take"), 24, 60);
   const skip = normalizeSkip(searchParams.get("skip"));
@@ -83,6 +125,34 @@ export async function GET(request: NextRequest) {
     };
   }
 
+  if (publisherType === "DEALER") {
+    where.publisherId = { not: null };
+  } else if (publisherType === "INDIVIDUAL") {
+    where.publisherId = null;
+  }
+
+  if (publisherSlug) {
+    where.publisher = {
+      is: {
+        slug: publisherSlug,
+        type: "DEALER",
+        status: "ACTIVE",
+      },
+    };
+  }
+
+  if (verifiedOnly === true && publisherType !== "INDIVIDUAL") {
+    where.publisher = {
+      is: {
+        ...(publisherSlug ? { slug: publisherSlug } : {}),
+        type: "DEALER",
+        status: "ACTIVE",
+        verified: true,
+      },
+    };
+    where.publisherId = { not: null };
+  }
+
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
@@ -112,6 +182,18 @@ export async function GET(request: NextRequest) {
       status: true,
       createdAt: true,
       updatedAt: true,
+      publisherId: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+          logoUrl: true,
+        },
+      },
     },
   });
 
@@ -149,6 +231,8 @@ export async function POST(request: NextRequest) {
   const mileageKm = parseNullableInt((body as { mileageKm?: unknown }).mileageKm);
   const fuelType = parseFuelType((body as { fuelType?: unknown }).fuelType);
   const gearbox = parseGearbox((body as { gearbox?: unknown }).gearbox);
+  const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
+  const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : "";
 
   if (!title || !description || !city || !make || !model || priceCents === null || year === null || mileageKm === null || !fuelType || !gearbox) {
     return withCorrelationId(
@@ -168,9 +252,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const isAdmin = canAccessAdmin(session.user);
+  let publisherForCreateId: string | null = null;
+
+  if (publisherId) {
+    const access = await resolvePublisherMembership(publisherId, session.user.id, isAdmin);
+    if ("error" in access) {
+      const errorCode = access.error ?? "FORBIDDEN";
+      const message = access.message ?? "Forbidden.";
+      return withCorrelationId(
+        errorResponse(errorCode === "FORBIDDEN" ? 403 : 404, errorCode, message),
+        correlationId
+      );
+    }
+    publisherForCreateId = access.publisher.id;
+  }
+
   const created = await prisma.autoListing.create({
     data: {
       ownerId: session.user.id,
+      publisherId: publisherForCreateId,
       status: "DRAFT",
       title,
       description,
@@ -203,6 +304,18 @@ export async function POST(request: NextRequest) {
       createdAt: true,
       updatedAt: true,
       ownerId: true,
+      publisherId: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+          logoUrl: true,
+        },
+      },
     },
   });
 
@@ -214,10 +327,11 @@ export async function POST(request: NextRequest) {
     outcome: "SUCCESS",
     reason: AuditReason.SUCCESS,
     metadata: {
-      isAdmin: canAccessAdmin(session.user),
+      isAdmin,
       status: created.status,
       priceCents: created.priceCents,
       currency: created.currency,
+      publisherId: created.publisherId,
     },
   });
 

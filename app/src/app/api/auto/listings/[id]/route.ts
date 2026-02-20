@@ -13,7 +13,6 @@ import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/li
 
 const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
 const GEARBOX_TYPES = ["MANUAL", "AUTO", "OTHER"] as const;
-
 type FuelType = (typeof FUEL_TYPES)[number];
 type GearboxType = (typeof GEARBOX_TYPES)[number];
 type StatusAction = "PAUSED" | "ARCHIVED";
@@ -40,6 +39,7 @@ async function loadListing(id: string) {
     select: {
       id: true,
       ownerId: true,
+      publisherId: true,
       title: true,
       description: true,
       priceCents: true,
@@ -55,8 +55,58 @@ async function loadListing(id: string) {
       status: true,
       createdAt: true,
       updatedAt: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+          logoUrl: true,
+        },
+      },
     },
   });
+}
+
+type LoadedAutoListing = Awaited<ReturnType<typeof loadListing>>;
+
+function sanitizePublicListing(listing: LoadedAutoListing) {
+  if (!listing) return null;
+  const { ownerId: _ownerId, ...safeListing } = listing;
+  return safeListing;
+}
+
+async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
+  const publisher = await prisma.autoPublisher.findUnique({
+    where: { id: publisherId },
+    select: { id: true, type: true, status: true },
+  });
+
+  if (!publisher || publisher.type !== "DEALER" || publisher.status !== "ACTIVE") {
+    return { error: "PUBLISHER_NOT_FOUND", message: "Dealer publisher not found." } as const;
+  }
+
+  if (isAdmin) {
+    return { publisher } as const;
+  }
+
+  const membership = await prisma.autoPublisherMember.findFirst({
+    where: {
+      publisherId,
+      userId,
+      status: "ACTIVE",
+      role: { in: ["OWNER", "AGENT"] },
+    },
+    select: { id: true, role: true },
+  });
+
+  if (!membership) {
+    return { error: "FORBIDDEN", message: "You must be an active dealer member." } as const;
+  }
+
+  return { publisher, membership } as const;
 }
 
 export async function GET(
@@ -80,26 +130,7 @@ export async function GET(
     return errorResponse(404, "NOT_FOUND", "Listing not found.");
   }
 
-  return NextResponse.json({
-    listing: {
-      id: listing.id,
-      title: listing.title,
-      description: listing.description,
-      priceCents: listing.priceCents,
-      currency: listing.currency,
-      country: listing.country,
-      city: listing.city,
-      make: listing.make,
-      model: listing.model,
-      year: listing.year,
-      mileageKm: listing.mileageKm,
-      fuelType: listing.fuelType,
-      gearbox: listing.gearbox,
-      status: listing.status,
-      createdAt: listing.createdAt,
-      updatedAt: listing.updatedAt,
-    },
-  });
+  return NextResponse.json({ listing: sanitizePublicListing(listing) });
 }
 
 export async function PATCH(
@@ -124,13 +155,6 @@ export async function PATCH(
 
   const isAdmin = canAccessAdmin(session.user);
   const isOwner = listing.ownerId === session.user.id;
-
-  if (!isOwner && !isAdmin) {
-    return withCorrelationId(
-      errorResponse(403, "FORBIDDEN", "You can edit only your own listing."),
-      correlationId
-    );
-  }
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -255,7 +279,13 @@ export async function PATCH(
     data.gearbox = gearbox;
   }
 
+  const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
+  const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : null;
+  const wantsPublisherAttach = typeof publisherIdRaw === "string";
+  const wantsPublisherDetach = publisherIdRaw === null;
+
   const hasFieldChanges = Object.keys(data).length > 0;
+  const wantsPublisherChange = wantsPublisherAttach || wantsPublisherDetach;
 
   if (hasFieldChanges && !["DRAFT", "PAUSED"].includes(listing.status)) {
     return withCorrelationId(
@@ -264,36 +294,94 @@ export async function PATCH(
     );
   }
 
-  if (!statusRequested && !hasFieldChanges) {
-    return withCorrelationId(errorResponse(400, "NO_CHANGES", "No valid changes provided."), correlationId);
+  if (wantsPublisherChange && !["DRAFT", "PAUSED"].includes(listing.status)) {
+    return withCorrelationId(
+      errorResponse(409, "INVALID_LISTING_STATUS", "Publisher can be changed only for DRAFT or PAUSED listings."),
+      correlationId
+    );
   }
 
-  const where: Record<string, unknown> = {
-    id,
-    ...(isAdmin ? {} : { ownerId: session.user.id }),
-  };
+  if (!isOwner && !isAdmin && (!wantsPublisherAttach || hasFieldChanges)) {
+    return withCorrelationId(
+      errorResponse(403, "FORBIDDEN", "You can edit only your own listing."),
+      correlationId
+    );
+  }
+
+  if (wantsPublisherDetach) {
+    if (!isOwner && !isAdmin) {
+      return withCorrelationId(
+        errorResponse(403, "FORBIDDEN", "Only owner or admin can detach publisher."),
+        correlationId
+      );
+    }
+    data.publisherId = null;
+  }
+
+  if (wantsPublisherAttach) {
+    if (!publisherId) {
+      return withCorrelationId(
+        errorResponse(400, "INVALID_PUBLISHER", "publisherId is invalid."),
+        correlationId
+      );
+    }
+
+    const access = await resolvePublisherMembership(publisherId, session.user.id, isAdmin);
+    if ("error" in access) {
+      const errorCode = access.error ?? "FORBIDDEN";
+      const message = access.message ?? "Forbidden.";
+      return withCorrelationId(
+        errorResponse(errorCode === "FORBIDDEN" ? 403 : 404, errorCode, message),
+        correlationId
+      );
+    }
+
+    data.publisherId = access.publisher.id;
+
+    auditLog({
+      correlationId,
+      actor: { userId: session.user.id, role: session.user.role ?? null },
+      action: "auto.listingAttachPublisher",
+      entity: { type: "auto_listing", id },
+      outcome: "SUCCESS",
+      reason: AuditReason.SUCCESS,
+      metadata: { publisherId: access.publisher.id },
+    });
+  }
 
   if (statusRequested === "PAUSED") {
-    where.status = "PUBLISHED";
     data.status = "PAUSED";
   }
 
   if (statusRequested === "ARCHIVED") {
-    where.status = { in: ["DRAFT", "PUBLISHED", "PAUSED"] };
     data.status = "ARCHIVED";
+  }
+
+  if (!statusRequested && Object.keys(data).length === 0) {
+    return withCorrelationId(errorResponse(400, "NO_CHANGES", "No valid changes provided."), correlationId);
+  }
+
+  const canAttachAsMember = !isAdmin && !isOwner && wantsPublisherAttach && !hasFieldChanges && !statusRequested;
+  const requiresDraftPausedState = hasFieldChanges || wantsPublisherChange;
+
+  const where: Record<string, unknown> = {
+    id,
+    ...(isAdmin || canAttachAsMember ? {} : { ownerId: session.user.id }),
+  };
+
+  if (requiresDraftPausedState) {
+    where.status = { in: ["DRAFT", "PAUSED"] };
+  } else if (statusRequested === "PAUSED") {
+    where.status = "PUBLISHED";
+  } else if (statusRequested === "ARCHIVED") {
+    where.status = { in: ["DRAFT", "PUBLISHED", "PAUSED"] };
   }
 
   const result = await prisma.autoListing.updateMany({ where, data });
 
   if (result.count === 0) {
     return withCorrelationId(
-      errorResponse(
-        409,
-        "INVALID_LISTING_STATUS",
-        statusRequested
-          ? "Listing cannot transition from current status."
-          : "Listing could not be updated from current status."
-      ),
+      errorResponse(409, "INVALID_LISTING_STATUS", "Listing cannot transition from current status."),
       correlationId
     );
   }
@@ -310,8 +398,9 @@ export async function PATCH(
     metadata: {
       statusRequested,
       changedFields: Object.keys(data),
+      publisherId: updated?.publisherId ?? null,
     },
   });
 
-  return withCorrelationId(NextResponse.json({ listing: updated }), correlationId);
+  return withCorrelationId(NextResponse.json({ listing: sanitizePublicListing(updated) }), correlationId);
 }
