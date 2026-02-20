@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { PrestaPayoutStatus, TiakPayoutStatus } from "@prisma/client";
+import {
+  DisputeContextType,
+  PrestaPayoutStatus,
+  TiakPayoutStatus,
+} from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type ReleaseType = "PRESTA" | "TIAK";
-
-const blockingDisputeStatuses = ["OPEN", "IN_REVIEW"] as const;
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -38,22 +40,32 @@ function hasActivityLogDelegate() {
   return Boolean(runtimePrisma.activityLog);
 }
 
-async function hasActiveDispute(verticals: string[], referenceIds: string[]) {
+async function hasActiveDispute(
+  contexts: Array<{ contextType: DisputeContextType; contextId: string }>
+) {
   if (!hasDisputeDelegate()) {
     // TODO: add hard guard when dispute model is always available in all environments.
     return false;
   }
 
-  const cleanedRefs = Array.from(new Set(referenceIds.map((value) => value.trim()).filter(Boolean)));
-  if (cleanedRefs.length === 0) {
+  const cleanedContexts = contexts
+    .map((entry) => ({
+      contextType: entry.contextType,
+      contextId: entry.contextId.trim(),
+    }))
+    .filter((entry) => entry.contextType.length > 0 && entry.contextId.length > 0);
+
+  if (cleanedContexts.length === 0) {
     return false;
   }
 
   const dispute = await prisma.dispute.findFirst({
     where: {
-      vertical: { in: verticals },
-      referenceId: { in: cleanedRefs },
-      status: { in: [...blockingDisputeStatuses] },
+      status: "OPEN",
+      OR: cleanedContexts.map((entry) => ({
+        contextType: entry.contextType,
+        contextId: entry.contextId,
+      })),
     },
     select: { id: true },
   });
@@ -94,9 +106,10 @@ export async function POST(request: NextRequest) {
   }
 
   const type = parseType((body as { type?: unknown }).type);
-  const payoutId = typeof (body as { payoutId?: unknown }).payoutId === "string"
-    ? (body as { payoutId: string }).payoutId.trim()
-    : "";
+  const payoutId =
+    typeof (body as { payoutId?: unknown }).payoutId === "string"
+      ? (body as { payoutId: string }).payoutId.trim()
+      : "";
 
   if (!type || !payoutId) {
     return errorResponse(400, "INVALID_INPUT", "type and payoutId are required.");
@@ -130,10 +143,13 @@ export async function POST(request: NextRequest) {
       return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
     }
 
-    const blocked = await hasActiveDispute(
-      ["PRESTA", "SHOP"],
-      [payout.bookingId, payout.booking?.id ?? "", payout.booking?.orderId ?? "", payout.id]
-    );
+    const blocked = await hasActiveDispute([
+      { contextType: DisputeContextType.PRESTA_BOOKING, contextId: payout.bookingId },
+      {
+        contextType: DisputeContextType.SHOP_ORDER,
+        contextId: payout.booking?.orderId ?? "",
+      },
+    ]);
 
     if (blocked) {
       return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");
@@ -177,10 +193,13 @@ export async function POST(request: NextRequest) {
     return errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release.");
   }
 
-  const blocked = await hasActiveDispute(
-    ["TIAK_TIAK", "SHOP"],
-    [payout.deliveryId, payout.delivery?.id ?? "", payout.delivery?.orderId ?? "", payout.id]
-  );
+  const blocked = await hasActiveDispute([
+    { contextType: DisputeContextType.TIAK_DELIVERY, contextId: payout.deliveryId },
+    {
+      contextType: DisputeContextType.SHOP_ORDER,
+      contextId: payout.delivery?.orderId ?? "",
+    },
+  ]);
 
   if (blocked) {
     return errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction.");

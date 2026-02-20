@@ -204,6 +204,13 @@ enum DisputeStatus {
   REJECTED
 }
 
+enum DisputeContextType {
+  SHOP_ORDER
+  PRESTA_BOOKING
+  TIAK_DELIVERY
+  GP_SHIPMENT
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -253,7 +260,8 @@ model User {
   prestaProposals            PrestaProposal[]        @relation("PrestaProposalProvider")
   prestaReviewsAuthored      Review[]                @relation("PrestaReviewAuthor")
   prestaReviewsReceived      Review[]                @relation("PrestaReviewTarget")
-  disputesOpened             Dispute[]
+  disputesOpened             Dispute[]             @relation("DisputeOpenedBy")
+  disputesAssigned           Dispute[]             @relation("DisputeAssignedAdmin")
   tiakDeliveriesAsCustomer   TiakDelivery[]          @relation("TiakDeliveryCustomer")
   tiakDeliveriesAsCourier    TiakDelivery[]          @relation("TiakDeliveryCourier")
   tiakCourierProfile         TiakCourierProfile?
@@ -904,21 +912,30 @@ model TiakPayout {
 }
 
 model Dispute {
-  id          String        @id @default(cuid())
-  vertical    String
-  referenceId String
-  reason      String
-  status      DisputeStatus @default(OPEN)
-  openedById  String
-  resolvedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id              String             @id @default(cuid())
+  vertical        String
+  referenceId     String
+  contextType     DisputeContextType @default(SHOP_ORDER)
+  contextId       String             @default("")
+  reason          String
+  description     String?
+  status          DisputeStatus      @default(OPEN)
+  openedById      String
+  assignedAdminId String?
+  resolutionNote  String?
+  resolvedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
-  openedBy User @relation(fields: [openedById], references: [id], onDelete: Cascade)
+  openedBy      User  @relation("DisputeOpenedBy", fields: [openedById], references: [id], onDelete: Cascade)
+  assignedAdmin User? @relation("DisputeAssignedAdmin", fields: [assignedAdminId], references: [id], onDelete: SetNull)
 
+  @@unique([contextType, contextId, status])
   @@index([openedById, status, createdAt])
+  @@index([assignedAdminId])
   @@index([referenceId])
   @@index([vertical, status])
+  @@index([contextType, contextId])
 }
 
 model Account {
