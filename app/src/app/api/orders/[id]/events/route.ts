@@ -2,7 +2,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { OrderStatus, PaymentStatus } from "@prisma/client";
+import { PaymentLedgerStatus, type OrderStatus, type PaymentStatus } from "@prisma/client";
 
 const allowedStatuses = new Set([
   "PENDING",
@@ -86,6 +86,70 @@ export async function POST(
     order.paymentStatus === "PENDING"
   ) {
     nextPaymentStatus = "PAID";
+  }
+
+  const isCashOrManualPayment = order.paymentMethod === "CASH";
+  const isOnlinePayment = !isCashOrManualPayment;
+
+  if (nextPaymentStatus && isOnlinePayment) {
+    const latestLedger = await prisma.paymentLedger.findFirst({
+      where: { orderId: order.id },
+      orderBy: [{ createdAt: "desc" }],
+      select: { status: true },
+    });
+
+    if (!latestLedger) {
+      return NextResponse.json(
+        {
+          error: "LEDGER_REQUIRED_FOR_ONLINE",
+          message: "Payment ledger is required for online payment status updates.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (
+      order.paymentStatus === "PAID" &&
+      (nextPaymentStatus === "FAILED" || nextPaymentStatus === "REFUNDED")
+    ) {
+      return NextResponse.json(
+        {
+          error: "ONLINE_PAYMENT_TERMINAL",
+          message: "Online paid orders cannot move backward to FAILED or REFUNDED.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (nextPaymentStatus === "PAID" && latestLedger.status !== PaymentLedgerStatus.CONFIRMED) {
+      return NextResponse.json(
+        {
+          error: "LEDGER_NOT_CONFIRMED",
+          message: "Ledger must be CONFIRMED before setting payment status to PAID.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (nextPaymentStatus === "FAILED" && latestLedger.status !== PaymentLedgerStatus.FAILED) {
+      return NextResponse.json(
+        {
+          error: "LEDGER_NOT_FAILED",
+          message: "Ledger must be FAILED before setting payment status to FAILED.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (nextPaymentStatus === "REFUNDED") {
+      return NextResponse.json(
+        {
+          error: "ONLINE_REFUND_NOT_ALLOWED",
+          message: "Online refunds must be handled by the payment provider flow.",
+        },
+        { status: 409 }
+      );
+    }
   }
 
   const resultingPaymentStatus = nextPaymentStatus ?? order.paymentStatus;

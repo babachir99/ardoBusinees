@@ -38,16 +38,16 @@ function canAccessOrder(order: OrderWithSeller, userId: string, role: string): b
   return false;
 }
 
+function isProductionEnvironment(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+}
+
 function isMockPaymentsEnabled(): boolean {
-  if (process.env.NODE_ENV === "production") {
+  if (isProductionEnvironment()) {
     return false;
   }
 
-  return (
-    process.env.PAYMENTS_MOCK_ENABLED === "1" ||
-    process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENTS === "1" ||
-    process.env.NEXT_PUBLIC_FORCE_TEST_PAYMENTS === "1"
-  );
+  return process.env.PAYMENTS_MOCK_ENABLED === "1";
 }
 
 async function finalizeMockPayment(order: OrderWithSeller) {
@@ -124,6 +124,10 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: "Mock payments are disabled in production." }, { status: 403 });
   }
 
   if (!isMockPaymentsEnabled()) {

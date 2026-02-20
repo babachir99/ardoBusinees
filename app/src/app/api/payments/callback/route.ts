@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PaymentLedgerStatus, PrestaBookingStatus } from "@prisma/client";
+import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma/client";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -56,40 +56,64 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Payment not found" }, { status: 404 });
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id: payment.orderId },
-      select: {
-        id: true,
-        sellerId: true,
-        totalCents: true,
-        feesCents: true,
-        currency: true,
-        status: true,
-        paymentStatus: true,
-      },
-    });
+  let result: {
+    updatedPayment: {
+      id: string;
+      orderId: string;
+      provider: string;
+      providerRef: string | null;
+      status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+      amountCents: number;
+      currency: string;
+    };
+    finalOrder: {
+      id: string;
+      status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELED" | "FULFILLING" | "REFUNDED";
+      paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+    };
+  };
 
-    if (!order) {
-      throw new Error("ORDER_NOT_FOUND");
-    }
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: payment.orderId },
+        select: {
+          id: true,
+          sellerId: true,
+          totalCents: true,
+          feesCents: true,
+          currency: true,
+          status: true,
+          paymentStatus: true,
+          paymentMethod: true,
+        },
+      });
 
-    const desiredLedgerStatus =
-      callbackStatus === "PAID" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
+      if (!order) {
+        throw new Error("ORDER_NOT_FOUND");
+      }
 
-    const latestLedger = await tx.paymentLedger.findFirst({
-      where: { orderId: order.id },
-      orderBy: [{ createdAt: "desc" }],
-      select: {
-        id: true,
-        status: true,
-      },
-    });
+      const desiredLedgerStatus =
+        callbackStatus === "PAID" ? PaymentLedgerStatus.CONFIRMED : PaymentLedgerStatus.FAILED;
+      const paymentMethod = payment.method ?? order.paymentMethod ?? null;
+      const isOnlinePayment = paymentMethod !== "CASH";
 
-    let effectiveCallbackStatus: "PAID" | "FAILED" = callbackStatus;
+      const latestLedger = await tx.paymentLedger.findFirst({
+        where: { orderId: order.id },
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          id: true,
+          status: true,
+        },
+      });
 
-    if (latestLedger) {
-      if (latestLedger.status === PaymentLedgerStatus.INITIATED) {
+      if (isOnlinePayment && !latestLedger) {
+        throw new Error("LEDGER_REQUIRED_FOR_ONLINE");
+      }
+
+      let effectiveLedgerStatus: PaymentLedgerStatus | null = latestLedger?.status ?? null;
+
+      if (latestLedger && latestLedger.status === PaymentLedgerStatus.INITIATED) {
         const moved = await tx.paymentLedger.updateMany({
           where: {
             id: latestLedger.id,
@@ -100,141 +124,202 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (moved.count === 0) {
+        if (moved.count === 1) {
+          effectiveLedgerStatus = desiredLedgerStatus;
+        } else {
           const refreshedLedger = await tx.paymentLedger.findUnique({
             where: { id: latestLedger.id },
             select: { status: true },
           });
 
-          if (refreshedLedger?.status === PaymentLedgerStatus.CONFIRMED) {
-            effectiveCallbackStatus = "PAID";
-          } else if (refreshedLedger?.status === PaymentLedgerStatus.FAILED) {
-            effectiveCallbackStatus = "FAILED";
-          }
+          effectiveLedgerStatus = refreshedLedger?.status ?? latestLedger.status;
         }
-      } else if (latestLedger.status === PaymentLedgerStatus.CONFIRMED) {
-        effectiveCallbackStatus = "PAID";
-      } else if (latestLedger.status === PaymentLedgerStatus.FAILED) {
-        effectiveCallbackStatus = "FAILED";
       }
-    }
 
-    const paymentUpdateData: {
-      status: "PAID" | "FAILED";
-      providerRef?: string;
-    } = {
-      status: effectiveCallbackStatus,
-    };
+      const effectiveCallbackStatus: "PAID" | "FAILED" | null =
+        effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED
+          ? "PAID"
+          : effectiveLedgerStatus === PaymentLedgerStatus.FAILED
+          ? "FAILED"
+          : isOnlinePayment
+          ? null
+          : callbackStatus;
 
-    if (providerRef) {
-      paymentUpdateData.providerRef = providerRef;
-    }
-
-    const updatedPayment = await tx.payment.update({
-      where: { id: payment.id },
-      data: paymentUpdateData,
-    });
-
-    if (effectiveCallbackStatus === "PAID") {
-      const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
-      const paidAt = new Date();
-
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: nextOrderStatus,
-          paymentStatus: "PAID",
-          events: {
-            create: [
-              {
-                status: nextOrderStatus,
-                note: `Payment callback confirmed (${updatedPayment.provider})`,
-              },
-            ],
+      if (!effectiveCallbackStatus) {
+        const unchangedPayment = await tx.payment.findUnique({ where: { id: payment.id } });
+        return {
+          updatedPayment: unchangedPayment ?? payment,
+          finalOrder: {
+            id: order.id,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
           },
-        },
-      });
+        };
+      }
 
-      await tx.prestaBooking.updateMany({
+      const paymentStatusesForTransition: PaymentStatus[] =
+        effectiveCallbackStatus === "PAID" ? ["PENDING", "PAID"] : ["PENDING", "FAILED"];
+
+      await tx.payment.updateMany({
         where: {
-          orderId: order.id,
+          id: payment.id,
           status: {
-            in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
+            in: paymentStatusesForTransition,
           },
         },
         data: {
-          status: PrestaBookingStatus.PAID,
-          paidAt,
+          status: effectiveCallbackStatus,
+          ...(providerRef ? { providerRef } : {}),
         },
       });
 
-      await tx.tiakDelivery.updateMany({
-        where: {
-          orderId: order.id,
-          OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
-        },
-        data: {
-          paymentStatus: "PAID",
-          paidAt,
-        },
-      });
+      const updatedPayment = await tx.payment.findUnique({ where: { id: payment.id } });
+      if (!updatedPayment) {
+        throw new Error("PAYMENT_NOT_FOUND");
+      }
 
-      if (order.sellerId) {
-        const existingPayout = await tx.payout.findFirst({
-          where: { orderId: order.id, sellerId: order.sellerId },
-          select: { id: true },
+      if (effectiveCallbackStatus === "PAID") {
+        const nextOrderStatus = order.status === "PENDING" ? "CONFIRMED" : order.status;
+        const paidAt = new Date();
+
+        const paidOrderTransition = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            paymentStatus: "PENDING",
+          },
+          data: {
+            status: nextOrderStatus,
+            paymentStatus: "PAID",
+          },
         });
 
-        if (!existingPayout) {
-          await tx.payout.create({
+        if (paidOrderTransition.count === 1) {
+          await tx.orderEvent.create({
             data: {
-              sellerId: order.sellerId,
               orderId: order.id,
-              amountCents: Math.max(order.totalCents - order.feesCents, 0),
-              currency: order.currency,
-              status: "PENDING",
+              status: nextOrderStatus,
+              note: `Payment callback confirmed (${updatedPayment.provider})`,
             },
           });
         }
-      }
-    } else {
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: "FAILED",
-          events: {
-            create: [
-              {
-                status: order.status,
-                note: `Payment callback failed (${updatedPayment.provider})`,
-              },
-            ],
+
+        await tx.prestaBooking.updateMany({
+          where: {
+            orderId: order.id,
+            status: {
+              in: [PrestaBookingStatus.PENDING, PrestaBookingStatus.CONFIRMED],
+            },
           },
+          data: {
+            status: PrestaBookingStatus.PAID,
+            paidAt,
+          },
+        });
+
+        await tx.tiakDelivery.updateMany({
+          where: {
+            orderId: order.id,
+            OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+          },
+          data: {
+            paymentStatus: "PAID",
+            paidAt,
+          },
+        });
+
+        if (order.sellerId) {
+          const existingPayout = await tx.payout.findFirst({
+            where: { orderId: order.id, sellerId: order.sellerId },
+            select: { id: true },
+          });
+
+          if (!existingPayout) {
+            await tx.payout.create({
+              data: {
+                sellerId: order.sellerId,
+                orderId: order.id,
+                amountCents: Math.max(order.totalCents - order.feesCents, 0),
+                currency: order.currency,
+                status: "PENDING",
+              },
+            });
+          }
+        }
+      } else {
+        const failedOrderTransition = await tx.order.updateMany({
+          where: {
+            id: order.id,
+            paymentStatus: "PENDING",
+          },
+          data: {
+            paymentStatus: "FAILED",
+          },
+        });
+
+        if (failedOrderTransition.count === 1) {
+          await tx.orderEvent.create({
+            data: {
+              orderId: order.id,
+              status: order.status,
+              note: `Payment callback failed (${updatedPayment.provider})`,
+            },
+          });
+        }
+
+        await tx.tiakDelivery.updateMany({
+          where: {
+            orderId: order.id,
+            OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+          },
+          data: {
+            paymentStatus: "FAILED",
+          },
+        });
+      }
+
+      const finalOrder = await tx.order.findUnique({
+        where: { id: updatedPayment.orderId },
+        select: {
+          id: true,
+          status: true,
+          paymentStatus: true,
         },
       });
 
-      await tx.tiakDelivery.updateMany({
-        where: {
-          orderId: order.id,
-          OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+      return {
+        updatedPayment,
+        finalOrder: finalOrder ?? {
+          id: order.id,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
         },
-        data: {
-          paymentStatus: "FAILED",
-        },
-      });
+      };
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "LEDGER_REQUIRED_FOR_ONLINE") {
+        return NextResponse.json(
+          {
+            error: "LEDGER_REQUIRED_FOR_ONLINE",
+            message: "Payment ledger is required for online callbacks.",
+          },
+          { status: 409 }
+        );
+      }
+
+      if (error.message === "ORDER_NOT_FOUND") {
+        return NextResponse.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
+      }
     }
 
-    const finalOrder = await tx.order.findUnique({
-      where: { id: updatedPayment.orderId },
-      select: {
-        id: true,
-        status: true,
-        paymentStatus: true,
+    return NextResponse.json(
+      {
+        error: "PRISMA_ERROR",
+        message: "Database unavailable.",
       },
-    });
-
-    return { updatedPayment, finalOrder };
-  });
+      { status: 503 }
+    );
+  }
 
   return NextResponse.json({
     success: true,
