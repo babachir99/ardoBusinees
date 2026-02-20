@@ -58,22 +58,6 @@ async function loadListing(id: string) {
       status: true,
       createdAt: true,
       updatedAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-        },
-      },
-      publisher: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          verified: true,
-          type: true,
-        },
-      },
       publisher: {
         select: {
           id: true,
@@ -270,11 +254,14 @@ export async function PATCH(
       status: true,
       createdAt: true,
       updatedAt: true,
-      owner: {
+      publisher: {
         select: {
           id: true,
           name: true,
-          image: true,
+          slug: true,
+          verified: true,
+          type: true,
+          status: true,
         },
       },
     },

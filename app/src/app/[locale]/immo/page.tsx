@@ -13,6 +13,8 @@ type SearchParams = {
   maxSurface?: string;
   city?: string;
   country?: string;
+  publisherType?: string;
+  verifiedOnly?: string;
   sort?: string;
 };
 
@@ -67,6 +69,25 @@ export default async function ImmoListingsPage({
     };
   }
 
+  const publisherType = filters.publisherType === "AGENCY" || filters.publisherType === "INDIVIDUAL" ? filters.publisherType : "";
+  const verifiedOnly = ["1", "true"].includes((filters.verifiedOnly ?? "").toLowerCase());
+
+  if (publisherType === "AGENCY") {
+    where.publisherId = { not: null };
+  } else if (publisherType === "INDIVIDUAL") {
+    where.publisherId = null;
+  }
+
+  if (verifiedOnly) {
+    where.publisher = {
+      is: {
+        type: "AGENCY",
+        status: "ACTIVE",
+        verified: true,
+      },
+    };
+  }
+
   const sort = filters.sort === "price_asc" || filters.sort === "price_desc" ? filters.sort : "newest";
   const orderBy =
     sort === "price_asc"
@@ -92,11 +113,13 @@ export default async function ImmoListingsPage({
       city: true,
       country: true,
       createdAt: true,
-      owner: {
+      publisher: {
         select: {
           id: true,
           name: true,
-          image: true,
+          slug: true,
+          verified: true,
+          type: true,
         },
       },
     },
@@ -109,9 +132,12 @@ export default async function ImmoListingsPage({
         ? "Annonces verifiees, filtres clairs, contact interne securise."
         : "Verified listings, clear filters and secure internal contact.",
     filters: locale === "fr" ? "Filtres" : "Filters",
+    publisherFilter: locale === "fr" ? "Particuliers / Agences" : "Individuals / Agencies",
+    verifiedAgencies: locale === "fr" ? "Agences verifiees" : "Verified agencies",
     mine: locale === "fr" ? "Mes annonces" : "My listings",
     login: locale === "fr" ? "Se connecter" : "Sign in",
     details: locale === "fr" ? "Voir" : "View",
+    agencies: locale === "fr" ? "Agences" : "Agencies",
     empty:
       locale === "fr"
         ? "Aucune annonce publiee pour ces filtres."
@@ -127,6 +153,9 @@ export default async function ImmoListingsPage({
           <div className="mt-4 flex gap-3 text-xs">
             <Link href="/stores/jontaado-immo" className="rounded-full border border-white/20 px-3 py-1">
               Stores
+            </Link>
+            <Link href="/immo/agences" className="rounded-full border border-white/20 px-3 py-1">
+              {t.agencies}
             </Link>
             {session?.user?.id ? (
               <Link href="/immo/my" className="rounded-full border border-emerald-300/40 px-3 py-1 text-emerald-200">
@@ -161,6 +190,15 @@ export default async function ImmoListingsPage({
             <input name="minPrice" defaultValue={filters.minPrice ?? ""} placeholder="Min price" className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
             <input name="maxPrice" defaultValue={filters.maxPrice ?? ""} placeholder="Max price" className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
             <input name="minSurface" defaultValue={filters.minSurface ?? ""} placeholder="Min m?" className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
+            <select name="publisherType" defaultValue={publisherType} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.publisherFilter}</option>
+              <option value="INDIVIDUAL">{locale === "fr" ? "Particuliers" : "Individuals"}</option>
+              <option value="AGENCY">{locale === "fr" ? "Agences" : "Agencies"}</option>
+            </select>
+            <select name="verifiedOnly" defaultValue={verifiedOnly ? "true" : ""} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
+              <option value="">{t.verifiedAgencies}</option>
+              <option value="true">{t.verifiedAgencies}</option>
+            </select>
             <div className="flex gap-2">
               <input name="maxSurface" defaultValue={filters.maxSurface ?? ""} placeholder="Max m?" className="w-full rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
               <button className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950">OK</button>
@@ -183,7 +221,7 @@ export default async function ImmoListingsPage({
                 <p className="mt-1 text-xs text-zinc-400">{listing.surfaceM2} m? ? {listing.rooms ?? "-"} rooms</p>
                 <p className="mt-1 text-xs text-zinc-400">{listing.city}, {listing.country}</p>
                 <div className="mt-4 flex items-center justify-between">
-                  <p className="text-xs text-zinc-500">{listing.owner.name ?? "JONTAADO"}</p>
+                  <p className="text-xs text-zinc-500">{listing.publisher?.name ?? "JONTAADO"}</p>
                   <Link href={`/immo/${listing.id}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
                     {t.details}
                   </Link>

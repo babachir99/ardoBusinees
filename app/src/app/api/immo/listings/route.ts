@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canAccessAdmin } from "@/app/api/immo/listings/_shared";
 
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 const PROPERTY_TYPES = ["APARTMENT", "HOUSE", "LAND", "COMMERCIAL", "OTHER"] as const;
@@ -163,13 +164,6 @@ export async function GET(request: NextRequest) {
       contactMode: true,
       createdAt: true,
       updatedAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-        },
-      },
       publisher: {
         select: {
           id: true,
@@ -206,6 +200,8 @@ export async function POST(request: NextRequest) {
   const rooms = parseNullableInt((body as { rooms?: unknown }).rooms);
   const city = normalizeString((body as { city?: unknown }).city);
   const country = normalizeString((body as { country?: unknown }).country).toUpperCase() || "SN";
+  const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
+  const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : "";
 
   if (!title || !description || !listingType || !propertyType || priceCents === null || surfaceM2 === null || !city) {
     return errorResponse(
@@ -215,9 +211,41 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let publisherForCreateId: string | null = null;
+
+  if (publisherId) {
+    const publisher = await prisma.immoPublisher.findUnique({
+      where: { id: publisherId },
+      select: { id: true, type: true, status: true },
+    });
+
+    if (!publisher || publisher.type !== "AGENCY" || publisher.status !== "ACTIVE") {
+      return errorResponse(404, "PUBLISHER_NOT_FOUND", "Agency publisher not found.");
+    }
+
+    const isAdmin = canAccessAdmin(session.user);
+    const membership = isAdmin
+      ? { role: "OWNER" }
+      : await prisma.immoPublisherMember.findFirst({
+          where: {
+            publisherId,
+            userId: session.user.id,
+            status: "ACTIVE",
+          },
+          select: { role: true },
+        });
+
+    if (!membership) {
+      return errorResponse(403, "FORBIDDEN", "You must be an active agency member.");
+    }
+
+    publisherForCreateId = publisher.id;
+  }
+
   const created = await prisma.immoListing.create({
     data: {
       ownerId: session.user.id,
+      publisherId: publisherForCreateId,
       title,
       description,
       listingType,
@@ -248,13 +276,8 @@ export async function POST(request: NextRequest) {
       contactMode: true,
       createdAt: true,
       updatedAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-        },
-      },
+      ownerId: true,
+      publisherId: true,
     },
   });
 

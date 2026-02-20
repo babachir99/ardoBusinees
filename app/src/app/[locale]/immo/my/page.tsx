@@ -34,7 +34,40 @@ export default async function ImmoMyPage({
       city: true,
       country: true,
       status: true,
+      publisherId: true,
       createdAt: true,
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+        },
+      },
+    },
+  });
+
+  const agencies = await prisma.immoPublisherMember.findMany({
+    where: {
+      userId: session.user.id,
+      status: "ACTIVE",
+      publisher: {
+        status: "ACTIVE",
+        type: "AGENCY",
+      },
+    },
+    orderBy: [{ createdAt: "asc" }],
+    select: {
+      publisher: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          verified: true,
+          city: true,
+          country: true,
+        },
+      },
     },
   });
 
@@ -63,6 +96,7 @@ export default async function ImmoMyPage({
             ...item,
             createdAt: item.createdAt.toISOString(),
           }))}
+          agencies={agencies.map((item) => item.publisher)}
         />
       </main>
     </div>

@@ -17,12 +17,29 @@ type ImmoListingRow = {
   city: string;
   country: string;
   status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED";
+  publisherId?: string | null;
+  publisher?: {
+    id: string;
+    name: string;
+    slug: string;
+    verified: boolean;
+  } | null;
   createdAt: string;
+};
+
+type AgencyOption = {
+  id: string;
+  name: string;
+  slug: string;
+  verified: boolean;
+  city: string | null;
+  country: string | null;
 };
 
 type Props = {
   locale: string;
   listings: ImmoListingRow[];
+  agencies: AgencyOption[];
 };
 
 type DraftCreate = {
@@ -36,6 +53,7 @@ type DraftCreate = {
   city: string;
   country: string;
   currency: string;
+  publisherId: string;
 };
 
 const defaultCreate: DraftCreate = {
@@ -49,6 +67,7 @@ const defaultCreate: DraftCreate = {
   city: "",
   country: "SN",
   currency: "EUR",
+  publisherId: "",
 };
 
 const actionLabels = {
@@ -64,6 +83,7 @@ const actionLabels = {
     surface: "Surface m?",
     rooms: "Pieces",
     city: "Ville",
+    agency: "Agence",
     empty: "Aucune annonce pour le moment.",
     successCreate: "Brouillon cree.",
     successUpdate: "Annonce mise a jour.",
@@ -82,6 +102,7 @@ const actionLabels = {
     surface: "Surface m?",
     rooms: "Rooms",
     city: "City",
+    agency: "Agency",
     empty: "No listings yet.",
     successCreate: "Draft created.",
     successUpdate: "Listing updated.",
@@ -101,7 +122,7 @@ function statusLabel(locale: string, status: ImmoListingRow["status"]) {
   return status;
 }
 
-export default function ImmoMyDashboard({ locale, listings }: Props) {
+export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
   const l = locale === "fr" ? actionLabels.fr : actionLabels.en;
   const router = useRouter();
 
@@ -123,6 +144,7 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
           city: item.city,
           country: item.country,
           currency: item.currency,
+          publisherId: item.publisherId ?? "",
         },
       ])
     ) as Record<
@@ -136,6 +158,7 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
         city: string;
         country: string;
         currency: string;
+        publisherId: string;
       }
     >;
   }, [listings]);
@@ -164,6 +187,7 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...createForm,
+          ...(createForm.publisherId ? { publisherId: createForm.publisherId } : {}),
           priceCents: Number(createForm.priceCents),
           surfaceM2: Number(createForm.surfaceM2),
           rooms: createForm.rooms ? Number(createForm.rooms) : null,
@@ -209,6 +233,7 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
           city: draft.city,
           country: draft.country,
           currency: draft.currency,
+          publisherId: draft.publisherId || null,
         }),
       });
 
@@ -331,6 +356,25 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
             <option value="OTHER">OTHER</option>
           </select>
         </div>
+        {agencies.length > 0 ? (
+          <select
+            value={createForm.publisherId}
+            onChange={(event) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                publisherId: event.target.value,
+              }))
+            }
+            className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white"
+          >
+            <option value="">{l.agency}</option>
+            {agencies.map((agency) => (
+              <option key={agency.id} value={agency.id}>
+                {agency.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <button
           type="submit"
           disabled={saving === "create"}
@@ -362,6 +406,9 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-zinc-300">{formatMoney(listing.priceCents, listing.currency, locale)}</p>
+                {listing.publisher?.name ? (
+                  <p className="mt-1 text-xs text-zinc-400">{l.agency}: {listing.publisher.name}</p>
+                ) : null}
                 {isEditable && draft ? (
                   <div className="mt-3 grid gap-2 md:grid-cols-2">
                     <input
@@ -392,6 +439,20 @@ export default function ImmoMyDashboard({ locale, listings }: Props) {
                       className="rounded-xl border border-white/15 bg-zinc-900/70 px-3 py-2 text-sm text-white md:col-span-2"
                       rows={2}
                     />
+                    {agencies.length > 0 ? (
+                      <select
+                        value={draft.publisherId}
+                        onChange={(event) => updateEditField(listing.id, "publisherId", event.target.value)}
+                        className="rounded-xl border border-white/15 bg-zinc-900/70 px-3 py-2 text-sm text-white md:col-span-2"
+                      >
+                        <option value="">{l.agency}</option>
+                        {agencies.map((agency) => (
+                          <option key={agency.id} value={agency.id}>
+                            {agency.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                   </div>
                 ) : null}
 
