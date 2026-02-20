@@ -7,7 +7,7 @@ import {
   TiakPayoutStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger" },
       outcome: "DENIED",
-      reason: "INVALID_SIGNATURE",
+      reason: AuditReason.FORBIDDEN,
     });
     return respond(errorResponse(400, "INVALID_SIGNATURE", "Invalid webhook signature."));
   }
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger" },
       outcome: "CONFLICT",
-      reason: "INVALID_PAYLOAD",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_PAYLOAD", "Invalid JSON payload."));
   }
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger" },
       outcome: "CONFLICT",
-      reason: "INVALID_PAYLOAD",
+      reason: AuditReason.INVALID_INPUT,
       metadata: { hasIntentId: Boolean(intentId), hasOrderId: Boolean(orderId) },
     });
     return respond(errorResponse(400, "INVALID_PAYLOAD", "status + intentId or orderId are required."));
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger", id: orderId || null },
       outcome: "CONFLICT",
-      reason: "LEDGER_NOT_FOUND",
+      reason: AuditReason.LEDGER_MISSING,
       metadata: { hasIntentId: Boolean(intentId) },
     });
     return respond(errorResponse(400, "LEDGER_NOT_FOUND", "Payment ledger not found for webhook payload."));
@@ -350,7 +350,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger", id: transition.ledgerId },
       outcome: "SUCCESS",
-      reason: "WEBHOOK_PROCESSED",
+      reason: AuditReason.SUCCESS,
       metadata: {
         requestedWebhookStatus: transition.requestedWebhookStatus,
         ledgerStatus: transition.ledgerStatus,
@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "PaymentLedger", id: resolvedLedger.id },
         outcome: "CONFLICT",
-        reason: "LEDGER_NOT_FOUND",
+        reason: AuditReason.LEDGER_MISSING,
       });
       return respond(errorResponse(400, "LEDGER_NOT_FOUND", "Payment ledger not found for webhook payload."));
     }
@@ -381,7 +381,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger", id: resolvedLedger.id },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }

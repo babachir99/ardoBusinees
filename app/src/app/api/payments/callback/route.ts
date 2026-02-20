@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma/client";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payment" },
       outcome: "DENIED",
-      reason: "UNAUTHORIZED",
+      reason: AuditReason.UNAUTHORIZED,
     });
     return respond(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
   }
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payment" },
       outcome: "CONFLICT",
-      reason: "INVALID_PAYLOAD",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(NextResponse.json({ error: "Invalid payload" }, { status: 400 }));
   }
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payment", id: paymentId || null },
       outcome: "CONFLICT",
-      reason: "INVALID_STATUS",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(NextResponse.json({ error: "Invalid status" }, { status: 400 }));
   }
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payment", id: paymentId || providerRef || orderId || null },
       outcome: "CONFLICT",
-      reason: "PAYMENT_NOT_FOUND",
+      reason: AuditReason.NOT_FOUND,
     });
     return respond(NextResponse.json({ error: "Payment not found" }, { status: 404 }));
   }
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
           action,
           entity: { type: "Payment", id: payment.id },
           outcome: "CONFLICT",
-          reason: "LEDGER_REQUIRED_FOR_ONLINE",
+          reason: AuditReason.LEDGER_MISSING,
           metadata: { orderId: payment.orderId },
         });
         return respond(
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
           action,
           entity: { type: "Order", id: payment.orderId },
           outcome: "CONFLICT",
-          reason: "ORDER_NOT_FOUND",
+          reason: AuditReason.NOT_FOUND,
         });
         return respond(
           NextResponse.json(
@@ -382,7 +382,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payment", id: payment.id },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(
       NextResponse.json(
@@ -401,7 +401,7 @@ export async function POST(request: NextRequest) {
     action,
     entity: { type: "Payment", id: result.updatedPayment.id },
     outcome: "SUCCESS",
-    reason: "CALLBACK_PROCESSED",
+    reason: AuditReason.SUCCESS,
     metadata: {
       orderId: result.updatedPayment.orderId,
       paymentStatus: result.updatedPayment.status,

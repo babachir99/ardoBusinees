@@ -8,7 +8,7 @@ import {
 } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 type ReleaseType = "PRESTA" | "TIAK";
 
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payout" },
       outcome: "ERROR",
-      reason: "DELEGATE_UNAVAILABLE",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(
       errorResponse(
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payout" },
       outcome: "ERROR",
-      reason: "DELEGATE_UNAVAILABLE",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(
       errorResponse(
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payout" },
       outcome: "DENIED",
-      reason: "UNAUTHORIZED",
+      reason: AuditReason.UNAUTHORIZED,
     });
     return respond(errorResponse(401, "UNAUTHORIZED", "Admin access required."));
   }
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payout" },
       outcome: "CONFLICT",
-      reason: "INVALID_BODY",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_BODY", "JSON body is required."));
   }
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "Payout", id: payoutId || null },
       outcome: "CONFLICT",
-      reason: "INVALID_INPUT",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_INPUT", "type and payoutId are required."));
   }
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "PrestaPayout", id: result.payout.id },
         outcome: "SUCCESS",
-        reason: result.released ? "RELEASED" : "ALREADY_PAID",
+        reason: AuditReason.SUCCESS,
         metadata: { type, status: result.payout.status },
       });
 
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
           action,
           entity: { type: "PrestaPayout", id: payoutId },
           outcome: "CONFLICT",
-          reason: "PAYOUT_NOT_FOUND",
+          reason: AuditReason.NOT_FOUND,
         });
         return respond(errorResponse(404, "PAYOUT_NOT_FOUND", "PRESTA payout not found."));
       }
@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
           action,
           entity: { type: "PrestaPayout", id: payoutId },
           outcome: "CONFLICT",
-          reason: "INVALID_PAYOUT_STATE",
+          reason: AuditReason.STATE_CONFLICT,
         });
         return respond(errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release."));
       }
@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
           action,
           entity: { type: "PrestaPayout", id: payoutId },
           outcome: "DENIED",
-          reason: "PAYOUT_BLOCKED_BY_DISPUTE",
+          reason: AuditReason.ACTIVE_DISPUTE,
         });
         return respond(errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction."));
       }
@@ -304,7 +304,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "PrestaPayout", id: payoutId },
         outcome: "ERROR",
-        reason: "PRISMA_ERROR",
+        reason: AuditReason.DB_ERROR,
       });
       return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
     }
@@ -395,7 +395,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "TiakPayout", id: result.payout.id },
       outcome: "SUCCESS",
-      reason: result.released ? "RELEASED" : "ALREADY_PAID",
+      reason: AuditReason.SUCCESS,
       metadata: { type, status: result.payout.status },
     });
 
@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "TiakPayout", id: payoutId },
         outcome: "CONFLICT",
-        reason: "PAYOUT_NOT_FOUND",
+        reason: AuditReason.NOT_FOUND,
       });
       return respond(errorResponse(404, "PAYOUT_NOT_FOUND", "TIAK payout not found."));
     }
@@ -420,7 +420,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "TiakPayout", id: payoutId },
         outcome: "CONFLICT",
-        reason: "INVALID_PAYOUT_STATE",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(errorResponse(409, "INVALID_PAYOUT_STATE", "Payout must be READY before release."));
     }
@@ -432,7 +432,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "TiakPayout", id: payoutId },
         outcome: "DENIED",
-        reason: "PAYOUT_BLOCKED_BY_DISPUTE",
+        reason: AuditReason.ACTIVE_DISPUTE,
       });
       return respond(errorResponse(409, "PAYOUT_BLOCKED_BY_DISPUTE", "Active dispute found for this transaction."));
     }
@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "TiakPayout", id: payoutId },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }

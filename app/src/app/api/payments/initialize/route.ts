@@ -4,7 +4,7 @@ import { PaymentLedgerContextType, PaymentLedgerStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 const PLATFORM_FEE_BPS = 1000;
 
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "PaymentLedger" },
         outcome: "ERROR",
-        reason: "DELEGATE_UNAVAILABLE",
+        reason: AuditReason.DB_ERROR,
       });
       return respond(
         errorResponse(
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order" },
         outcome: "DENIED",
-        reason: "UNAUTHORIZED",
+        reason: AuditReason.UNAUTHORIZED,
       });
       return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
     }
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order" },
         outcome: "CONFLICT",
-        reason: "INVALID_INPUT",
+        reason: AuditReason.INVALID_INPUT,
       });
       return respond(errorResponse(400, "INVALID_INPUT", "orderId or orderIds is required."));
     }
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order" },
         outcome: "CONFLICT",
-        reason: "ORDER_NOT_FOUND",
+        reason: AuditReason.NOT_FOUND,
         metadata: { requestedCount: orderIds.length, foundCount: orders.length },
       });
       return respond(errorResponse(404, "ORDER_NOT_FOUND", "One or more orders were not found."));
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order", id: forbiddenOrder.id },
         outcome: "DENIED",
-        reason: "FORBIDDEN",
+        reason: AuditReason.FORBIDDEN,
       });
       return respond(errorResponse(403, "FORBIDDEN", `Forbidden for order ${forbiddenOrder.id}.`));
     }
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order", id: paidOrder.id },
         outcome: "CONFLICT",
-        reason: "ORDER_ALREADY_PAID",
+        reason: AuditReason.PAYMENT_ALREADY_PAID,
       });
       return respond(errorResponse(409, "ORDER_ALREADY_PAID", `Order ${paidOrder.id} is already paid.`));
     }
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         action,
         entity: { type: "Order", id: nonPendingOrder.id },
         outcome: "CONFLICT",
-        reason: "ORDER_NOT_PENDING",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(
         errorResponse(
@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger", id: intentId },
       outcome: "SUCCESS",
-      reason: "INITIALIZED",
+      reason: AuditReason.SUCCESS,
       metadata: {
         orderCount: initializedPayments.length,
         amountTotalCents: initializedPayments.reduce((sum, item) => sum + item.amountCents, 0),
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
       action,
       entity: { type: "PaymentLedger" },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }

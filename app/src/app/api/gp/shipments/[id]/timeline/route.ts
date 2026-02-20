@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 const orderedStatuses = ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED", "DELIVERED"] as const;
 
@@ -195,7 +195,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment" },
       outcome: "DENIED",
-      reason: "UNAUTHORIZED",
+      reason: AuditReason.UNAUTHORIZED,
     });
     return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
   }
@@ -210,7 +210,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id },
       outcome: "CONFLICT",
-      reason: "INVALID_BODY",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_BODY", "Invalid JSON body."));
   }
@@ -228,7 +228,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id },
       outcome: "CONFLICT",
-      reason: "INVALID_PROOF_URL",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path."));
   }
@@ -240,7 +240,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id },
       outcome: "CONFLICT",
-      reason: "PROOF_REQUIRED",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "PROOF_REQUIRED", "proofUrl is required for tracking events."));
   }
@@ -252,7 +252,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id },
       outcome: "CONFLICT",
-      reason: "INVALID_STATUS",
+      reason: AuditReason.INVALID_INPUT,
     });
     return respond(errorResponse(400, "INVALID_STATUS", "Invalid tracking status."));
   }
@@ -268,7 +268,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id },
         outcome: "CONFLICT",
-        reason: "SHIPMENT_NOT_FOUND",
+        reason: AuditReason.NOT_FOUND,
       });
       return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
@@ -280,7 +280,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id: loaded.shipment.id },
         outcome: "DENIED",
-        reason: "FORBIDDEN",
+        reason: AuditReason.FORBIDDEN,
       });
       return respond(errorResponse(403, "FORBIDDEN", "Only assigned transporter can add events."));
     }
@@ -292,7 +292,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id: loaded.shipment.id },
         outcome: "DENIED",
-        reason: "INVALID_CODE",
+        reason: AuditReason.INVALID_INPUT,
       });
       return respond(errorResponse(400, "INVALID_CODE", "Shipment code mismatch."));
     }
@@ -307,7 +307,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id: loaded.shipment.id },
         outcome: "CONFLICT",
-        reason: "DUPLICATE_EVENT",
+        reason: AuditReason.DUPLICATE_EVENT,
       });
       return respond(errorResponse(409, "DUPLICATE_EVENT", "This status is already recorded."));
     }
@@ -319,7 +319,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id: loaded.shipment.id },
         outcome: "CONFLICT",
-        reason: "INVALID_TRANSITION",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(errorResponse(409, "INVALID_TRANSITION", "Status transition not allowed."));
     }
@@ -391,7 +391,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id: result.shipment.id },
       outcome: "SUCCESS",
-      reason: "STATUS_UPDATED",
+      reason: AuditReason.SUCCESS,
       metadata: { status: result.shipment.status },
     });
 
@@ -401,7 +401,7 @@ export async function POST(
       action: "gp.eventCreate",
       entity: { type: "GpShipmentEvent", id: result.event.id },
       outcome: "SUCCESS",
-      reason: "EVENT_CREATED",
+      reason: AuditReason.SUCCESS,
       metadata: { shipmentId: result.shipment.id, status: result.event.status },
     });
 
@@ -414,7 +414,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id },
         outcome: "CONFLICT",
-        reason: "CAS_CONFLICT",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(errorResponse(409, "CONFLICT", "Shipment status changed concurrently. Refresh and retry."));
     }
@@ -426,7 +426,7 @@ export async function POST(
         action: "gp.statusTransition",
         entity: { type: "GpShipment", id },
         outcome: "CONFLICT",
-        reason: "SHIPMENT_NOT_FOUND",
+        reason: AuditReason.NOT_FOUND,
       });
       return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
     }
@@ -437,7 +437,7 @@ export async function POST(
       action: "gp.statusTransition",
       entity: { type: "GpShipment", id },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }

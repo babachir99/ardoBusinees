@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -24,7 +24,7 @@ export async function POST(
       action,
       entity: { type: "TiakDelivery" },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Migration missing: run prisma migrate"));
   }
@@ -38,7 +38,7 @@ export async function POST(
       action,
       entity: { type: "TiakDelivery" },
       outcome: "DENIED",
-      reason: "UNAUTHORIZED",
+      reason: AuditReason.UNAUTHORIZED,
     });
     return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
   }
@@ -63,7 +63,7 @@ export async function POST(
         action,
         entity: { type: "TiakDelivery", id },
         outcome: "CONFLICT",
-        reason: "JOB_NOT_FOUND",
+        reason: AuditReason.NOT_FOUND,
       });
       return respond(errorResponse(404, "JOB_NOT_FOUND", "Tiak job not found."));
     }
@@ -77,7 +77,7 @@ export async function POST(
         action,
         entity: { type: "TiakDelivery", id: job.id },
         outcome: "DENIED",
-        reason: "FORBIDDEN",
+        reason: AuditReason.FORBIDDEN,
       });
       return respond(errorResponse(403, "FORBIDDEN", "Only assigned courier or admin can accept."));
     }
@@ -90,7 +90,7 @@ export async function POST(
         action,
         entity: { type: "TiakDelivery", id: job.id },
         outcome: "CONFLICT",
-        reason: "JOB_NOT_ASSIGNED",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(errorResponse(409, "JOB_NOT_ASSIGNED", "Job has no assigned courier."));
     }
@@ -161,7 +161,7 @@ export async function POST(
         action: "tiak.expire",
         entity: { type: "TiakDelivery", id: job.id },
         outcome: "SUCCESS",
-        reason: "ASSIGNMENT_EXPIRED",
+        reason: AuditReason.ASSIGNMENT_EXPIRED,
       });
       return respond(errorResponse(409, "ASSIGNMENT_EXPIRED", "Assignment has expired."));
     }
@@ -173,7 +173,7 @@ export async function POST(
         action,
         entity: { type: "TiakDelivery", id: job.id },
         outcome: "CONFLICT",
-        reason: "JOB_NOT_OPEN",
+        reason: AuditReason.STATE_CONFLICT,
       });
       return respond(errorResponse(409, "JOB_NOT_OPEN", "Job is no longer assignable."));
     }
@@ -184,7 +184,7 @@ export async function POST(
       action,
       entity: { type: "TiakDelivery", id: job.id },
       outcome: "SUCCESS",
-      reason: "ACCEPTED",
+      reason: AuditReason.SUCCESS,
     });
 
     return respond(
@@ -202,7 +202,7 @@ export async function POST(
       action,
       entity: { type: "TiakDelivery", id },
       outcome: "ERROR",
-      reason: "PRISMA_ERROR",
+      reason: AuditReason.DB_ERROR,
     });
     return respond(errorResponse(503, "PRISMA_ERROR", "Database unavailable."));
   }
