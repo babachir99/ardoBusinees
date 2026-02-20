@@ -19,12 +19,20 @@ export default async function CarsPage() {
             priority
           />
         </Link>
-        <Link
-          href="/stores"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {t("back")}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/auto"
+            className="rounded-full border border-sky-300/40 px-4 py-2 text-xs font-semibold text-sky-200 transition hover:border-sky-300/70"
+          >
+            {t("title")}
+          </Link>
+          <Link
+            href="/stores"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {t("back")}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">

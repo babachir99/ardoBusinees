@@ -316,6 +316,15 @@ export default async function HomePage({
             </div>
           </div>
 
+          <div className="-mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-zinc-900/60 px-3 py-2 fade-up">
+            <Link href="/immo" className="rounded-full border border-emerald-300/40 px-3 py-1 text-[11px] font-semibold text-emerald-200">
+              IMMO
+            </Link>
+            <Link href="/auto" className="rounded-full border border-sky-300/40 px-3 py-1 text-[11px] font-semibold text-sky-200">
+              AUTO
+            </Link>
+          </div>
+
           <div className="-mt-4 rounded-3xl border border-white/10 bg-zinc-900/70 p-[2.2px] card-glow fade-up">
             {session ? (
               hasOperatorProfile ? (

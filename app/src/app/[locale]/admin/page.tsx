@@ -773,6 +773,12 @@ export default async function AdminPage() {
                 cta: t("sellers.cta"),
                 href: "/admin/sellers",
               },
+              {
+                title: "IMMO monetization",
+                subtitle: "Purchases and ledger status",
+                cta: "Open",
+                href: "/admin/immo/monetization",
+              },
             ].map((card) => (
               <div
                 key={card.title}

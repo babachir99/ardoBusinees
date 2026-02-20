@@ -252,11 +252,13 @@ export async function POST(request: NextRequest) {
             select: {
               id: true,
               listingId: true,
+              publisherId: true,
               kind: true,
               durationDays: true,
               status: true,
               listing: {
                 select: {
+                  id: true,
                   featuredUntil: true,
                   boostUntil: true,
                 },
@@ -277,9 +279,15 @@ export async function POST(request: NextRequest) {
 
             if (confirmed.count === 1) {
               const now = new Date();
-              if (purchase.kind === "FEATURED") {
-                const base = purchase.listing.featuredUntil && purchase.listing.featuredUntil > now ? purchase.listing.featuredUntil : now;
-                const featuredUntil = new Date(base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000);
+
+              if (purchase.kind === "FEATURED" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.featuredUntil && purchase.listing.featuredUntil > now
+                    ? purchase.listing.featuredUntil
+                    : now;
+                const featuredUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
                 await tx.immoListing.update({
                   where: { id: purchase.listingId },
                   data: {
@@ -288,14 +296,54 @@ export async function POST(request: NextRequest) {
                     monetizationUpdatedAt: now,
                   },
                 });
-              } else {
-                const base = purchase.listing.boostUntil && purchase.listing.boostUntil > now ? purchase.listing.boostUntil : now;
-                const boostUntil = new Date(base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000);
+              } else if (purchase.kind === "BOOST" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.boostUntil && purchase.listing.boostUntil > now
+                    ? purchase.listing.boostUntil
+                    : now;
+                const boostUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
                 await tx.immoListing.update({
                   where: { id: purchase.listingId },
                   data: {
                     boostUntil,
                     monetizationUpdatedAt: now,
+                  },
+                });
+              } else if (purchase.kind === "BOOST_PACK_10") {
+                await tx.immoMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 10,
+                    featuredCredits: 0,
+                  },
+                  update: {
+                    boostCredits: { increment: 10 },
+                  },
+                });
+              } else if (purchase.kind === "FEATURED_PACK_4") {
+                await tx.immoMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 0,
+                    featuredCredits: 4,
+                  },
+                  update: {
+                    featuredCredits: { increment: 4 },
+                  },
+                });
+              } else if (purchase.kind === "EXTRA_SLOTS_10") {
+                await tx.immoPublisher.updateMany({
+                  where: {
+                    id: purchase.publisherId,
+                    type: "AGENCY",
+                    status: "ACTIVE",
+                  },
+                  data: {
+                    extraSlots: { increment: 10 },
                   },
                 });
               }

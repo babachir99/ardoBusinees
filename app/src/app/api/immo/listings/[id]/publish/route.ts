@@ -21,7 +21,22 @@ export async function POST(
   const isAdmin = canAccessAdmin(session.user);
   const listing = await prisma.immoListing.findUnique({
     where: { id },
-    select: { id: true, ownerId: true, status: true, imageUrls: true },
+    select: {
+      id: true,
+      ownerId: true,
+      status: true,
+      imageUrls: true,
+      publisherId: true,
+      publisher: {
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          includedPublishedQuota: true,
+          extraSlots: true,
+        },
+      },
+    },
   });
 
   if (!listing) {
@@ -34,6 +49,25 @@ export async function POST(
 
   if (!Array.isArray(listing.imageUrls) || listing.imageUrls.length === 0) {
     return errorResponse(409, "AT_LEAST_ONE_IMAGE_REQUIRED", "At least one listing image is required before publishing.");
+  }
+
+
+  if (listing.publisherId && listing.publisher && listing.publisher.type === "AGENCY" && listing.publisher.status === "ACTIVE") {
+    const publishedCount = await prisma.immoListing.count({
+      where: {
+        publisherId: listing.publisherId,
+        status: "PUBLISHED",
+      },
+    });
+
+    const allowedQuota = listing.publisher.includedPublishedQuota + listing.publisher.extraSlots;
+    if (publishedCount >= allowedQuota) {
+      return errorResponse(
+        409,
+        "QUOTA_EXCEEDED",
+        "Agency published quota exceeded. Buy EXTRA_SLOTS_10 to publish more listings."
+      );
+    }
   }
 
   const result = await prisma.immoListing.updateMany({

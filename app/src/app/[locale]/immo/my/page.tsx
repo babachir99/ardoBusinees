@@ -70,10 +70,58 @@ export default async function ImmoMyPage({
           verified: true,
           city: true,
           country: true,
+          includedPublishedQuota: true,
+          extraSlots: true,
+          monetizationBalance: {
+            select: {
+              boostCredits: true,
+              featuredCredits: true,
+            },
+          },
         },
       },
     },
   });
+
+  const agencyIds = agencies.map((item) => item.publisher.id);
+  const listingIds = listings.map((item) => item.id);
+  const recentPurchases = agencyIds.length || listingIds.length
+    ? await prisma.immoMonetizationPurchase.findMany({
+        where: {
+          OR: [
+            ...(agencyIds.length ? [{ publisherId: { in: agencyIds } }] : []),
+            ...(listingIds.length ? [{ listingId: { in: listingIds } }] : []),
+          ],
+        },
+        orderBy: [{ createdAt: "desc" }],
+        take: 120,
+        select: {
+          id: true,
+          listingId: true,
+          publisherId: true,
+          kind: true,
+          status: true,
+          createdAt: true,
+        },
+      })
+    : [];
+
+  const publishedCounts = agencyIds.length
+    ? await prisma.immoListing.groupBy({
+        by: ["publisherId"],
+        where: {
+          publisherId: { in: agencyIds },
+          status: "PUBLISHED",
+        },
+        _count: {
+          _all: true,
+        },
+      })
+    : [];
+
+  const publishedCountByPublisher = new Map(
+    publishedCounts.map((item) => [item.publisherId ?? "", item._count._all])
+  );
 
   const canPublish = hasAnyUserRole(session.user, ["SELLER", "IMMO_AGENT", "ADMIN"]);
 
@@ -102,7 +150,27 @@ export default async function ImmoMyPage({
             featuredUntil: item.featuredUntil?.toISOString() ?? null,
             boostUntil: item.boostUntil?.toISOString() ?? null,
           }))}
-          agencies={agencies.map((item) => item.publisher)}
+          recentPurchases={recentPurchases.map((item) => ({
+            id: item.id,
+            listingId: item.listingId,
+            publisherId: item.publisherId,
+            kind: item.kind,
+            status: item.status,
+            createdAt: item.createdAt.toISOString(),
+          }))}
+          agencies={agencies.map((item) => ({
+            id: item.publisher.id,
+            name: item.publisher.name,
+            slug: item.publisher.slug,
+            verified: item.publisher.verified,
+            city: item.publisher.city,
+            country: item.publisher.country,
+            includedPublishedQuota: item.publisher.includedPublishedQuota,
+            extraSlots: item.publisher.extraSlots,
+            usedPublishedCount: publishedCountByPublisher.get(item.publisher.id) ?? 0,
+            boostCredits: item.publisher.monetizationBalance?.boostCredits ?? 0,
+            featuredCredits: item.publisher.monetizationBalance?.featuredCredits ?? 0,
+          }))}
         />
       </main>
     </div>

@@ -271,6 +271,9 @@ enum ImmoPublisherStatus {
 enum ImmoMonetizationKind {
   FEATURED
   BOOST
+  BOOST_PACK_10
+  FEATURED_PACK_4
+  EXTRA_SLOTS_10
 }
 
 enum ImmoMonetizationPurchaseStatus {
@@ -278,6 +281,27 @@ enum ImmoMonetizationPurchaseStatus {
   CONFIRMED
   FAILED
   EXPIRED
+}
+
+enum AutoListingStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum AutoFuelType {
+  GASOLINE
+  DIESEL
+  HYBRID
+  ELECTRIC
+  OTHER
+}
+
+enum AutoGearbox {
+  MANUAL
+  AUTO
+  OTHER
 }
 
 model User {
@@ -340,6 +364,7 @@ model User {
   immoListings               ImmoListing[]
   immoPublisherMemberships    ImmoPublisherMember[]
   immoMonetizationPurchasesCreated ImmoMonetizationPurchase[] @relation("ImmoMonetizationCreatedBy")
+  autoListings              AutoListing[]
 }
 
 model UserAddress {
@@ -409,21 +434,24 @@ model ImmoListing {
 }
 
 model ImmoPublisher {
-  id        String             @id @default(cuid())
-  type      ImmoPublisherType
-  name      String
-  slug      String             @unique
-  status    ImmoPublisherStatus @default(ACTIVE)
-  verified  Boolean            @default(false)
-  country   String?
-  city      String?
-  logoUrl   String?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id                     String              @id @default(cuid())
+  type                   ImmoPublisherType
+  name                   String
+  slug                   String              @unique
+  status                 ImmoPublisherStatus @default(ACTIVE)
+  verified               Boolean             @default(false)
+  country                String?
+  city                   String?
+  logoUrl                String?
+  includedPublishedQuota Int                 @default(20)
+  extraSlots             Int                 @default(0)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
-  members  ImmoPublisherMember[]
-  listings ImmoListing[]
+  members               ImmoPublisherMember[]
+  listings              ImmoListing[]
   monetizationPurchases ImmoMonetizationPurchase[]
+  monetizationBalance   ImmoMonetizationBalance?
 
   @@index([status, type, createdAt])
   @@index([status, country, city])
@@ -446,9 +474,18 @@ model ImmoPublisherMember {
   @@index([userId, status])
 }
 
+model ImmoMonetizationBalance {
+  publisherId      String   @id
+  boostCredits     Int      @default(0)
+  featuredCredits  Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  publisher ImmoPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+}
+
 model ImmoMonetizationPurchase {
   id              String                         @id @default(cuid())
-  listingId       String
+  listingId       String?
   publisherId     String
   kind            ImmoMonetizationKind
   durationDays    Int
@@ -460,7 +497,7 @@ model ImmoMonetizationPurchase {
   createdAt       DateTime                       @default(now())
   updatedAt       DateTime                       @updatedAt
 
-  listing       ImmoListing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing       ImmoListing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
   publisher     ImmoPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   paymentLedger PaymentLedger @relation(fields: [paymentLedgerId], references: [id], onDelete: Cascade)
   createdBy     User          @relation("ImmoMonetizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
@@ -468,6 +505,33 @@ model ImmoMonetizationPurchase {
   @@index([status, kind])
   @@index([listingId, createdAt])
   @@index([publisherId, createdAt])
+}
+
+model AutoListing {
+  id          String            @id @default(cuid())
+  ownerId     String
+  status      AutoListingStatus @default(DRAFT)
+  title       String
+  description String
+  priceCents  Int
+  currency    String            @default("XOF")
+  country     String            @default("SN")
+  city        String
+  make        String
+  model       String
+  year        Int
+  mileageKm   Int
+  fuelType    AutoFuelType
+  gearbox     AutoGearbox
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([country, city, status])
+  @@index([make, model, year, status])
+  @@index([ownerId, status, createdAt])
 }
 
 model SellerProfile {

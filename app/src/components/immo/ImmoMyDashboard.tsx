@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 
 type ImmoListingRow = {
@@ -38,13 +38,31 @@ type AgencyOption = {
   verified: boolean;
   city: string | null;
   country: string | null;
+  includedPublishedQuota: number;
+  extraSlots: number;
+  usedPublishedCount: number;
+  boostCredits: number;
+  featuredCredits: number;
+};
+
+type MonetizationPurchaseRow = {
+  id: string;
+  listingId: string | null;
+  publisherId: string;
+  kind: "FEATURED" | "BOOST" | "BOOST_PACK_10" | "FEATURED_PACK_4" | "EXTRA_SLOTS_10";
+  status: "PENDING" | "CONFIRMED" | "FAILED" | "EXPIRED";
+  createdAt: string;
 };
 
 type Props = {
   locale: string;
   listings: ImmoListingRow[];
+  recentPurchases: MonetizationPurchaseRow[];
   agencies: AgencyOption[];
 };
+
+type ListingMonetizationKind = "FEATURED" | "BOOST";
+type PackMonetizationKind = "BOOST_PACK_10" | "FEATURED_PACK_4" | "EXTRA_SLOTS_10";
 
 type DraftCreate = {
   title: string;
@@ -103,8 +121,15 @@ const actionLabels = {
     uploading: "Upload...",
     uploadSuccess: "Photos ajoutees.",
     agency: "Agence",
+    agencyQuota: "Quota publications",
+    agencyCredits: "Credits disponibles",
+    buyBoostPack: "Acheter Boost x10",
+    buyFeaturedPack: "Acheter Mise en avant x4",
+    buyExtraSlots: "Acheter +10 slots",
     monetizationFeatured: "Mettre en avant (7j)",
     monetizationBoost: "Booster (3j)",
+    monetizationFeaturedCredit: "Utiliser credit mise en avant",
+    monetizationBoostCredit: "Utiliser credit boost",
     featuredUntil: "Mise en avant jusqu'au",
     boostUntil: "Boost jusqu'au",
     monetizationCheckoutMissing: "Checkout indisponible pour le moment.",
@@ -113,6 +138,11 @@ const actionLabels = {
     successCreate: "Brouillon cree.",
     successUpdate: "Annonce mise a jour.",
     successAction: "Statut mis a jour.",
+    successCreditApplied: "Credit applique avec succes.",
+    purchasePending: "Paiement en attente",
+    purchaseFailed: "Paiement echoue",
+    purchaseConfirmed: "Paiement confirme",
+    retryPayment: "Reessayer",
     errorDefault: "Action impossible pour le moment.",
   },
   en: {
@@ -141,8 +171,15 @@ const actionLabels = {
     uploading: "Uploading...",
     uploadSuccess: "Photos added.",
     agency: "Agency",
+    agencyQuota: "Published quota",
+    agencyCredits: "Available credits",
+    buyBoostPack: "Buy Boost x10",
+    buyFeaturedPack: "Buy Featured x4",
+    buyExtraSlots: "Buy +10 slots",
     monetizationFeatured: "Feature (7d)",
     monetizationBoost: "Boost (3d)",
+    monetizationFeaturedCredit: "Use featured credit",
+    monetizationBoostCredit: "Use boost credit",
     featuredUntil: "Featured until",
     boostUntil: "Boost until",
     monetizationCheckoutMissing: "Checkout unavailable right now.",
@@ -151,6 +188,11 @@ const actionLabels = {
     successCreate: "Draft created.",
     successUpdate: "Listing updated.",
     successAction: "Listing status updated.",
+    successCreditApplied: "Credit applied successfully.",
+    purchasePending: "Payment pending",
+    purchaseFailed: "Payment failed",
+    purchaseConfirmed: "Payment confirmed",
+    retryPayment: "Retry",
     errorDefault: "Action unavailable right now.",
   },
 };
@@ -182,7 +224,7 @@ function statusLabel(locale: string, status: ImmoListingRow["status"]) {
   return status;
 }
 
-export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
+export default function ImmoMyDashboard({ locale, listings, recentPurchases, agencies }: Props) {
   const l = locale === "fr" ? actionLabels.fr : actionLabels.en;
   const router = useRouter();
 
@@ -228,6 +270,40 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
   }, [listings]);
 
   const [editForm, setEditForm] = useState(editDefaults);
+
+  const agencyById = useMemo(() => {
+    return new Map(agencies.map((agency) => [agency.id, agency]));
+  }, [agencies]);
+
+  const latestListingPurchaseByKind = useMemo(() => {
+    const map = new Map<string, MonetizationPurchaseRow>();
+    for (const purchase of recentPurchases) {
+      if (!purchase.listingId) continue;
+      const key = `${purchase.listingId}:${purchase.kind}`;
+      if (!map.has(key)) {
+        map.set(key, purchase);
+      }
+    }
+    return map;
+  }, [recentPurchases]);
+
+  const latestPublisherPurchaseByKind = useMemo(() => {
+    const map = new Map<string, MonetizationPurchaseRow>();
+    for (const purchase of recentPurchases) {
+      const key = `${purchase.publisherId}:${purchase.kind}`;
+      if (!map.has(key)) {
+        map.set(key, purchase);
+      }
+    }
+    return map;
+  }, [recentPurchases]);
+
+  const purchaseStatusLabel = (status: MonetizationPurchaseRow["status"]) => {
+    if (status === "PENDING") return l.purchasePending;
+    if (status === "FAILED") return l.purchaseFailed;
+    if (status === "CONFIRMED") return l.purchaseConfirmed;
+    return status;
+  };
 
   const updateEditField = (id: string, key: keyof (typeof editDefaults)[string], value: string) => {
     setEditForm((prev) => ({
@@ -407,8 +483,11 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
   }
 
 
-  async function startMonetization(listingId: string, kind: "FEATURED" | "BOOST") {
-    setMonetizationPending((prev) => ({ ...prev, [listingId]: true }));
+  async function startCheckout(
+    pendingKey: string,
+    payload: { kind: ListingMonetizationKind | PackMonetizationKind; listingId?: string; publisherId?: string }
+  ) {
+    setMonetizationPending((prev) => ({ ...prev, [pendingKey]: true }));
     setError("");
     setMessage("");
 
@@ -416,15 +495,21 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
       const response = await fetch("/api/immo/monetization/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId, kind }),
+        body: JSON.stringify(payload),
       });
 
       const body = (await response.json().catch(() => null)) as
-        | { message?: string; checkoutUrl?: string | null }
+        | { message?: string; checkoutUrl?: string | null; appliedWithCredits?: boolean }
         | null;
 
       if (!response.ok) {
         setError(body?.message ?? l.errorDefault);
+        return;
+      }
+
+      if (body?.appliedWithCredits) {
+        setMessage(l.successCreditApplied);
+        router.refresh();
         return;
       }
 
@@ -437,8 +522,47 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
     } catch {
       setError(l.errorDefault);
     } finally {
-      setMonetizationPending((prev) => ({ ...prev, [listingId]: false }));
+      setMonetizationPending((prev) => ({ ...prev, [pendingKey]: false }));
     }
+  }
+
+  async function applyCredit(listingId: string, kind: ListingMonetizationKind) {
+    const pendingKey = `credit:${listingId}:${kind}`;
+    setMonetizationPending((prev) => ({ ...prev, [pendingKey]: true }));
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/immo/monetization/apply-credit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, kind }),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        setError(body?.message ?? l.errorDefault);
+        return;
+      }
+
+      setMessage(l.successCreditApplied);
+      router.refresh();
+    } catch {
+      setError(l.errorDefault);
+    } finally {
+      setMonetizationPending((prev) => ({ ...prev, [pendingKey]: false }));
+    }
+  }
+
+  async function startMonetization(listingId: string, kind: ListingMonetizationKind) {
+    await startCheckout(listingId, { listingId, kind });
+  }
+
+  async function startPackPurchase(publisherId: string, kind: PackMonetizationKind) {
+    await startCheckout(`pack:${publisherId}:${kind}`, { publisherId, kind });
   }
 
   return (
@@ -568,6 +692,83 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
       {message ? <p className="mt-3 text-sm text-emerald-300">{message}</p> : null}
       {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
 
+      {agencies.length > 0 ? (
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          {agencies.map((agency) => (
+            <article key={agency.id} className="rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
+              <p className="text-sm font-semibold text-white">{agency.name}</p>
+              <p className="mt-1 text-xs text-zinc-300">
+                {l.agencyQuota}: {agency.usedPublishedCount}/{agency.includedPublishedQuota + agency.extraSlots}
+              </p>
+              <p className="mt-1 text-xs text-zinc-300">
+                {l.agencyCredits}: boost={agency.boostCredits}, featured={agency.featuredCredits}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void startPackPurchase(agency.id, "BOOST_PACK_10")}
+                  disabled={monetizationPending[`pack:${agency.id}:BOOST_PACK_10`] === true}
+                  className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60"
+                >
+                  {monetizationPending[`pack:${agency.id}:BOOST_PACK_10`] ? "..." : l.buyBoostPack}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startPackPurchase(agency.id, "FEATURED_PACK_4")}
+                  disabled={monetizationPending[`pack:${agency.id}:FEATURED_PACK_4`] === true}
+                  className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
+                >
+                  {monetizationPending[`pack:${agency.id}:FEATURED_PACK_4`] ? "..." : l.buyFeaturedPack}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void startPackPurchase(agency.id, "EXTRA_SLOTS_10")}
+                  disabled={monetizationPending[`pack:${agency.id}:EXTRA_SLOTS_10`] === true}
+                  className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs font-semibold text-emerald-100 disabled:opacity-60"
+                >
+                  {monetizationPending[`pack:${agency.id}:EXTRA_SLOTS_10`] ? "..." : l.buyExtraSlots}
+                </button>
+              </div>
+              <div className="mt-3 space-y-1 text-xs">
+                {(["BOOST_PACK_10", "FEATURED_PACK_4", "EXTRA_SLOTS_10"] as const).map((packKind) => {
+                  const purchase = latestPublisherPurchaseByKind.get(`${agency.id}:${packKind}`);
+                  if (!purchase) return null;
+
+                  const showRetry = purchase.status === "FAILED";
+                  return (
+                    <div key={packKind} className="flex items-center justify-between gap-2 text-zinc-300">
+                      <span>
+                        {packKind}: {purchaseStatusLabel(purchase.status)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {purchase.status !== "PENDING" ? (
+                          <Link
+                            href={`/immo/my/receipts/${purchase.id}`}
+                            className="rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100"
+                          >
+                            {locale === "fr" ? "Recu" : "Receipt"}
+                          </Link>
+                        ) : null}
+                        {showRetry ? (
+                          <button
+                            type="button"
+                            onClick={() => void startPackPurchase(agency.id, packKind)}
+                            disabled={monetizationPending[`pack:${agency.id}:${packKind}`] === true}
+                            className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-60"
+                          >
+                            {l.retryPayment}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
       <div className="mt-8 space-y-4">
         {listings.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-zinc-950/40 p-4 text-sm text-zinc-300">
@@ -577,6 +778,8 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
           listings.map((listing) => {
             const draft = editForm[listing.id];
             const isEditable = listing.status === "DRAFT" || listing.status === "PAUSED";
+            const featuredPurchase = latestListingPurchaseByKind.get(`${listing.id}:FEATURED`);
+            const boostPurchase = latestListingPurchaseByKind.get(`${listing.id}:BOOST`);
 
             return (
               <article key={listing.id} className="rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
@@ -718,25 +921,105 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
                   ) : null}
 
                   {listing.status === "PUBLISHED" && listing.publisherId ? (
-                    <button
-                      type="button"
-                      onClick={() => void startMonetization(listing.id, "FEATURED")}
-                      disabled={monetizationPending[listing.id] === true}
-                      className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
-                    >
-                      {monetizationPending[listing.id] ? "..." : l.monetizationFeatured}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const agency = agencyById.get(listing.publisherId ?? "");
+                          if ((agency?.featuredCredits ?? 0) > 0) {
+                            void applyCredit(listing.id, "FEATURED");
+                          } else {
+                            void startMonetization(listing.id, "FEATURED");
+                          }
+                        }}
+                        disabled={
+                          monetizationPending[listing.id] === true ||
+                          monetizationPending[`credit:${listing.id}:FEATURED`] === true
+                        }
+                        className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
+                      >
+                        {monetizationPending[listing.id] === true ||
+                        monetizationPending[`credit:${listing.id}:FEATURED`] === true
+                          ? "..."
+                          : (agencyById.get(listing.publisherId ?? "")?.featuredCredits ?? 0) > 0
+                            ? l.monetizationFeaturedCredit
+                            : l.monetizationFeatured}
+                      </button>
+                      {featuredPurchase ? (
+                        <span className="text-xs text-zinc-300">
+                          FEATURED: {purchaseStatusLabel(featuredPurchase.status)}
+                          {featuredPurchase.status !== "PENDING" ? (
+                            <Link
+                              href={`/immo/my/receipts/${featuredPurchase.id}`}
+                              className="ml-2 rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100"
+                            >
+                              {locale === "fr" ? "Recu" : "Receipt"}
+                            </Link>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {featuredPurchase?.status === "FAILED" ? (
+                        <button
+                          type="button"
+                          onClick={() => void startMonetization(listing.id, "FEATURED")}
+                          disabled={monetizationPending[listing.id] === true}
+                          className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {l.retryPayment}
+                        </button>
+                      ) : null}
+                    </>
                   ) : null}
 
                   {listing.status === "PUBLISHED" && listing.publisherId ? (
-                    <button
-                      type="button"
-                      onClick={() => void startMonetization(listing.id, "BOOST")}
-                      disabled={monetizationPending[listing.id] === true}
-                      className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60"
-                    >
-                      {monetizationPending[listing.id] ? "..." : l.monetizationBoost}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const agency = agencyById.get(listing.publisherId ?? "");
+                          if ((agency?.boostCredits ?? 0) > 0) {
+                            void applyCredit(listing.id, "BOOST");
+                          } else {
+                            void startMonetization(listing.id, "BOOST");
+                          }
+                        }}
+                        disabled={
+                          monetizationPending[listing.id] === true ||
+                          monetizationPending[`credit:${listing.id}:BOOST`] === true
+                        }
+                        className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60"
+                      >
+                        {monetizationPending[listing.id] === true ||
+                        monetizationPending[`credit:${listing.id}:BOOST`] === true
+                          ? "..."
+                          : (agencyById.get(listing.publisherId ?? "")?.boostCredits ?? 0) > 0
+                            ? l.monetizationBoostCredit
+                            : l.monetizationBoost}
+                      </button>
+                      {boostPurchase ? (
+                        <span className="text-xs text-zinc-300">
+                          BOOST: {purchaseStatusLabel(boostPurchase.status)}
+                          {boostPurchase.status !== "PENDING" ? (
+                            <Link
+                              href={`/immo/my/receipts/${boostPurchase.id}`}
+                              className="ml-2 rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100"
+                            >
+                              {locale === "fr" ? "Recu" : "Receipt"}
+                            </Link>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {boostPurchase?.status === "FAILED" ? (
+                        <button
+                          type="button"
+                          onClick={() => void startMonetization(listing.id, "BOOST")}
+                          disabled={monetizationPending[listing.id] === true}
+                          className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                        >
+                          {l.retryPayment}
+                        </button>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               </article>
