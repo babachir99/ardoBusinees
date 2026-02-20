@@ -385,6 +385,7 @@ model ImmoListing {
   country      String            @default("SN")
   addressHidden Boolean          @default(true)
   contactMode  ImmoContactMode   @default(INTERNAL_MESSAGE)
+  imageUrls    String[]          @default([])
   status       ImmoListingStatus @default(DRAFT)
   isFeatured   Boolean           @default(false)
   featuredUntil DateTime?

@@ -1,4 +1,4 @@
-﻿-- Extend PaymentLedger context enum
+-- Extend PaymentLedger context enum
 DO $$ BEGIN
   ALTER TYPE "marketplace"."PaymentLedgerContextType" ADD VALUE IF NOT EXISTS 'IMMO_MONETIZATION';
 EXCEPTION

@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       status: true,
+      currency: true,
       publisherId: true,
       publisher: {
         select: {
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
         publisherId: listing.publisherId,
         userId: session.user.id,
         status: "ACTIVE",
+        role: { in: ["OWNER", "AGENT"] },
       },
       select: { id: true },
     });
@@ -156,6 +158,26 @@ export async function POST(request: NextRequest) {
   }
 
   const pricing = PRICING[kind];
+
+  if (listing.currency !== pricing.currency) {
+    auditLog({
+      correlationId,
+      actor: { userId: session.user.id, role: session.user.role ?? null },
+      action,
+      entity: { type: "ImmoListing", id: listing.id },
+      outcome: "CONFLICT",
+      reason: AuditReason.STATE_CONFLICT,
+      metadata: { listingCurrency: listing.currency, pricingCurrency: pricing.currency },
+    });
+    return respond(
+      errorResponse(
+        409,
+        "UNSUPPORTED_CURRENCY",
+        `Listing currency ${listing.currency} is not supported for monetization pricing ${pricing.currency}.`
+      )
+    );
+  }
+
   const intentId = randomUUID();
   const platformFeeCents = Math.round((pricing.amountCents * PLATFORM_FEE_BPS) / 10000);
   const payoutCents = pricing.amountCents - platformFeeCents;

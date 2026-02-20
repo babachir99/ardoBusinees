@@ -33,6 +33,7 @@ export default async function ImmoMyPage({
       rooms: true,
       city: true,
       country: true,
+      imageUrls: true,
       status: true,
       isFeatured: true,
       featuredUntil: true,

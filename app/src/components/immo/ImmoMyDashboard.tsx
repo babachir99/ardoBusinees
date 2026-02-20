@@ -16,6 +16,7 @@ type ImmoListingRow = {
   rooms: number | null;
   city: string;
   country: string;
+  imageUrls: string[];
   status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED";
   isFeatured: boolean;
   featuredUntil: string | null;
@@ -57,6 +58,7 @@ type DraftCreate = {
   country: string;
   currency: string;
   publisherId: string;
+  imageUrls: string;
 };
 
 const defaultCreate: DraftCreate = {
@@ -71,6 +73,7 @@ const defaultCreate: DraftCreate = {
   country: "SN",
   currency: "EUR",
   publisherId: "",
+  imageUrls: "",
 };
 
 const actionLabels = {
@@ -82,10 +85,23 @@ const actionLabels = {
     publish: "Publier",
     pause: "Mettre en pause",
     archive: "Archiver",
+    titlePlaceholder: "Titre",
+    descriptionPlaceholder: "Description",
+    listingTypeSale: "Vente",
+    listingTypeRent: "Location",
+    propertyApartment: "Appartement",
+    propertyHouse: "Maison",
+    propertyLand: "Terrain",
+    propertyCommercial: "Commercial",
+    propertyOther: "Autre",
     price: "Prix",
-    surface: "Surface m?",
+    surface: "Surface m2",
     rooms: "Pieces",
     city: "Ville",
+    images: "Photos (URLs, une par ligne)",
+    uploadImages: "Uploader des photos",
+    uploading: "Upload...",
+    uploadSuccess: "Photos ajoutees.",
     agency: "Agence",
     monetizationFeatured: "Mettre en avant (7j)",
     monetizationBoost: "Booster (3j)",
@@ -107,10 +123,23 @@ const actionLabels = {
     publish: "Publish",
     pause: "Pause",
     archive: "Archive",
+    titlePlaceholder: "Title",
+    descriptionPlaceholder: "Description",
+    listingTypeSale: "Sale",
+    listingTypeRent: "Rent",
+    propertyApartment: "Apartment",
+    propertyHouse: "House",
+    propertyLand: "Land",
+    propertyCommercial: "Commercial",
+    propertyOther: "Other",
     price: "Price",
-    surface: "Surface m?",
+    surface: "Surface m2",
     rooms: "Rooms",
     city: "City",
+    images: "Photos (URLs, one per line)",
+    uploadImages: "Upload photos",
+    uploading: "Uploading...",
+    uploadSuccess: "Photos added.",
     agency: "Agency",
     monetizationFeatured: "Feature (7d)",
     monetizationBoost: "Boost (3d)",
@@ -125,6 +154,22 @@ const actionLabels = {
     errorDefault: "Action unavailable right now.",
   },
 };
+
+function parseImageUrlsInput(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+
+function mergeImageUrlText(existing: string, incoming: string[]) {
+  return Array.from(new Set([...parseImageUrlsInput(existing), ...incoming])).join("\n");
+}
 
 function statusLabel(locale: string, status: ImmoListingRow["status"]) {
   if (locale === "fr") {
@@ -143,6 +188,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
 
   const [createForm, setCreateForm] = useState<DraftCreate>(defaultCreate);
   const [saving, setSaving] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [monetizationPending, setMonetizationPending] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -161,6 +207,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
           country: item.country,
           currency: item.currency,
           publisherId: item.publisherId ?? "",
+          imageUrls: item.imageUrls.join("\n"),
         },
       ])
     ) as Record<
@@ -175,6 +222,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
         country: string;
         currency: string;
         publisherId: string;
+        imageUrls: string;
       }
     >;
   }, [listings]);
@@ -190,6 +238,65 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
       },
     }));
   };
+
+  async function uploadImages(files: FileList | null, target: "create" | string) {
+    if (!files || files.length === 0) return;
+
+    const list = Array.from(files);
+    setUploading(target);
+    setError("");
+    setMessage("");
+
+    try {
+      const uploadedUrls = await Promise.all(
+        list.map(async (file) => {
+          const formData = new FormData();
+          formData.set("file", file);
+
+          const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string; url?: string }
+            | null;
+
+          if (!response.ok || !body?.url) {
+            throw new Error(body?.error ?? l.errorDefault);
+          }
+
+          return body.url;
+        })
+      );
+
+      if (target === "create") {
+        setCreateForm((prev) => ({
+          ...prev,
+          imageUrls: mergeImageUrlText(prev.imageUrls, uploadedUrls),
+        }));
+      } else {
+        setEditForm((prev) => {
+          const current = prev[target];
+          if (!current) return prev;
+
+          return {
+            ...prev,
+            [target]: {
+              ...current,
+              imageUrls: mergeImageUrlText(current.imageUrls, uploadedUrls),
+            },
+          };
+        });
+      }
+
+      setMessage(l.uploadSuccess);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : l.errorDefault);
+    } finally {
+      setUploading(null);
+    }
+  }
 
   async function createDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -207,6 +314,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
           priceCents: Number(createForm.priceCents),
           surfaceM2: Number(createForm.surfaceM2),
           rooms: createForm.rooms ? Number(createForm.rooms) : null,
+          imageUrls: parseImageUrlsInput(createForm.imageUrls),
         }),
       });
 
@@ -250,6 +358,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
           country: draft.country,
           currency: draft.currency,
           publisherId: draft.publisherId || null,
+          imageUrls: parseImageUrlsInput(draft.imageUrls),
         }),
       });
 
@@ -341,7 +450,7 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
         <input
           value={createForm.title}
           onChange={(event) => setCreateForm((prev) => ({ ...prev, title: event.target.value }))}
-          placeholder="Title"
+          placeholder={l.titlePlaceholder}
           className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white"
           required
         />
@@ -355,11 +464,32 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
         <textarea
           value={createForm.description}
           onChange={(event) => setCreateForm((prev) => ({ ...prev, description: event.target.value }))}
-          placeholder="Description"
+          placeholder={l.descriptionPlaceholder}
           className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white md:col-span-2"
           rows={3}
           required
         />
+        <textarea
+          value={createForm.imageUrls}
+          onChange={(event) => setCreateForm((prev) => ({ ...prev, imageUrls: event.target.value }))}
+          placeholder={l.images}
+          className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white md:col-span-2"
+          rows={2}
+        />
+        <label className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-200 md:col-span-2">
+          {uploading === "create" ? l.uploading : l.uploadImages}
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            className="mt-2 block w-full text-xs text-zinc-300"
+            disabled={uploading === "create"}
+            onChange={(event) => {
+              void uploadImages(event.currentTarget.files, "create");
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
         <input
           value={createForm.priceCents}
           onChange={(event) => setCreateForm((prev) => ({ ...prev, priceCents: event.target.value }))}
@@ -387,8 +517,8 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
             }
             className="w-full rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white"
           >
-            <option value="SALE">SALE</option>
-            <option value="RENT">RENT</option>
+            <option value="SALE">{l.listingTypeSale}</option>
+            <option value="RENT">{l.listingTypeRent}</option>
           </select>
           <select
             value={createForm.propertyType}
@@ -400,11 +530,11 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
             }
             className="w-full rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm text-white"
           >
-            <option value="APARTMENT">APARTMENT</option>
-            <option value="HOUSE">HOUSE</option>
-            <option value="LAND">LAND</option>
-            <option value="COMMERCIAL">COMMERCIAL</option>
-            <option value="OTHER">OTHER</option>
+            <option value="APARTMENT">{l.propertyApartment}</option>
+            <option value="HOUSE">{l.propertyHouse}</option>
+            <option value="LAND">{l.propertyLand}</option>
+            <option value="COMMERCIAL">{l.propertyCommercial}</option>
+            <option value="OTHER">{l.propertyOther}</option>
           </select>
         </div>
         {agencies.length > 0 ? (
@@ -456,6 +586,14 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
                     {statusLabel(locale, listing.status)}
                   </span>
                 </div>
+                {listing.imageUrls[0] ? (
+                  <img
+                    src={listing.imageUrls[0]}
+                    alt={listing.title}
+                    className="mt-3 h-36 w-full rounded-xl border border-white/10 object-cover"
+                    loading="lazy"
+                  />
+                ) : null}
                 <p className="mt-2 text-sm text-zinc-300">{formatMoney(listing.priceCents, listing.currency, locale)}</p>
                 {listing.publisher?.name ? (
                   <p className="mt-1 text-xs text-zinc-400">{l.agency}: {listing.publisher.name}</p>
@@ -496,6 +634,27 @@ export default function ImmoMyDashboard({ locale, listings, agencies }: Props) {
                       className="rounded-xl border border-white/15 bg-zinc-900/70 px-3 py-2 text-sm text-white md:col-span-2"
                       rows={2}
                     />
+                    <textarea
+                      value={draft.imageUrls}
+                      onChange={(event) => updateEditField(listing.id, "imageUrls", event.target.value)}
+                      className="rounded-xl border border-white/15 bg-zinc-900/70 px-3 py-2 text-sm text-white md:col-span-2"
+                      rows={2}
+                      placeholder={l.images}
+                    />
+                    <label className="rounded-xl border border-white/15 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-200 md:col-span-2">
+                      {uploading === listing.id ? l.uploading : l.uploadImages}
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="mt-2 block w-full text-xs text-zinc-300"
+                        disabled={uploading === listing.id}
+                        onChange={(event) => {
+                          void uploadImages(event.currentTarget.files, listing.id);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
                     {agencies.length > 0 ? (
                       <select
                         value={draft.publisherId}

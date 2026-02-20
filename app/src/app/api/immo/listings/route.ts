@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canAccessAdmin } from "@/app/api/immo/listings/_shared";
+import { canAccessAdmin, parseImageUrls } from "@/app/api/immo/listings/_shared";
 
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 const PROPERTY_TYPES = ["APARTMENT", "HOUSE", "LAND", "COMMERCIAL", "OTHER"] as const;
@@ -198,6 +198,7 @@ export async function GET(request: NextRequest) {
       country: true,
       status: true,
       contactMode: true,
+      imageUrls: true,
       isFeatured: true,
       featuredUntil: true,
       boostUntil: true,
@@ -217,7 +218,12 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ listings });
+  const normalizedListings = listings.map((listing) => ({
+    ...listing,
+    isFeatured: Boolean(listing.featuredUntil && listing.featuredUntil > now),
+  }));
+
+  return NextResponse.json({ listings: normalizedListings });
 }
 
 export async function POST(request: NextRequest) {
@@ -241,6 +247,7 @@ export async function POST(request: NextRequest) {
   const rooms = parseNullableInt((body as { rooms?: unknown }).rooms);
   const city = normalizeString((body as { city?: unknown }).city);
   const country = normalizeString((body as { country?: unknown }).country).toUpperCase() || "SN";
+  const parsedImageUrls = parseImageUrls((body as { imageUrls?: unknown }).imageUrls ?? []);
   const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
   const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : "";
 
@@ -250,6 +257,10 @@ export async function POST(request: NextRequest) {
       "VALIDATION_ERROR",
       "title, description, listingType, propertyType, priceCents, surfaceM2 and city are required."
     );
+  }
+
+  if (parsedImageUrls === null) {
+    return errorResponse(400, "INVALID_IMAGE_URLS", "imageUrls must contain valid upload URLs.");
   }
 
   let publisherForCreateId: string | null = null;
@@ -298,6 +309,7 @@ export async function POST(request: NextRequest) {
       city,
       country,
       addressHidden: true,
+      imageUrls: parsedImageUrls,
       contactMode: "INTERNAL_MESSAGE",
       status: "DRAFT",
     },
@@ -315,6 +327,7 @@ export async function POST(request: NextRequest) {
       country: true,
       status: true,
       contactMode: true,
+      imageUrls: true,
       isFeatured: true,
       featuredUntil: true,
       boostUntil: true,

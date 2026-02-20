@@ -48,3 +48,28 @@ export function canPublishImmo(user: { role?: string | null; roles?: string[] | 
 export function canManagePublisher(user: { role?: string | null; roles?: string[] | null } | null | undefined) {
   return hasAnyUserRole(user, ["IMMO_AGENT", "ADMIN"]);
 }
+
+export function parseImageUrls(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const normalized = Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (normalized.length > 20) return null;
+
+  for (const url of normalized) {
+    const isInternal = url.startsWith("/uploads/");
+    const isExternal = /^https?:\/\//i.test(url);
+    if (!isInternal && !isExternal) {
+      return null;
+    }
+  }
+
+  return normalized;
+}

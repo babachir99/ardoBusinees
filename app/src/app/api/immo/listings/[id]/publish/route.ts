@@ -21,7 +21,7 @@ export async function POST(
   const isAdmin = canAccessAdmin(session.user);
   const listing = await prisma.immoListing.findUnique({
     where: { id },
-    select: { id: true, ownerId: true, status: true },
+    select: { id: true, ownerId: true, status: true, imageUrls: true },
   });
 
   if (!listing) {
@@ -30,6 +30,10 @@ export async function POST(
 
   if (!isAdmin && listing.ownerId != session.user.id) {
     return errorResponse(403, "FORBIDDEN", "You can publish only your own listing.");
+  }
+
+  if (!Array.isArray(listing.imageUrls) || listing.imageUrls.length === 0) {
+    return errorResponse(409, "AT_LEAST_ONE_IMAGE_REQUIRED", "At least one listing image is required before publishing.");
   }
 
   const result = await prisma.immoListing.updateMany({

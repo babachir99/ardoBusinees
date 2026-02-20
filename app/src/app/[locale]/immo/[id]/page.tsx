@@ -31,6 +31,7 @@ export default async function ImmoListingDetailPage({
       rooms: true,
       city: true,
       country: true,
+      imageUrls: true,
       status: true,
       createdAt: true,
       owner: {
@@ -62,6 +63,8 @@ export default async function ImmoListingDetailPage({
         ? "Contact via messagerie interne (coming soon)."
         : "Contact via internal messaging (coming soon).",
     owner: locale === "fr" ? "Annonceur" : "Owner",
+    rooms: locale === "fr" ? "pieces" : "rooms",
+    photos: locale === "fr" ? "Photos" : "Photos",
   };
 
   return (
@@ -72,14 +75,37 @@ export default async function ImmoListingDetailPage({
         </Link>
 
         <section className="mt-6 rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-          <p className="text-xs text-zinc-400">{listing.listingType} ? {listing.propertyType}</p>
+          <p className="text-xs text-zinc-400">{listing.listingType} - {listing.propertyType}</p>
           <h1 className="mt-2 text-3xl font-semibold text-white">{listing.title}</h1>
           <p className="mt-3 text-lg font-semibold text-emerald-200">
             {formatMoney(listing.priceCents, listing.currency, locale)}
           </p>
           <p className="mt-2 text-sm text-zinc-400">
-            {listing.surfaceM2} m? ? {listing.rooms ?? "-"} rooms ? {listing.city}, {listing.country}
+            {listing.surfaceM2} m2 - {listing.rooms ?? "-"} {t.rooms} - {listing.city}, {listing.country}
           </p>
+          {listing.imageUrls.length > 0 ? (
+            <div className="mt-5 space-y-3">
+              <img
+                src={listing.imageUrls[0]}
+                alt={listing.title}
+                className="h-72 w-full rounded-2xl border border-white/10 object-cover"
+              />
+              {listing.imageUrls.length > 1 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {listing.imageUrls.slice(1, 4).map((url) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt={t.photos}
+                      className="h-24 w-full rounded-xl border border-white/10 object-cover"
+                      loading="lazy"
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className="mt-5 whitespace-pre-line text-sm text-zinc-200">{listing.description}</p>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">

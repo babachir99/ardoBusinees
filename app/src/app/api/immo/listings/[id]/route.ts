@@ -6,6 +6,7 @@ import {
   canAccessAdmin,
   errorResponse,
   normalizeString,
+  parseImageUrls,
   parseNullableInt,
 } from "@/app/api/immo/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId } from "@/lib/audit";
@@ -53,6 +54,7 @@ async function loadListing(id: string) {
       rooms: true,
       city: true,
       country: true,
+      imageUrls: true,
       addressHidden: true,
       contactMode: true,
       status: true,
@@ -149,6 +151,10 @@ export async function PATCH(
   const rooms = parseNullableInt((body as { rooms?: unknown }).rooms);
   const city = normalizeString((body as { city?: unknown }).city);
   const country = normalizeString((body as { country?: unknown }).country).toUpperCase();
+  const hasImageUrlsField = Object.prototype.hasOwnProperty.call(body, "imageUrls");
+  const parsedImageUrls = hasImageUrlsField
+    ? parseImageUrls((body as { imageUrls?: unknown }).imageUrls)
+    : null;
   const addressHiddenRaw = (body as { addressHidden?: unknown }).addressHidden;
   const statusRaw = parseStatusUpdate((body as { status?: unknown }).status);
   const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
@@ -168,6 +174,12 @@ export async function PATCH(
   if (rooms !== null) data.rooms = rooms;
   if (city) data.city = city;
   if (country) data.country = country;
+  if (hasImageUrlsField) {
+    if (parsedImageUrls === null) {
+      return errorResponse(400, "INVALID_IMAGE_URLS", "imageUrls must contain valid upload URLs.");
+    }
+    data.imageUrls = parsedImageUrls;
+  }
   if (typeof addressHiddenRaw === "boolean") data.addressHidden = addressHiddenRaw;
   if (statusRaw === "PAUSED" || statusRaw === "DRAFT") data.status = statusRaw;
 
@@ -254,6 +266,7 @@ export async function PATCH(
       rooms: true,
       city: true,
       country: true,
+      imageUrls: true,
       addressHidden: true,
       contactMode: true,
       status: true,
