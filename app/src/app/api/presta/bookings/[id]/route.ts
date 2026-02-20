@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { PrestaBookingStatus, Prisma } from "@prisma/client";
+import {
+  PaymentLedgerContextType,
+  PaymentLedgerStatus,
+  PrestaBookingStatus,
+  PrestaPayoutStatus,
+  Prisma,
+} from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -76,6 +82,10 @@ async function ensurePrestaPayout(params: {
     prestaPayout: {
       findUnique: (args: unknown) => Promise<PayoutView | null>;
       create: (args: unknown) => Promise<PayoutView>;
+      updateMany: (args: unknown) => Promise<{ count: number }>;
+    };
+    paymentLedger?: {
+      findUnique: (args: unknown) => Promise<{ status: PaymentLedgerStatus } | null>;
     };
   };
 
@@ -91,7 +101,52 @@ async function ensurePrestaPayout(params: {
     },
   });
 
+  const ledger = runtimePrisma.paymentLedger
+    ? await runtimePrisma.paymentLedger.findUnique({
+        where: {
+          contextType_contextId: {
+            contextType: PaymentLedgerContextType.PRESTA_BOOKING,
+            contextId: params.bookingId,
+          },
+        },
+        select: { status: true },
+      })
+    : null;
+
+  const initialPayoutStatus =
+    ledger?.status === PaymentLedgerStatus.CONFIRMED
+      ? PrestaPayoutStatus.READY
+      : PrestaPayoutStatus.PENDING;
+
   if (existing) {
+    if (initialPayoutStatus === PrestaPayoutStatus.READY && existing.status === PrestaPayoutStatus.PENDING) {
+      await runtimePrisma.prestaPayout.updateMany({
+        where: {
+          bookingId: params.bookingId,
+          status: PrestaPayoutStatus.PENDING,
+        },
+        data: {
+          status: PrestaPayoutStatus.READY,
+        },
+      });
+
+      const refreshed = await runtimePrisma.prestaPayout.findUnique({
+        where: { bookingId: params.bookingId },
+        select: {
+          id: true,
+          status: true,
+          amountTotalCents: true,
+          platformFeeCents: true,
+          providerPayoutCents: true,
+          currency: true,
+        },
+      });
+
+      if (refreshed) {
+        return refreshed;
+      }
+    }
+
     return existing;
   }
 
@@ -107,6 +162,7 @@ async function ensurePrestaPayout(params: {
         platformFeeCents,
         providerPayoutCents,
         currency: params.currency,
+        status: initialPayoutStatus,
       },
       select: {
         id: true,

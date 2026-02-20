@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod, PaymentStatus, TiakPayoutStatus } from "@prisma/client";
+import {
+  PaymentLedgerContextType,
+  PaymentLedgerStatus,
+  PaymentMethod,
+  PaymentStatus,
+  TiakPayoutStatus,
+} from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -415,6 +421,21 @@ export async function PATCH(
     } | null = null;
 
     if (nextStatus === "DELIVERED" && payoutDraft) {
+      const ledger = await tx.paymentLedger.findUnique({
+        where: {
+          contextType_contextId: {
+            contextType: PaymentLedgerContextType.TIAK_DELIVERY,
+            contextId: updated.id,
+          },
+        },
+        select: { status: true },
+      });
+
+      const initialPayoutStatus =
+        ledger?.status === PaymentLedgerStatus.CONFIRMED
+          ? TiakPayoutStatus.READY
+          : TiakPayoutStatus.PENDING;
+
       payout = await tx.tiakPayout.upsert({
         where: { deliveryId: updated.id },
         update: {},
@@ -425,7 +446,7 @@ export async function PATCH(
           platformFeeCents: payoutDraft.platformFeeCents,
           courierPayoutCents: payoutDraft.courierPayoutCents,
           currency: payoutDraft.currency,
-          status: TiakPayoutStatus.PENDING,
+          status: initialPayoutStatus,
         },
         select: {
           id: true,
@@ -438,6 +459,36 @@ export async function PATCH(
           deliveryId: true,
         },
       });
+
+      if (initialPayoutStatus === TiakPayoutStatus.READY && payout.status === TiakPayoutStatus.PENDING) {
+        await tx.tiakPayout.updateMany({
+          where: {
+            id: payout.id,
+            status: TiakPayoutStatus.PENDING,
+          },
+          data: {
+            status: TiakPayoutStatus.READY,
+          },
+        });
+
+        const refreshedPayout = await tx.tiakPayout.findUnique({
+          where: { id: payout.id },
+          select: {
+            id: true,
+            status: true,
+            amountTotalCents: true,
+            platformFeeCents: true,
+            courierPayoutCents: true,
+            currency: true,
+            createdAt: true,
+            deliveryId: true,
+          },
+        });
+
+        if (refreshedPayout) {
+          payout = refreshedPayout;
+        }
+      }
     }
 
     return { updated, payout };
