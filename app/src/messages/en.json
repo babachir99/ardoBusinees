@@ -915,6 +915,29 @@
         "IN_REVIEW": "In review",
         "CONFIRMED": "Confirmed",
         "INITIATED": "Initiated"
+      },
+      "alerts": {
+        "title": "Alerts",
+        "none": "No active alerts.",
+        "runReconciliationHint": "Run reconciliation to detect inconsistencies.",
+        "labels": {
+          "warn": "WARN"
+        },
+        "actions": {
+          "openQueue": "Open queue",
+          "openKyc": "Open KYC",
+          "openReconciliation": "Open reconciliation",
+          "runReconciliation": "Run reconciliation"
+        },
+        "items": {
+          "payoutsReady": "{count} payouts are READY.",
+          "disputesActive": "{count} active disputes require attention.",
+          "paymentsFailed": "{count} failed payments in the last 7 days.",
+          "kycPending": "{count} KYC files pending review.",
+          "criticalLedgerMissingPayout": "{count} ledger CONFIRMED records missing compliant payout.",
+          "criticalPayoutActiveDispute": "{count} payouts are READY/PAID with active disputes.",
+          "criticalOrderLedgerMismatch": "{count} paid orders have ledger mismatch."
+        }
       }
     },
     "orders": {

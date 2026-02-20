@@ -915,6 +915,29 @@
         "IN_REVIEW": "En revue",
         "CONFIRMED": "Confirme",
         "INITIATED": "Initie"
+      },
+      "alerts": {
+        "title": "Alertes",
+        "none": "Aucune alerte active.",
+        "runReconciliationHint": "Lance la reconciliation pour detecter les incoherences.",
+        "labels": {
+          "warn": "WARN"
+        },
+        "actions": {
+          "openQueue": "Voir la file",
+          "openKyc": "Voir KYC",
+          "openReconciliation": "Voir reconciliation",
+          "runReconciliation": "Lancer reconciliation"
+        },
+        "items": {
+          "payoutsReady": "{count} payouts sont READY.",
+          "disputesActive": "{count} litiges actifs a traiter.",
+          "paymentsFailed": "{count} paiements echoues sur les 7 derniers jours.",
+          "kycPending": "{count} dossiers KYC en attente.",
+          "criticalLedgerMissingPayout": "{count} ledgers CONFIRMED sans payout conforme.",
+          "criticalPayoutActiveDispute": "{count} payouts READY/PAID avec litiges actifs.",
+          "criticalOrderLedgerMismatch": "{count} commandes payees avec mismatch ledger."
+        }
       }
     },
     "orders": {

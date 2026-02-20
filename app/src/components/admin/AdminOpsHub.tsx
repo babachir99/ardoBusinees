@@ -71,6 +71,24 @@ function normalizeFilter(value: string | null): QueueFilter {
   return "ALL";
 }
 
+
+type AlertSeverity = "WARN" | "CRITICAL";
+
+type OpsAlert = {
+  id: string;
+  severity: AlertSeverity;
+  message: string;
+  href?: string;
+  actionLabel?: string;
+};
+
+const ALERT_THRESHOLDS = {
+  PAYOUTS_READY: 10,
+  DISPUTES_ACTIVE: 3,
+  PAYMENTS_FAILED_7D: 5,
+  KYC_PENDING: 20,
+} as const;
+
 export default function AdminOpsHub({ kpis, queueItems }: Props) {
   const t = useTranslations("Admin.opsHub");
   const router = useRouter();
@@ -85,6 +103,24 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
   const [reconError, setReconError] = useState("");
   const [reconData, setReconData] = useState<ReconciliationFindings | null>(null);
 
+  const warnFlags = useMemo(
+    () => ({
+      payoutsReady:
+        typeof kpis.payoutsReady === "number" &&
+        kpis.payoutsReady >= ALERT_THRESHOLDS.PAYOUTS_READY,
+      disputesActive:
+        typeof kpis.disputesActive === "number" &&
+        kpis.disputesActive >= ALERT_THRESHOLDS.DISPUTES_ACTIVE,
+      paymentsFailed7d:
+        typeof kpis.paymentsFailed7d === "number" &&
+        kpis.paymentsFailed7d >= ALERT_THRESHOLDS.PAYMENTS_FAILED_7D,
+      kycPending:
+        typeof kpis.kycPending === "number" &&
+        kpis.kycPending >= ALERT_THRESHOLDS.KYC_PENDING,
+    }),
+    [kpis]
+  );
+
   const cards = useMemo(
     () => [
       {
@@ -92,27 +128,31 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: t("cards.payoutsReady"),
         value: kpis.payoutsReady,
         href: { pathname: "/admin", query: { opsFilter: "PAYOUT" } },
+        warn: warnFlags.payoutsReady,
       },
       {
         key: "disputes",
         label: t("cards.disputesActive"),
         value: kpis.disputesActive,
         href: { pathname: "/admin", query: { opsFilter: "DISPUTE" } },
+        warn: warnFlags.disputesActive,
       },
       {
         key: "payments",
         label: t("cards.paymentsFailed7d"),
         value: kpis.paymentsFailed7d,
         href: { pathname: "/admin", query: { opsFilter: "PAYMENT_FAILED" } },
+        warn: warnFlags.paymentsFailed7d,
       },
       {
         key: "kyc",
         label: t("cards.kycPending"),
         value: kpis.kycPending,
         href: "/admin/kyc",
+        warn: warnFlags.kycPending,
       },
     ].filter((card) => card.key !== "kyc" || typeof card.value === "number"),
-    [kpis, t]
+    [kpis, t, warnFlags]
   );
 
   const filterTabs: Array<{ key: QueueFilter; label: string }> = [
@@ -145,6 +185,94 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     if (activeFilter === "DISPUTE") return queueItems.filter((item) => item.type === "DISPUTE");
     return queueItems.filter((item) => item.type === "PAYMENT_FAILED");
   }, [activeFilter, queueItems]);
+
+  const activeAlerts = useMemo<OpsAlert[]>(() => {
+    const alerts: OpsAlert[] = [];
+
+    if (warnFlags.payoutsReady && typeof kpis.payoutsReady === "number") {
+      alerts.push({
+        id: "warn-payouts",
+        severity: "WARN",
+        message: t("alerts.items.payoutsReady", { count: kpis.payoutsReady }),
+        href: "/admin?opsFilter=PAYOUT#ops-queue",
+        actionLabel: t("alerts.actions.openQueue"),
+      });
+    }
+
+    if (warnFlags.disputesActive && typeof kpis.disputesActive === "number") {
+      alerts.push({
+        id: "warn-disputes",
+        severity: "WARN",
+        message: t("alerts.items.disputesActive", { count: kpis.disputesActive }),
+        href: "/admin?opsFilter=DISPUTE#ops-queue",
+        actionLabel: t("alerts.actions.openQueue"),
+      });
+    }
+
+    if (warnFlags.paymentsFailed7d && typeof kpis.paymentsFailed7d === "number") {
+      alerts.push({
+        id: "warn-payments",
+        severity: "WARN",
+        message: t("alerts.items.paymentsFailed", { count: kpis.paymentsFailed7d }),
+        href: "/admin?opsFilter=PAYMENT_FAILED#ops-queue",
+        actionLabel: t("alerts.actions.openQueue"),
+      });
+    }
+
+    if (warnFlags.kycPending && typeof kpis.kycPending === "number") {
+      alerts.push({
+        id: "warn-kyc",
+        severity: "WARN",
+        message: t("alerts.items.kycPending", { count: kpis.kycPending }),
+        href: "/admin/kyc",
+        actionLabel: t("alerts.actions.openKyc"),
+      });
+    }
+
+    if (reconData) {
+      const confirmedLedgerMissingPayout = reconData.confirmedLedgerMissingPayout.length;
+      const payoutReadyButActiveDispute = reconData.payoutReadyButActiveDispute.length;
+      const orderPaidButLedgerNotConfirmed = reconData.orderPaidButLedgerNotConfirmed.length;
+
+      if (confirmedLedgerMissingPayout > 0) {
+        alerts.push({
+          id: "critical-ledger-missing-payout",
+          severity: "CRITICAL",
+          message: t("alerts.items.criticalLedgerMissingPayout", {
+            count: confirmedLedgerMissingPayout,
+          }),
+          href: "#ops-reconciliation",
+          actionLabel: t("alerts.actions.openReconciliation"),
+        });
+      }
+
+      if (payoutReadyButActiveDispute > 0) {
+        alerts.push({
+          id: "critical-payout-active-dispute",
+          severity: "CRITICAL",
+          message: t("alerts.items.criticalPayoutActiveDispute", {
+            count: payoutReadyButActiveDispute,
+          }),
+          href: "#ops-reconciliation",
+          actionLabel: t("alerts.actions.openReconciliation"),
+        });
+      }
+
+      if (orderPaidButLedgerNotConfirmed > 0) {
+        alerts.push({
+          id: "critical-order-ledger-mismatch",
+          severity: "CRITICAL",
+          message: t("alerts.items.criticalOrderLedgerMismatch", {
+            count: orderPaidButLedgerNotConfirmed,
+          }),
+          href: "#ops-reconciliation",
+          actionLabel: t("alerts.actions.openReconciliation"),
+        });
+      }
+    }
+
+    return alerts;
+  }, [kpis, reconData, t, warnFlags]);
 
   async function handleRelease(item: OpsQueueItem) {
     if (item.action.kind !== "release") return;
@@ -234,12 +362,72 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
           <Link
             key={card.key}
             href={card.href}
-            className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 transition hover:border-white/30"
+            className={`rounded-2xl border bg-zinc-950/50 p-4 transition hover:border-white/30 ${
+              card.warn ? "border-amber-300/40" : "border-white/10"
+            }`}
           >
-            <p className="text-xs text-zinc-400">{card.label}</p>
+            <p className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>{card.label}</span>
+              {card.warn ? (
+                <span className="rounded-full border border-amber-300/50 bg-amber-300/15 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                  {t("alerts.labels.warn")}
+                </span>
+              ) : null}
+            </p>
             <p className="mt-2 text-2xl font-semibold text-white">{typeof card.value === "number" ? card.value : "-"}</p>
           </Link>
         ))}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-white">{t("alerts.title")}</h3>
+        </div>
+
+        {!reconData ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <p className="text-xs text-zinc-400">{t("alerts.runReconciliationHint")}</p>
+            <button
+              type="button"
+              onClick={() => void handleRunReconciliation()}
+              disabled={reconLoading}
+              className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reconLoading ? t("reconciliation.running") : t("alerts.actions.runReconciliation")}
+            </button>
+          </div>
+        ) : null}
+
+        {activeAlerts.length === 0 ? (
+          <p className="mt-3 text-xs text-zinc-400">{t("alerts.none")}</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {activeAlerts.map((alert) => (
+              <div key={alert.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                      alert.severity === "CRITICAL"
+                        ? "border-rose-300/50 bg-rose-300/15 text-rose-100"
+                        : "border-amber-300/50 bg-amber-300/15 text-amber-100"
+                    }`}
+                  >
+                    {alert.severity}
+                  </span>
+                  <p className="text-xs text-zinc-200">{alert.message}</p>
+                </div>
+                {alert.href && alert.actionLabel ? (
+                  <Link
+                    href={alert.href}
+                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
+                  >
+                    {alert.actionLabel}
+                  </Link>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div id="ops-queue" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40">
@@ -316,7 +504,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
+      <div id="ops-reconciliation" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-white">{t("reconciliation.title")}</h3>
           <button
