@@ -313,7 +313,7 @@ export default async function AdminPage() {
       status: item.status,
       ageLabel: formatAgeLabel(item.createdAt),
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
-      action: { kind: "release" as const, label: "Release", releaseType: "PRESTA" as const },
+      action: { kind: "release" as const, label: t("opsHub.actions.release"), releaseType: "PRESTA" as const },
       createdAtMs: item.createdAt.getTime(),
     }))),
     ...((tiakPayoutReadyItems ?? []).map((item) => ({
@@ -323,7 +323,7 @@ export default async function AdminPage() {
       status: item.status,
       ageLabel: formatAgeLabel(item.createdAt),
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
-      action: { kind: "release" as const, label: "Release", releaseType: "TIAK" as const },
+      action: { kind: "release" as const, label: t("opsHub.actions.release"), releaseType: "TIAK" as const },
       createdAtMs: item.createdAt.getTime(),
     }))),
     ...((disputesActiveItems ?? []).map((item) => ({
@@ -334,8 +334,8 @@ export default async function AdminPage() {
       ageLabel: formatAgeLabel(item.createdAt),
       action: {
         kind: "link" as const,
-        label: "Open dispute",
-        href: `/admin?opsFilter=DISPUTES&focus=${item.id}#ops-queue`,
+        label: t("opsHub.actions.openDispute"),
+        href: `/admin?opsFilter=DISPUTE&focus=${item.id}#ops-queue`,
       },
       createdAtMs: item.createdAt.getTime(),
     }))),
@@ -348,8 +348,8 @@ export default async function AdminPage() {
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
       action: {
         kind: "link" as const,
-        label: "Inspect",
-        href: `/admin?opsFilter=PAYMENTS_FAILED&focus=${item.id}#ops-queue`,
+        label: t("opsHub.actions.inspect"),
+        href: `/admin?opsFilter=PAYMENT_FAILED&focus=${item.id}#ops-queue`,
       },
       createdAtMs: item.createdAt.getTime(),
     }))),

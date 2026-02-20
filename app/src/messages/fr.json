@@ -850,6 +850,73 @@
       "badge1": "Alertes temps reel",
       "badge2": "Audit complet"
     },
+    "opsHub": {
+      "title": "Centre Ops",
+      "subtitle": "KPI operations et file d'action admin",
+      "cards": {
+        "payoutsReady": "Payouts prets",
+        "disputesActive": "Litiges actifs",
+        "paymentsFailed7d": "Paiements echoues (7j)",
+        "kycPending": "KYC en attente"
+      },
+      "filters": {
+        "all": "Tout",
+        "payouts": "Payouts",
+        "disputes": "Litiges",
+        "paymentsFailed": "Paiements echoues"
+      },
+      "queue": {
+        "title": "A traiter maintenant",
+        "columns": {
+          "type": "Type",
+          "ref": "Reference",
+          "status": "Statut",
+          "amount": "Montant",
+          "age": "Age",
+          "action": "Action"
+        },
+        "empty": "Aucun item urgent.",
+        "types": {
+          "payout": "Payout",
+          "dispute": "Litige",
+          "paymentFailed": "Paiement echoue"
+        }
+      },
+      "actions": {
+        "release": "Liberer",
+        "openDispute": "Ouvrir litige",
+        "inspect": "Voir",
+        "released": "Libere"
+      },
+      "messages": {
+        "releaseBlocked": "Liberation bloquee (litige actif ou etat invalide). Rafraichissement...",
+        "releaseFailed": "Echec de liberation. Reessaie.",
+        "dryRunFailed": "Echec du dry-run."
+      },
+      "reconciliation": {
+        "title": "Reconciliation (dry-run)",
+        "run": "Lancer la reconciliation",
+        "running": "Execution...",
+        "noFindings": "Aucune anomalie",
+        "sections": {
+          "confirmedLedgerMissingPayout": "Ledger confirme sans payout conforme",
+          "payoutReadyButActiveDispute": "Payout READY/PAID avec litige actif",
+          "orderPaidButLedgerNotConfirmed": "Commande payee avec ledger non confirme"
+        },
+        "noPayout": "AUCUN_PAYOUT",
+        "missing": "ABSENT"
+      },
+      "statuses": {
+        "READY": "Pret",
+        "PAID": "Paye",
+        "FAILED": "Echoue",
+        "PENDING": "En attente",
+        "OPEN": "Ouvert",
+        "IN_REVIEW": "En revue",
+        "CONFIRMED": "Confirme",
+        "INITIATED": "Initie"
+      }
+    },
     "orders": {
       "title": "Suivi des commandes",
       "subtitle": "Mettre a jour les statuts et les preuves.",
@@ -1339,20 +1406,3 @@
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

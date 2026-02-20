@@ -850,6 +850,73 @@
       "badge1": "Real-time alerts",
       "badge2": "Full audit trail"
     },
+    "opsHub": {
+      "title": "Ops Hub",
+      "subtitle": "Ops KPIs and admin action queue",
+      "cards": {
+        "payoutsReady": "PAYOUTS READY",
+        "disputesActive": "DISPUTES ACTIVE",
+        "paymentsFailed7d": "PAYMENTS FAILED (7D)",
+        "kycPending": "KYC PENDING"
+      },
+      "filters": {
+        "all": "ALL",
+        "payouts": "PAYOUTS",
+        "disputes": "DISPUTES",
+        "paymentsFailed": "PAYMENTS FAILED"
+      },
+      "queue": {
+        "title": "Action queue",
+        "columns": {
+          "type": "Type",
+          "ref": "Reference",
+          "status": "Status",
+          "amount": "Amount",
+          "age": "Age",
+          "action": "Action"
+        },
+        "empty": "No urgent items.",
+        "types": {
+          "payout": "Payout",
+          "dispute": "Dispute",
+          "paymentFailed": "Payment failed"
+        }
+      },
+      "actions": {
+        "release": "Release",
+        "openDispute": "Open dispute",
+        "inspect": "Inspect",
+        "released": "Released"
+      },
+      "messages": {
+        "releaseBlocked": "Release blocked (active dispute or invalid state). Refreshing...",
+        "releaseFailed": "Release failed. Try again.",
+        "dryRunFailed": "Dry-run failed."
+      },
+      "reconciliation": {
+        "title": "Reconciliation dry-run",
+        "run": "Run reconciliation (dry-run)",
+        "running": "Running...",
+        "noFindings": "No findings",
+        "sections": {
+          "confirmedLedgerMissingPayout": "Confirmed ledger missing compliant payout",
+          "payoutReadyButActiveDispute": "READY/PAID payout with active dispute",
+          "orderPaidButLedgerNotConfirmed": "Paid order with non-confirmed ledger"
+        },
+        "noPayout": "NO_PAYOUT",
+        "missing": "MISSING"
+      },
+      "statuses": {
+        "READY": "Ready",
+        "PAID": "Paid",
+        "FAILED": "Failed",
+        "PENDING": "Pending",
+        "OPEN": "Open",
+        "IN_REVIEW": "In review",
+        "CONFIRMED": "Confirmed",
+        "INITIATED": "Initiated"
+      }
+    },
     "orders": {
       "title": "Order tracking",
       "subtitle": "Update statuses and proofs.",
@@ -1333,14 +1400,3 @@
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
