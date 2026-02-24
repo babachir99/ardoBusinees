@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { isEligibleForGP } from "@/lib/orchestratorEligibility";
 
 type PaymentMethod = "WAVE" | "ORANGE_MONEY" | "CARD" | "CASH";
 type TripCurrency = "XOF" | "EUR" | "USD";
@@ -31,6 +32,20 @@ type FormState = {
   contactPhone: string;
   notes: string;
   acceptedPaymentMethods: PaymentMethod[];
+};
+
+type OrchestratorIntent = {
+  id: string;
+  intentType: "TRANSPORT" | "LOCAL_DELIVERY" | "SERVICE_REQUEST";
+  objectType: "DOCUMENTS" | "SMALL_PARCEL" | "PARTS" | "KEYS" | "NONE";
+  weightKg: number | null;
+  fromCountry: string | null;
+  toCountry: string | null;
+  fromCity: string | null;
+  toCity: string | null;
+  status: "OPEN" | "MATCHED" | "CLOSED" | "EXPIRED";
+  targetVertical?: string | null;
+  targetEntityId?: string | null;
 };
 
 const paymentOptions: Array<{ value: PaymentMethod; fr: string; en: string }> = [
@@ -96,6 +111,13 @@ export default function GpTripPublisher({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const [intentSummary, setIntentSummary] = useState<OrchestratorIntent | null>(null);
+  const [intentLoaded, setIntentLoaded] = useState(false);
+  const [intentPrefilled, setIntentPrefilled] = useState(false);
+  const [createdTripId, setCreatedTripId] = useState<string | null>(null);
+  const [attachingIntent, setAttachingIntent] = useState(false);
+  const [intentAttachState, setIntentAttachState] = useState<"attached" | "resolved" | "forbidden" | null>(null);
 
   const t = useMemo(
     () => ({
@@ -124,6 +146,25 @@ export default function GpTripPublisher({
           ? "La date d'arrivee doit etre superieure ou egale a la date de depart."
           : "Arrival date must be after or equal to departure date.",
       serverError: locale === "fr" ? "Erreur lors de la publication" : "Failed to publish trip",
+      intentBadgeTitle: locale === "fr" ? "Intention liee" : "Linked intent",
+      intentAttach: locale === "fr" ? "Associer l'intention" : "Attach intent",
+      intentAttached: locale === "fr" ? "Intention associee au trajet." : "Intent attached to trip.",
+      intentAlreadyResolved:
+        locale === "fr"
+          ? "Intention deja traitee."
+          : "Intent already handled",
+      intentAttachForbidden:
+        locale === "fr"
+          ? "Non autorise a associer cette intention."
+          : "Not allowed to attach this intent",
+      intentAttachError: locale === "fr" ? "Impossible d'associer l'intention." : "Unable to attach intent.",
+      intentSummaryHint: locale === "fr" ? "Pre-remplissage GP depuis orchestrateur (manuel)." : "GP prefill from orchestrator (manual).",
+      objectType: locale === "fr" ? "Objet" : "Object",
+      fromTo: locale === "fr" ? "Trajet" : "Route",
+      weight: locale === "fr" ? "Poids" : "Weight",
+      intentAttachedState: locale === "fr" ? "Intention associee" : "Intent attached",
+      intentHandledState: locale === "fr" ? "Intention traitee" : "Intent handled",
+      intentForbiddenState: locale === "fr" ? "Association refusee" : "Attach blocked",
       groupRoute: locale === "fr" ? "1. Trajet" : "1. Route",
       groupTariff: locale === "fr" ? "2. Tarif" : "2. Pricing",
       groupCapacity: locale === "fr" ? "3. Capacite" : "3. Capacity",
@@ -132,6 +173,21 @@ export default function GpTripPublisher({
     }),
     [locale]
   );
+
+  function objectTypeLabel(value: OrchestratorIntent["objectType"]) {
+    if (locale === "fr") {
+      if (value === "SMALL_PARCEL") return "Petit colis";
+      if (value === "PARTS") return "Pieces";
+      if (value === "KEYS") return "Cles";
+      if (value === "DOCUMENTS") return "Documents";
+      return "Aucun";
+    }
+    if (value === "SMALL_PARCEL") return "Small parcel";
+    if (value === "PARTS") return "Parts";
+    if (value === "KEYS") return "Keys";
+    if (value === "DOCUMENTS") return "Documents";
+    return "None";
+  }
 
   const updateField = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -209,15 +265,20 @@ export default function GpTripPublisher({
         }),
       });
 
+      const body = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const body = await response.json().catch(() => null);
         throw new Error(body?.error || t.serverError);
       }
 
+      const tripId = typeof body?.id === "string" ? body.id : null;
+      setCreatedTripId(tripId);
       setForm(initialState(defaultContactPhone, defaultPaymentMethods));
       setSuccess(t.success);
       router.refresh();
-      onPublished?.();
+      if (!(intentSummary && intentSummary.status === "OPEN" && tripId)) {
+        onPublished?.();
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : t.serverError);
     } finally {
@@ -229,6 +290,127 @@ export default function GpTripPublisher({
     "h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-indigo-300/60 focus:ring-2 focus:ring-indigo-300/20";
 
   const currencySymbol = currencySymbolMap[form.currency];
+
+  useEffect(() => {
+    const intentIdRaw = searchParams.get("intentId")?.trim();
+    if (!intentIdRaw) {
+      setIntentLoaded(true);
+      return;
+    }
+
+    const intentId = intentIdRaw;
+    let cancelled = false;
+
+    async function loadIntent() {
+      try {
+        const response = await fetch(`/api/orchestrator/intents/${encodeURIComponent(intentId)}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setIntentSummary(null);
+            setIntentLoaded(true);
+          }
+          return;
+        }
+
+        const body = (await response.json().catch(() => null)) as { intent?: OrchestratorIntent } | null;
+        const intent = body?.intent;
+        if (!intent || intent.status !== "OPEN" || !isEligibleForGP(intent)) {
+          if (!cancelled) {
+            setIntentSummary(null);
+            setIntentLoaded(true);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setIntentSummary(intent);
+          setIntentLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setIntentSummary(null);
+          setIntentLoaded(true);
+        }
+      }
+    }
+
+    void loadIntent();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!intentSummary || intentPrefilled) return;
+
+    setForm((prev) => ({
+      ...prev,
+      originCity: prev.originCity || (intentSummary.fromCity ?? ""),
+      destinationCity: prev.destinationCity || (intentSummary.toCity ?? ""),
+      availableKg:
+        prev.availableKg ||
+        (typeof intentSummary.weightKg === "number" && Number.isFinite(intentSummary.weightKg)
+          ? String(Math.max(1, Math.trunc(intentSummary.weightKg)))
+          : ""),
+      notes:
+        prev.notes ||
+        (intentSummary.objectType && intentSummary.objectType !== "NONE"
+          ? `${locale === "fr" ? "Objet intention: " : "Intent object: "}${intentSummary.objectType}`
+          : ""),
+    }));
+    setIntentPrefilled(true);
+  }, [intentSummary, intentPrefilled, locale]);
+
+  useEffect(() => {
+    setIntentAttachState(null);
+  }, [intentSummary?.id, createdTripId]);
+
+  async function attachIntentToTrip() {
+    if (!intentSummary?.id || !createdTripId) return;
+
+    setAttachingIntent(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/orchestrator/intents/${intentSummary.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "MATCHED", targetVertical: "GP", targetEntityId: createdTripId }),
+      });
+
+      const body = (await response.json().catch(() => null)) as { message?: string; intent?: OrchestratorIntent } | null;
+      if (!response.ok) {
+        if (response.status === 400 || response.status === 409) {
+          setIntentAttachState("resolved");
+          setSuccess(t.intentAlreadyResolved);
+          if (body?.intent) {
+            setIntentSummary(body.intent);
+          }
+          return;
+        }
+        if (response.status === 403) {
+          setIntentAttachState("forbidden");
+          setSuccess(t.intentAttachForbidden);
+          return;
+        }
+        setError(body?.message ?? t.intentAttachError);
+        return;
+      }
+
+      setIntentSummary(body?.intent ?? { ...intentSummary, status: "MATCHED", targetVertical: "GP", targetEntityId: createdTripId });
+      setIntentAttachState("attached");
+      setSuccess(t.intentAttached);
+      onPublished?.();
+    } catch {
+      setError(t.intentAttachError);
+    } finally {
+      setAttachingIntent(false);
+    }
+  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -243,6 +425,44 @@ export default function GpTripPublisher({
       </div>
 
       {!canPublish && <p className="text-xs text-amber-300">{t.forbidden}</p>}
+
+      {intentSummary && intentLoaded ? (
+        <section className="space-y-3 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">{t.intentBadgeTitle}</p>
+              <p className="mt-1 text-xs text-zinc-300">{t.intentSummaryHint}</p>
+            </div>
+            <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100">
+              {intentAttachState === "attached" ? t.intentAttachedState : intentAttachState === "resolved" ? t.intentHandledState : intentAttachState === "forbidden" ? t.intentForbiddenState : intentSummary.status}
+            </span>
+          </div>
+          <div className="grid gap-2 text-xs text-zinc-300 md:grid-cols-3">
+            <p>
+              <span className="text-zinc-400">{t.fromTo}: </span>
+              {(intentSummary.fromCity ?? "-") + " -> " + (intentSummary.toCity ?? "-")}
+            </p>
+            <p>
+              <span className="text-zinc-400">{t.objectType}: </span>
+              {objectTypeLabel(intentSummary.objectType)}
+            </p>
+            <p>
+              <span className="text-zinc-400">{t.weight}: </span>
+              {typeof intentSummary.weightKg === "number" ? `${intentSummary.weightKg} kg` : "-"}
+            </p>
+          </div>
+          {createdTripId && intentSummary.status === "OPEN" && intentAttachState === null ? (
+            <button
+              type="button"
+              onClick={() => void attachIntentToTrip()}
+              disabled={attachingIntent}
+              className="h-10 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-4 text-sm font-medium text-cyan-100 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {attachingIntent ? `${t.intentAttach}...` : t.intentAttach}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.groupRoute}</h3>

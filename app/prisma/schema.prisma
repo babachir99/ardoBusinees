@@ -417,6 +417,10 @@ enum CrossVerticalIntentStatus {
   EXPIRED
 }
 
+enum CrossVerticalTargetVertical {
+  GP
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -861,6 +865,11 @@ model CrossVerticalIntent {
   fromCity        String?
   toCity          String?
   status          CrossVerticalIntentStatus @default(OPEN)
+  targetVertical  CrossVerticalTargetVertical?
+  targetEntityId  String?
+  matchedAt       DateTime?
+  closedAt        DateTime?
+  expiredAt       DateTime?
   createdByUserId String
   createdAt       DateTime                  @default(now())
 
@@ -869,6 +878,7 @@ model CrossVerticalIntent {
   @@index([createdByUserId, createdAt])
   @@index([status, createdAt])
   @@index([sourceVertical, sourceEntityId])
+  @@index([targetVertical, targetEntityId])
 }
 
 model SellerProfile {
