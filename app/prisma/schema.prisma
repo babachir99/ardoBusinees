@@ -389,6 +389,34 @@ enum CarPublisherStatus {
   SUSPENDED
 }
 
+enum CrossVerticalSourceVertical {
+  CARS
+  SHOP
+  IMMO
+  PRESTA
+}
+
+enum CrossVerticalIntentType {
+  TRANSPORT
+  LOCAL_DELIVERY
+  SERVICE_REQUEST
+}
+
+enum CrossVerticalObjectType {
+  DOCUMENTS
+  SMALL_PARCEL
+  PARTS
+  KEYS
+  NONE
+}
+
+enum CrossVerticalIntentStatus {
+  OPEN
+  MATCHED
+  CLOSED
+  EXPIRED
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -455,6 +483,7 @@ model User {
   carListings               CarListing[]
   carPublisherMemberships   CarPublisherMember[]
   carMonetizationPurchasesCreated CarMonetizationPurchase[] @relation("CarMonetizationCreatedBy")
+  crossVerticalIntentsCreated CrossVerticalIntent[]
 }
 
 model UserAddress {
@@ -818,6 +847,28 @@ model CarMonetizationPurchase {
   @@index([status, kind])
   @@index([listingId, createdAt])
   @@index([publisherId, createdAt])
+}
+
+model CrossVerticalIntent {
+  id              String                    @id @default(cuid())
+  sourceVertical  CrossVerticalSourceVertical
+  sourceEntityId  String
+  intentType      CrossVerticalIntentType
+  objectType      CrossVerticalObjectType   @default(NONE)
+  weightKg        Float?
+  fromCountry     String?
+  toCountry       String?
+  fromCity        String?
+  toCity          String?
+  status          CrossVerticalIntentStatus @default(OPEN)
+  createdByUserId String
+  createdAt       DateTime                  @default(now())
+
+  createdBy User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([createdByUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([sourceVertical, sourceEntityId])
 }
 
 model SellerProfile {

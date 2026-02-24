@@ -41,7 +41,8 @@ function hasRequiredDelegates(client: PrismaClient) {
     "userRoleAssignment" in runtimeClient &&
     "immoListing" in runtimeClient &&
     "immoPublisher" in runtimeClient &&
-    "immoPublisherMember" in runtimeClient
+    "immoPublisherMember" in runtimeClient &&
+    "crossVerticalIntent" in runtimeClient
   );
 }
 

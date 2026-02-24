@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
 import { hasUserRole } from "@/lib/userRoles";
+import CarsGpIntentSuggestion from "@/components/cars/CarsGpIntentSuggestion";
+import { isEligibleForGP } from "@/lib/orchestratorEligibility";
 
 export default async function CarListingDetailPage({
   params,
@@ -62,6 +64,19 @@ export default async function CarListingDetailPage({
     notFound();
   }
 
+  const partsShippingHint = /(piece|pieces|part|parts|spare|engine|moteur|gearbox|boite)/i.test(
+    `${listing.title} ${listing.description}`
+  );
+  const showGpSuggestion =
+    listing.status === "PUBLISHED" &&
+    isEligibleForGP({
+      intentType: "TRANSPORT",
+      objectType: partsShippingHint ? "PARTS" : "NONE",
+      fromCountry: listing.country,
+      fromCity: listing.city,
+    }) &&
+    (listing.country.toUpperCase() !== "SN" || partsShippingHint);
+
   const t = {
     back: locale === "fr" ? "Retour aux annonces" : "Back to listings",
     spec: locale === "fr" ? "Specifications" : "Specifications",
@@ -77,6 +92,7 @@ export default async function CarListingDetailPage({
     verified: locale === "fr" ? "Verifie" : "Verified",
     viewDealer: locale === "fr" ? "Voir la vitrine" : "View storefront",
     photos: locale === "fr" ? "Photos" : "Photos",
+    gpSuggestTitle: locale === "fr" ? "Transport international (GP)" : "International transport (GP)",
   };
 
   return (
@@ -146,6 +162,16 @@ export default async function CarListingDetailPage({
           </div>
 
           <p className="mt-5 whitespace-pre-line text-sm text-zinc-200">{listing.description}</p>
+
+          {showGpSuggestion ? (
+            <CarsGpIntentSuggestion
+              locale={locale}
+              listingId={listing.id}
+              fromCountry={listing.country}
+              fromCity={listing.city}
+              objectType={partsShippingHint ? "PARTS" : "NONE"}
+            />
+          ) : null}
         </section>
       </main>
     </div>
