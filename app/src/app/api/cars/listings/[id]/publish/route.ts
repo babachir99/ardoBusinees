@@ -4,9 +4,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   canAccessAdmin,
-  canPublishAuto,
+  canPublishCars,
   errorResponse,
-} from "@/app/api/auto/listings/_shared";
+} from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
 export async function POST(
@@ -22,12 +22,12 @@ export async function POST(
     );
   }
 
-  if (!canPublishAuto(session.user)) {
+  if (!canPublishCars(session.user)) {
     auditLog({
       correlationId,
       actor: { userId: session.user.id, role: session.user.role ?? null },
-      action: "auto.listingPublish",
-      entity: { type: "auto_listing" },
+      action: "cars.listingPublish",
+      entity: { type: "car_listing" },
       outcome: "DENIED",
       reason: AuditReason.FORBIDDEN,
       metadata: { reason: "ROLE_REQUIRED" },
@@ -41,7 +41,7 @@ export async function POST(
 
   const { id } = await context.params;
   const isAdmin = canAccessAdmin(session.user);
-  const listing = await prisma.autoListing.findUnique({
+  const listing = await prisma.carListing.findUnique({
     where: { id },
     select: {
       id: true,
@@ -53,8 +53,6 @@ export async function POST(
           id: true,
           type: true,
           status: true,
-          includedPublishedQuota: true,
-          extraSlots: true,
         },
       },
     },
@@ -68,8 +66,8 @@ export async function POST(
     auditLog({
       correlationId,
       actor: { userId: session.user.id, role: session.user.role ?? null },
-      action: "auto.listingPublish",
-      entity: { type: "auto_listing", id },
+      action: "cars.listingPublish",
+      entity: { type: "car_listing", id },
       outcome: "DENIED",
       reason: AuditReason.FORBIDDEN,
       metadata: { ownerId: listing.ownerId },
@@ -80,25 +78,7 @@ export async function POST(
       correlationId
     );
   }
-
-
-  if (listing.publisherId && listing.publisher && listing.publisher.type === "DEALER" && listing.publisher.status === "ACTIVE") {
-    const publishedCount = await prisma.autoListing.count({
-      where: {
-        publisherId: listing.publisherId,
-        status: "PUBLISHED",
-      },
-    });
-
-    const allowedQuota = listing.publisher.includedPublishedQuota + listing.publisher.extraSlots;
-    if (publishedCount >= allowedQuota) {
-      return withCorrelationId(
-        errorResponse(409, "QUOTA_EXCEEDED", "Dealer published quota exceeded. Buy EXTRA_SLOTS_10 to publish more listings."),
-        correlationId
-      );
-    }
-  }
-  const result = await prisma.autoListing.updateMany({
+  const result = await prisma.carListing.updateMany({
     where: {
       id,
       ...(isAdmin ? {} : { ownerId: session.user.id }),
@@ -111,8 +91,8 @@ export async function POST(
     auditLog({
       correlationId,
       actor: { userId: session.user.id, role: session.user.role ?? null },
-      action: "auto.listingPublish",
-      entity: { type: "auto_listing", id },
+      action: "cars.listingPublish",
+      entity: { type: "car_listing", id },
       outcome: "CONFLICT",
       reason: AuditReason.STATE_CONFLICT,
       metadata: { currentStatus: listing.status },
@@ -124,7 +104,7 @@ export async function POST(
     );
   }
 
-  const updated = await prisma.autoListing.findUnique({
+  const updated = await prisma.carListing.findUnique({
     where: { id },
     select: {
       id: true,
@@ -136,8 +116,8 @@ export async function POST(
   auditLog({
     correlationId,
     actor: { userId: session.user.id, role: session.user.role ?? null },
-    action: "auto.listingPublish",
-    entity: { type: "auto_listing", id },
+    action: "cars.listingPublish",
+    entity: { type: "car_listing", id },
     outcome: "SUCCESS",
     reason: AuditReason.SUCCESS,
     metadata: { status: updated?.status ?? null },

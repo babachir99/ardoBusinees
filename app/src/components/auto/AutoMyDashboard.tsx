@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
+import { Link, useRouter } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 
 type PublisherSummary = {
@@ -28,6 +29,9 @@ type AutoListingItem = {
   fuelType: "GASOLINE" | "DIESEL" | "HYBRID" | "ELECTRIC" | "OTHER";
   gearbox: "MANUAL" | "AUTO" | "OTHER";
   status: "DRAFT" | "PUBLISHED" | "PAUSED" | "ARCHIVED";
+  isFeatured: boolean;
+  featuredUntil: string | null;
+  boostUntil: string | null;
   createdAt: string;
   updatedAt: string;
   publisherId: string | null;
@@ -36,12 +40,27 @@ type AutoListingItem = {
 
 type DealerOption = PublisherSummary & {
   role: "OWNER" | "AGENT";
+  includedPublishedQuota: number;
+  extraSlots: number;
+  usedPublishedCount: number;
+  boostCredits: number;
+  featuredCredits: number;
+};
+
+type AutoMonetizationPurchase = {
+  id: string;
+  listingId: string | null;
+  publisherId: string;
+  kind: "FEATURED" | "BOOST" | "BOOST_PACK_10" | "FEATURED_PACK_4" | "EXTRA_SLOTS_10";
+  status: "PENDING" | "CONFIRMED" | "FAILED" | "EXPIRED";
+  createdAt: string;
 };
 
 type Props = {
   locale: string;
   listings: AutoListingItem[];
   dealers: DealerOption[];
+  recentPurchases: AutoMonetizationPurchase[];
 };
 
 type ListingForm = {
@@ -59,6 +78,9 @@ type ListingForm = {
   gearbox: AutoListingItem["gearbox"];
   publisherId: string;
 };
+
+type ListingMonetizationKind = "FEATURED" | "BOOST";
+type PackMonetizationKind = "BOOST_PACK_10" | "FEATURED_PACK_4" | "EXTRA_SLOTS_10";
 
 function emptyForm(): ListingForm {
   return {
@@ -78,12 +100,14 @@ function emptyForm(): ListingForm {
   };
 }
 
-export default function AutoMyDashboard({ locale, listings: initialListings, dealers }: Props) {
+export default function AutoMyDashboard({ locale, listings: initialListings, dealers, recentPurchases }: Props) {
+  const router = useRouter();
   const [listings, setListings] = useState(initialListings);
   const [createForm, setCreateForm] = useState<ListingForm>(emptyForm());
   const [edits, setEdits] = useState<Record<string, ListingForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [monetizationPending, setMonetizationPending] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
@@ -128,9 +152,52 @@ export default function AutoMyDashboard({ locale, listings: initialListings, dea
         locale === "fr"
           ? "Aucune adhesion concessionnaire active."
           : "No active dealer membership.",
+      quota: locale === "fr" ? "Quota publie" : "Published quota",
+      credits: locale === "fr" ? "Credits" : "Credits",
+      buyBoostPack: locale === "fr" ? "Acheter Boost x10" : "Buy Boost x10",
+      buyFeaturedPack: locale === "fr" ? "Acheter Mise en avant x4" : "Buy Featured x4",
+      buyExtraSlots: locale === "fr" ? "Acheter +10 slots" : "Buy +10 slots",
+      monetizationFeatured: locale === "fr" ? "Mettre en avant (7j)" : "Feature (7d)",
+      monetizationBoost: locale === "fr" ? "Booster (3j)" : "Boost (3d)",
+      monetizationFeaturedCredit: locale === "fr" ? "Utiliser credit mise en avant" : "Use featured credit",
+      monetizationBoostCredit: locale === "fr" ? "Utiliser credit boost" : "Use boost credit",
+      featuredUntilLabel: locale === "fr" ? "Mise en avant jusqu au" : "Featured until",
+      boostUntilLabel: locale === "fr" ? "Boost jusqu au" : "Boost until",
+      receipt: locale === "fr" ? "Recu" : "Receipt",
+      retry: locale === "fr" ? "Reessayer" : "Retry",
+      checkoutMissing: locale === "fr" ? "Checkout indisponible." : "Checkout unavailable.",
+      creditApplied: locale === "fr" ? "Credit applique avec succes." : "Credit applied successfully.",
     }),
     [locale]
   );
+
+  const dealerById = useMemo(() => new Map(dealers.map((dealer) => [dealer.id, dealer])), [dealers]);
+
+  const latestListingPurchaseByKind = useMemo(() => {
+    const map = new Map<string, AutoMonetizationPurchase>();
+    for (const purchase of recentPurchases) {
+      if (!purchase.listingId) continue;
+      const key = `${purchase.listingId}:${purchase.kind}`;
+      if (!map.has(key)) map.set(key, purchase);
+    }
+    return map;
+  }, [recentPurchases]);
+
+  const latestDealerPurchaseByKind = useMemo(() => {
+    const map = new Map<string, AutoMonetizationPurchase>();
+    for (const purchase of recentPurchases) {
+      const key = `${purchase.publisherId}:${purchase.kind}`;
+      if (!map.has(key)) map.set(key, purchase);
+    }
+    return map;
+  }, [recentPurchases]);
+
+  function purchaseStatusLabel(status: AutoMonetizationPurchase["status"]) {
+    if (status === "PENDING") return locale === "fr" ? "Paiement en attente" : "Payment pending";
+    if (status === "CONFIRMED") return locale === "fr" ? "Paiement confirme" : "Payment confirmed";
+    if (status === "FAILED") return locale === "fr" ? "Paiement echoue" : "Payment failed";
+    return locale === "fr" ? "Paiement expire" : "Payment expired";
+  }
 
   function getStatusLabel(status: AutoListingItem["status"]) {
     if (status === "DRAFT") return t.draft;
@@ -280,6 +347,93 @@ export default function AutoMyDashboard({ locale, listings: initialListings, dea
     setMessage(t.statusUpdated);
   }
 
+  async function startCheckout(
+    pendingKey: string,
+    payload: { kind: ListingMonetizationKind | PackMonetizationKind; listingId?: string; publisherId?: string }
+  ) {
+    setMonetizationPending((prev) => ({ ...prev, [pendingKey]: true }));
+    setErrorMsg("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/auto/monetization/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | {
+            message?: string;
+            checkoutUrl?: string | null;
+            appliedWithCredits?: boolean;
+            listing?: { id: string; featuredUntil?: string | null; boostUntil?: string | null };
+          }
+        | null;
+
+      if (!response.ok) {
+        setErrorMsg(body?.message ?? t.genericError);
+        return;
+      }
+
+      if (body?.appliedWithCredits) {
+        setMessage(t.creditApplied);
+        router.refresh();
+        return;
+      }
+
+      if (body?.checkoutUrl) {
+        window.location.href = body.checkoutUrl;
+        return;
+      }
+
+      setMessage(t.checkoutMissing);
+    } catch {
+      setErrorMsg(t.genericError);
+    } finally {
+      setMonetizationPending((prev) => ({ ...prev, [pendingKey]: false }));
+    }
+  }
+
+  async function applyCredit(listingId: string, kind: ListingMonetizationKind) {
+    const pendingKey = `credit:${listingId}:${kind}`;
+    setMonetizationPending((prev) => ({ ...prev, [pendingKey]: true }));
+    setErrorMsg("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/auto/monetization/apply-credit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, kind }),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        setErrorMsg(body?.message ?? t.genericError);
+        return;
+      }
+
+      setMessage(t.creditApplied);
+      router.refresh();
+    } catch {
+      setErrorMsg(t.genericError);
+    } finally {
+      setMonetizationPending((prev) => ({ ...prev, [pendingKey]: false }));
+    }
+  }
+
+  function startMonetization(listingId: string, kind: ListingMonetizationKind) {
+    void startCheckout(`listing:${listingId}:${kind}`, { listingId, kind });
+  }
+
+  function startPackPurchase(publisherId: string, kind: PackMonetizationKind) {
+    void startCheckout(`pack:${publisherId}:${kind}`, { publisherId, kind });
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
@@ -293,11 +447,34 @@ export default function AutoMyDashboard({ locale, listings: initialListings, dea
         {dealers.length === 0 ? (
           <p className="mt-2 text-xs text-zinc-400">{t.noDealerMember}</p>
         ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             {dealers.map((dealer) => (
-              <span key={dealer.id} className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
-                {dealer.name} ({dealer.role})
-              </span>
+              <article key={dealer.id} className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">{dealer.name}</p>
+                  <span className="text-[11px] text-cyan-100">{dealer.role}</span>
+                </div>
+                <p className="mt-1 text-xs text-zinc-300">{t.quota}: {dealer.usedPublishedCount}/{dealer.includedPublishedQuota + dealer.extraSlots}</p>
+                <p className="mt-1 text-xs text-zinc-300">{t.credits}: boost={dealer.boostCredits}, featured={dealer.featuredCredits}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => startPackPurchase(dealer.id, "BOOST_PACK_10")} disabled={monetizationPending[`pack:${dealer.id}:BOOST_PACK_10`] === true} className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60">{monetizationPending[`pack:${dealer.id}:BOOST_PACK_10`] ? "..." : t.buyBoostPack}</button>
+                  <button type="button" onClick={() => startPackPurchase(dealer.id, "FEATURED_PACK_4")} disabled={monetizationPending[`pack:${dealer.id}:FEATURED_PACK_4`] === true} className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60">{monetizationPending[`pack:${dealer.id}:FEATURED_PACK_4`] ? "..." : t.buyFeaturedPack}</button>
+                  <button type="button" onClick={() => startPackPurchase(dealer.id, "EXTRA_SLOTS_10")} disabled={monetizationPending[`pack:${dealer.id}:EXTRA_SLOTS_10`] === true} className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs font-semibold text-emerald-100 disabled:opacity-60">{monetizationPending[`pack:${dealer.id}:EXTRA_SLOTS_10`] ? "..." : t.buyExtraSlots}</button>
+                </div>
+                <div className="mt-3 space-y-1 text-xs text-zinc-300">
+                  {(["BOOST_PACK_10", "FEATURED_PACK_4", "EXTRA_SLOTS_10"] as const).map((kind) => {
+                    const purchase = latestDealerPurchaseByKind.get(`${dealer.id}:${kind}`);
+                    if (!purchase) return null;
+                    return (
+                      <div key={kind} className="flex flex-wrap items-center gap-2">
+                        <span>{kind}: {purchaseStatusLabel(purchase.status)}</span>
+                        {purchase.status !== "PENDING" ? <Link href={`/auto/my/receipts/${purchase.id}`} className="rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">{t.receipt}</Link> : null}
+                        {purchase.status === "FAILED" ? <button type="button" onClick={() => startPackPurchase(dealer.id, kind)} className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-semibold text-white">{t.retry}</button> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
             ))}
           </div>
         )}
@@ -348,15 +525,22 @@ export default function AutoMyDashboard({ locale, listings: initialListings, dea
         ) : (
           listings.map((listing) => {
             const editForm = edits[listing.id] ?? listingFormFromItem(listing);
+            const featuredPurchase = latestListingPurchaseByKind.get(`${listing.id}:FEATURED`);
+            const boostPurchase = latestListingPurchaseByKind.get(`${listing.id}:BOOST`);
+            const dealer = listing.publisherId ? dealerById.get(listing.publisherId) : undefined;
+            const featuredActive = Boolean(listing.featuredUntil && new Date(listing.featuredUntil).getTime() > Date.now());
+            const boostActive = Boolean(listing.boostUntil && new Date(listing.boostUntil).getTime() > Date.now());
             return (
               <article key={listing.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-lg font-semibold text-white">{listing.title}</h3>
-                  <span className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-300">{getStatusLabel(listing.status)}</span>
+                  <div className="flex flex-wrap items-center gap-2">{featuredActive ? <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] font-semibold text-amber-100">Featured</span> : null}{boostActive ? <span className="rounded-full border border-sky-300/40 px-2 py-0.5 text-[10px] font-semibold text-sky-100">Boost</span> : null}<span className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-300">{getStatusLabel(listing.status)}</span></div>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">{listing.make} {listing.model} - {formatMoney(listing.priceCents, listing.currency, locale)}</p>
                 <p className="mt-1 text-xs text-zinc-500">{t.createdAt}: {new Date(listing.createdAt).toLocaleDateString(locale)}</p>
                 <p className="mt-1 text-xs text-zinc-500">{t.dealerLabel}: {listing.publisher?.name ?? t.individual}</p>
+                {listing.featuredUntil ? <p className="mt-1 text-xs text-amber-200">{t.featuredUntilLabel}: {new Date(listing.featuredUntil).toLocaleDateString(locale)}</p> : null}
+                {listing.boostUntil ? <p className="mt-1 text-xs text-sky-200">{t.boostUntilLabel}: {new Date(listing.boostUntil).toLocaleDateString(locale)}</p> : null}
 
                 {listing.status === "DRAFT" || listing.status === "PAUSED" ? (
                   <div className="mt-4 grid gap-2 md:grid-cols-3">
@@ -398,6 +582,16 @@ export default function AutoMyDashboard({ locale, listings: initialListings, dea
                     <button type="button" disabled={statusBusyId === listing.id} onClick={() => changeStatus(listing.id, "archive")} className="rounded-full border border-rose-300/40 px-4 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60">
                       {t.archive}
                     </button>
+                  ) : null}
+                  {listing.status === "PUBLISHED" && listing.publisherId ? (
+                    <>
+                      <button type="button" onClick={() => ((dealer?.featuredCredits ?? 0) > 0 ? applyCredit(listing.id, "FEATURED") : startMonetization(listing.id, "FEATURED"))} disabled={monetizationPending[`listing:${listing.id}:FEATURED`] === true || monetizationPending[`credit:${listing.id}:FEATURED`] === true} className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60">{(dealer?.featuredCredits ?? 0) > 0 ? t.monetizationFeaturedCredit : t.monetizationFeatured}</button>
+                      <button type="button" onClick={() => ((dealer?.boostCredits ?? 0) > 0 ? applyCredit(listing.id, "BOOST") : startMonetization(listing.id, "BOOST"))} disabled={monetizationPending[`listing:${listing.id}:BOOST`] === true || monetizationPending[`credit:${listing.id}:BOOST`] === true} className="rounded-full border border-sky-300/40 px-3 py-1 text-xs font-semibold text-sky-100 disabled:opacity-60">{(dealer?.boostCredits ?? 0) > 0 ? t.monetizationBoostCredit : t.monetizationBoost}</button>
+                      {featuredPurchase ? <span className="text-xs text-zinc-300">FEATURED: {purchaseStatusLabel(featuredPurchase.status)} {featuredPurchase.status !== "PENDING" ? <Link href={`/auto/my/receipts/${featuredPurchase.id}`} className="ml-1 rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">{t.receipt}</Link> : null}</span> : null}
+                      {boostPurchase ? <span className="text-xs text-zinc-300">BOOST: {purchaseStatusLabel(boostPurchase.status)} {boostPurchase.status !== "PENDING" ? <Link href={`/auto/my/receipts/${boostPurchase.id}`} className="ml-1 rounded-full border border-emerald-300/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-100">{t.receipt}</Link> : null}</span> : null}
+                      {featuredPurchase?.status === "FAILED" ? <button type="button" onClick={() => startMonetization(listing.id, "FEATURED")} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">{t.retry}</button> : null}
+                      {boostPurchase?.status === "FAILED" ? <button type="button" onClick={() => startMonetization(listing.id, "BOOST")} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">{t.retry}</button> : null}
+                    </>
                   ) : null}
                 </div>
               </article>

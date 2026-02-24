@@ -11,10 +11,10 @@ import {
   normalizeUpper,
   parseBoolean,
   parseNullableInt,
-} from "@/app/api/auto/listings/_shared";
+} from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
-const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
+const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "LPG", "OTHER"] as const;
 const GEARBOX_TYPES = ["MANUAL", "AUTO", "OTHER"] as const;
 const SORT_VALUES = ["newest", "price_asc", "price_desc"] as const;
 const PUBLISHER_TYPES = ["INDIVIDUAL", "DEALER"] as const;
@@ -45,7 +45,7 @@ function parsePublisherType(value: unknown): PublisherType | null {
 }
 
 async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
-  const publisher = await prisma.autoPublisher.findUnique({
+  const publisher = await prisma.carPublisher.findUnique({
     where: { id: publisherId },
     select: { id: true, type: true, status: true },
   });
@@ -58,7 +58,7 @@ async function resolvePublisherMembership(publisherId: string, userId: string, i
     return { publisher } as const;
   }
 
-  const membership = await prisma.autoPublisherMember.findFirst({
+  const membership = await prisma.carPublisherMember.findFirst({
     where: {
       publisherId,
       userId,
@@ -92,8 +92,6 @@ export async function GET(request: NextRequest) {
   const publisherSlug = normalizeString(searchParams.get("publisherSlug"));
   const publisherType = parsePublisherType(searchParams.get("publisherType"));
   const verifiedOnly = parseBoolean(searchParams.get("verifiedOnly"));
-  const proRankingRaw = parseBoolean(searchParams.get("proRanking"));
-  const proRanking = proRankingRaw !== false;
   const sort = parseSort(searchParams.get("sort"));
   const take = normalizeTake(searchParams.get("take"), 24, 60);
   const skip = normalizeSkip(searchParams.get("skip"));
@@ -155,34 +153,14 @@ export async function GET(request: NextRequest) {
     where.publisherId = { not: null };
   }
 
-  const now = new Date();
-
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
       ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
-      : proRanking
-      ? [
-          { isFeatured: "desc" as const },
-          { featuredUntil: "desc" as const },
-          { boostUntil: "desc" as const },
-          { createdAt: "desc" as const },
-        ]
       : [{ createdAt: "desc" as const }];
 
-  if (proRanking) {
-    await prisma.autoListing.updateMany({
-      where: {
-        status: "PUBLISHED",
-        isFeatured: true,
-        featuredUntil: { lt: now },
-      },
-      data: { isFeatured: false },
-    }).catch(() => null);
-  }
-
-  const listings = await prisma.autoListing.findMany({
+  const listings = await prisma.carListing.findMany({
     where,
     orderBy,
     take,
@@ -202,9 +180,6 @@ export async function GET(request: NextRequest) {
       fuelType: true,
       gearbox: true,
       status: true,
-      isFeatured: true,
-      featuredUntil: true,
-      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       publisherId: true,
@@ -222,12 +197,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    listings: listings.map((listing) => ({
-      ...listing,
-      isFeatured: Boolean(listing.featuredUntil && listing.featuredUntil > now),
-    })),
-  });
+  return NextResponse.json({ listings });
 }
 
 export async function POST(request: NextRequest) {
@@ -298,7 +268,7 @@ export async function POST(request: NextRequest) {
     publisherForCreateId = access.publisher.id;
   }
 
-  const created = await prisma.autoListing.create({
+  const created = await prisma.carListing.create({
     data: {
       ownerId: session.user.id,
       publisherId: publisherForCreateId,
@@ -352,8 +322,8 @@ export async function POST(request: NextRequest) {
   auditLog({
     correlationId,
     actor: { userId: session.user.id, role: session.user.role ?? null },
-    action: "auto.listingCreate",
-    entity: { type: "auto_listing", id: created.id },
+    action: "cars.listingCreate",
+    entity: { type: "car_listing", id: created.id },
     outcome: "SUCCESS",
     reason: AuditReason.SUCCESS,
     metadata: {

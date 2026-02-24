@@ -29,7 +29,7 @@ function parseIntQuery(value: string | undefined) {
   return Math.max(0, Math.trunc(parsed));
 }
 
-export default async function AutoListingsPage({
+export default async function CarsListingsPage({
   params,
   searchParams,
 }: {
@@ -50,8 +50,8 @@ export default async function AutoListingsPage({
   const mileageMax = parseIntQuery(filters.mileageMax);
   const priceMin = parseIntQuery(filters.priceMin);
   const priceMax = parseIntQuery(filters.priceMax);
-  const fuelType = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"].includes(filters.fuelType ?? "")
-    ? (filters.fuelType as "GASOLINE" | "DIESEL" | "HYBRID" | "ELECTRIC" | "OTHER")
+  const fuelType = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "LPG", "OTHER"].includes(filters.fuelType ?? "")
+    ? (filters.fuelType as "GASOLINE" | "DIESEL" | "HYBRID" | "ELECTRIC" | "LPG" | "OTHER")
     : undefined;
   const gearbox = ["MANUAL", "AUTO", "OTHER"].includes(filters.gearbox ?? "")
     ? (filters.gearbox as "MANUAL" | "AUTO" | "OTHER")
@@ -73,11 +73,7 @@ export default async function AutoListingsPage({
       ...(yearMax !== null ? { lte: yearMax } : {}),
     };
   }
-
-  if (mileageMax !== null) {
-    where.mileageKm = { lte: mileageMax };
-  }
-
+  if (mileageMax !== null) where.mileageKm = { lte: mileageMax };
   if (priceMin !== null || priceMax !== null) {
     where.priceCents = {
       ...(priceMin !== null ? { gte: priceMin } : {}),
@@ -85,20 +81,11 @@ export default async function AutoListingsPage({
     };
   }
 
-  if (publisherType === "DEALER") {
-    where.publisherId = { not: null };
-  } else if (publisherType === "INDIVIDUAL") {
-    where.publisherId = null;
-  }
+  if (publisherType === "DEALER") where.publisherId = { not: null };
+  else if (publisherType === "INDIVIDUAL") where.publisherId = null;
 
   if (publisherSlug) {
-    where.publisher = {
-      is: {
-        slug: publisherSlug,
-        type: "DEALER",
-        status: "ACTIVE",
-      },
-    };
+    where.publisher = { is: { slug: publisherSlug, type: "DEALER", status: "ACTIVE" } };
   }
 
   if (verifiedOnly && publisherType !== "INDIVIDUAL") {
@@ -114,82 +101,61 @@ export default async function AutoListingsPage({
   }
 
   const sort = filters.sort === "price_asc" || filters.sort === "price_desc" ? filters.sort : "newest";
-  const proRanking = sort === "newest";
-  const now = new Date();
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
-      ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
-      : [
-          { isFeatured: "desc" as const },
-          { featuredUntil: "desc" as const },
-          { boostUntil: "desc" as const },
-          { createdAt: "desc" as const },
-        ];
+        ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
+        : [{ createdAt: "desc" as const }];
 
-  if (proRanking) {
-    await prisma.autoListing.updateMany({
-      where: { status: "PUBLISHED", isFeatured: true, featuredUntil: { lt: now } },
-      data: { isFeatured: false },
-    }).catch(() => null);
-  }
-
-  const listings = await prisma.autoListing.findMany({
-    where,
-    orderBy,
-    take: 60,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      priceCents: true,
-      currency: true,
-      country: true,
-      city: true,
-      make: true,
-      model: true,
-      year: true,
-      mileageKm: true,
-      fuelType: true,
-      gearbox: true,
-      isFeatured: true,
-      featuredUntil: true,
-      boostUntil: true,
-      createdAt: true,
-      publisherId: true,
-      publisher: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          verified: true,
-          city: true,
-          country: true,
-          logoUrl: true,
+  const [listings, dealers] = await Promise.all([
+    prisma.carListing.findMany({
+      where,
+      orderBy,
+      take: 60,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        priceCents: true,
+        currency: true,
+        country: true,
+        city: true,
+        make: true,
+        model: true,
+        year: true,
+        mileageKm: true,
+        fuelType: true,
+        gearbox: true,
+        createdAt: true,
+        publisherId: true,
+        publisher: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            verified: true,
+            city: true,
+            country: true,
+            logoUrl: true,
+          },
         },
       },
-    },
-  });
-
-  const dealers = await prisma.autoPublisher.findMany({
-    where: { type: "DEALER", status: "ACTIVE" },
-    orderBy: [{ verified: "desc" }, { name: "asc" }],
-    take: 100,
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      verified: true,
-    },
-  });
+    }),
+    prisma.carPublisher.findMany({
+      where: { type: "DEALER", status: "ACTIVE" },
+      orderBy: [{ verified: "desc" }, { name: "asc" }],
+      take: 100,
+      select: { id: true, name: true, slug: true, verified: true },
+    }),
+  ]);
 
   const t = {
-    title: locale === "fr" ? "JONTAADO AUTO" : "JONTAADO AUTO",
+    title: locale === "fr" ? "JONTAADO CARS" : "JONTAADO CARS",
     subtitle:
       locale === "fr"
-        ? "Annonces auto publiques avec filtres clairs et vitrines concessionnaires."
-        : "Public auto listings with clear filters and dealer storefronts.",
+        ? "Annonces voitures publiques avec filtres clairs et vitrines concessionnaires."
+        : "Public car listings with clear filters and dealer storefronts.",
     filters: locale === "fr" ? "Filtres" : "Filters",
     country: locale === "fr" ? "Pays" : "Country",
     city: locale === "fr" ? "Ville" : "City",
@@ -212,20 +178,18 @@ export default async function AutoListingsPage({
     apply: locale === "fr" ? "Appliquer" : "Apply",
     myListings: locale === "fr" ? "Mes annonces" : "My listings",
     login: locale === "fr" ? "Se connecter" : "Sign in",
-    immo: locale === "fr" ? "IMMO" : "IMMO",
+    immo: "IMMO",
     dealers: locale === "fr" ? "Concessionnaires" : "Dealers",
     details: locale === "fr" ? "Voir" : "View",
-    km: locale === "fr" ? "km" : "km",
+    km: "km",
     individual: locale === "fr" ? "Particulier" : "Individual",
     dealerBadge: locale === "fr" ? "Concessionnaire" : "Dealer",
     individualBadge: locale === "fr" ? "Particulier" : "Individual",
     verified: locale === "fr" ? "Verifie" : "Verified",
-    featuredBadge: locale === "fr" ? "Mis en avant" : "Featured",
-    boostBadge: locale === "fr" ? "Boost" : "Boost",
     empty:
       locale === "fr"
-        ? "Aucune annonce auto publiee pour ces filtres."
-        : "No published auto listing for these filters.",
+        ? "Aucune annonce voiture publiee pour ces filtres."
+        : "No published car listing for these filters.",
   };
 
   return (
@@ -235,20 +199,12 @@ export default async function AutoListingsPage({
           <h1 className="text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 text-sm text-zinc-300">{t.subtitle}</p>
           <div className="mt-4 flex gap-3 text-xs">
-            <Link href="/immo" className="rounded-full border border-white/20 px-3 py-1">
-              {t.immo}
-            </Link>
-            <Link href="/auto/dealers" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">
-              {t.dealers}
-            </Link>
+            <Link href="/immo" className="rounded-full border border-white/20 px-3 py-1">{t.immo}</Link>
+            <Link href="/cars/dealers" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">{t.dealers}</Link>
             {session?.user?.id ? (
-              <Link href="/auto/my" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">
-                {t.myListings}
-              </Link>
+              <Link href="/cars/my" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">{t.myListings}</Link>
             ) : (
-              <Link href="/login?callbackUrl=/auto/my" className="rounded-full border border-white/20 px-3 py-1">
-                {t.login}
-              </Link>
+              <Link href="/login?callbackUrl=/cars/my" className="rounded-full border border-white/20 px-3 py-1">{t.login}</Link>
             )}
           </div>
         </section>
@@ -269,6 +225,7 @@ export default async function AutoListingsPage({
               <option value="DIESEL">Diesel</option>
               <option value="HYBRID">Hybrid</option>
               <option value="ELECTRIC">Electric</option>
+              <option value="LPG">LPG</option>
               <option value="OTHER">Other</option>
             </select>
             <select name="gearbox" defaultValue={gearbox ?? ""} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm">
@@ -307,20 +264,11 @@ export default async function AutoListingsPage({
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {listings.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2 xl:col-span-3">
-              {t.empty}
-            </div>
+            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2 xl:col-span-3">{t.empty}</div>
           ) : (
-            listings.map((listing) => {
-              const featuredActive = Boolean(listing.featuredUntil && listing.featuredUntil > now);
-              const boostActive = Boolean(listing.boostUntil && listing.boostUntil > now);
-              return (
+            listings.map((listing) => (
               <article key={listing.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs text-zinc-400">{listing.make} {listing.model}</p>
-                  {featuredActive ? <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] font-semibold text-amber-100">{t.featuredBadge}</span> : null}
-                  {boostActive ? <span className="rounded-full border border-sky-300/40 px-2 py-0.5 text-[10px] font-semibold text-sky-100">{t.boostBadge}</span> : null}
-                </div>
+                <p className="text-xs text-zinc-400">{listing.make} {listing.model}</p>
                 <h2 className="mt-2 text-lg font-semibold text-white">{listing.title}</h2>
                 <p className="mt-2 line-clamp-2 text-sm text-zinc-300">{listing.description}</p>
                 <p className="mt-3 text-sm text-cyan-200">{formatMoney(listing.priceCents, listing.currency, locale)}</p>
@@ -336,12 +284,10 @@ export default async function AutoListingsPage({
                       {listing.publisher?.verified ? <span className="text-cyan-300">{t.verified}</span> : null}
                     </span>
                   </p>
-                  <Link href={`/auto/${listing.id}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
-                    {t.details}
-                  </Link>
+                  <Link href={`/cars/${listing.id}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">{t.details}</Link>
                 </div>
               </article>
-            );})
+            ))
           )}
         </section>
       </main>

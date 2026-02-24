@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+﻿import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -36,6 +36,9 @@ export default async function AutoMyPage({
         fuelType: true,
         gearbox: true,
         status: true,
+        isFeatured: true,
+        featuredUntil: true,
+        boostUntil: true,
         createdAt: true,
         updatedAt: true,
         publisherId: true,
@@ -73,11 +76,59 @@ export default async function AutoMyPage({
             city: true,
             country: true,
             logoUrl: true,
+            includedPublishedQuota: true,
+            extraSlots: true,
+            monetizationBalance: {
+              select: {
+                boostCredits: true,
+                featuredCredits: true,
+              },
+            },
           },
         },
       },
     }),
   ]);
+
+  const dealerIds = dealerMemberships.map((item) => item.publisher.id);
+  const listingIds = listings.map((item) => item.id);
+
+  const [recentPurchases, publishedCounts] = await Promise.all([
+    dealerIds.length || listingIds.length
+      ? prisma.autoMonetizationPurchase.findMany({
+          where: {
+            OR: [
+              ...(dealerIds.length ? [{ publisherId: { in: dealerIds } }] : []),
+              ...(listingIds.length ? [{ listingId: { in: listingIds } }] : []),
+            ],
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 120,
+          select: {
+            id: true,
+            listingId: true,
+            publisherId: true,
+            kind: true,
+            status: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    dealerIds.length
+      ? prisma.autoListing.groupBy({
+          by: ["publisherId"],
+          where: {
+            publisherId: { in: dealerIds },
+            status: "PUBLISHED",
+          },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const publishedCountByPublisher = new Map(
+    publishedCounts.map((item) => [item.publisherId ?? "", item._count._all])
+  );
 
   return (
     <div className="min-h-screen bg-jonta px-6 pb-24 pt-8 text-zinc-100">
@@ -97,6 +148,16 @@ export default async function AutoMyPage({
             ...item,
             createdAt: item.createdAt.toISOString(),
             updatedAt: item.updatedAt.toISOString(),
+            featuredUntil: item.featuredUntil?.toISOString() ?? null,
+            boostUntil: item.boostUntil?.toISOString() ?? null,
+          }))}
+          recentPurchases={recentPurchases.map((item) => ({
+            id: item.id,
+            listingId: item.listingId,
+            publisherId: item.publisherId,
+            kind: item.kind,
+            status: item.status,
+            createdAt: item.createdAt.toISOString(),
           }))}
           dealers={dealerMemberships.map((item) => ({
             id: item.publisher.id,
@@ -107,6 +168,11 @@ export default async function AutoMyPage({
             country: item.publisher.country,
             logoUrl: item.publisher.logoUrl,
             role: item.role,
+            includedPublishedQuota: item.publisher.includedPublishedQuota,
+            extraSlots: item.publisher.extraSlots,
+            usedPublishedCount: publishedCountByPublisher.get(item.publisher.id) ?? 0,
+            boostCredits: item.publisher.monetizationBalance?.boostCredits ?? 0,
+            featuredCredits: item.publisher.monetizationBalance?.featuredCredits ?? 0,
           }))}
         />
       </main>

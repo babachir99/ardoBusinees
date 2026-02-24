@@ -335,6 +335,44 @@ enum AutoPublisherStatus {
   SUSPENDED
 }
 
+
+enum CarListingStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum CarFuelType {
+  GASOLINE
+  DIESEL
+  HYBRID
+  ELECTRIC
+  LPG
+  OTHER
+}
+
+enum CarGearbox {
+  MANUAL
+  AUTO
+  OTHER
+}
+
+enum CarPublisherType {
+  INDIVIDUAL
+  DEALER
+}
+
+enum CarPublisherMemberRole {
+  OWNER
+  AGENT
+}
+
+enum CarPublisherStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 model User {
   id                     String    @id @default(cuid())
   email                  String    @unique
@@ -398,6 +436,8 @@ model User {
   autoListings              AutoListing[]
   autoPublisherMemberships  AutoPublisherMember[]
   autoMonetizationPurchasesCreated AutoMonetizationPurchase[] @relation("AutoMonetizationCreatedBy")
+  carListings               CarListing[]
+  carPublisherMemberships   CarPublisherMember[]
 }
 
 model UserAddress {
@@ -462,8 +502,6 @@ model ImmoListing {
   @@index([status, propertyType])
   @@index([ownerId, status, createdAt])
   @@index([publisherId, status])
-  @@index([status, featuredUntil])
-  @@index([status, boostUntil])
   @@index([status, featuredUntil])
   @@index([status, boostUntil])
 }
@@ -651,6 +689,73 @@ model AutoMonetizationPurchase {
   @@index([status, kind])
   @@index([listingId, createdAt])
   @@index([publisherId, createdAt])
+}
+
+
+model CarListing {
+  id          String           @id @default(cuid())
+  ownerId     String
+  publisherId String?
+  status      CarListingStatus @default(DRAFT)
+  title       String
+  description String
+  priceCents  Int
+  currency    String           @default("XOF")
+  country     String           @default("SN")
+  city        String
+  make        String
+  model       String
+  year        Int
+  mileageKm   Int
+  fuelType    CarFuelType
+  gearbox     CarGearbox
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  owner     User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  publisher CarPublisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([country, city, status])
+  @@index([make, model, year, status])
+  @@index([publisherId, status])
+  @@index([ownerId, status, createdAt])
+}
+
+model CarPublisher {
+  id        String             @id @default(cuid())
+  type      CarPublisherType
+  name      String
+  slug      String             @unique
+  status    CarPublisherStatus @default(ACTIVE)
+  verified  Boolean            @default(false)
+  country   String?
+  city      String?
+  logoUrl   String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  members  CarPublisherMember[]
+  listings CarListing[]
+
+  @@index([status, verified])
+  @@index([country, city, status])
+}
+
+model CarPublisherMember {
+  id          String                 @id @default(cuid())
+  publisherId String
+  userId      String
+  role        CarPublisherMemberRole @default(AGENT)
+  status      UserRoleStatus         @default(ACTIVE)
+  createdAt   DateTime               @default(now())
+
+  publisher CarPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publisherId, userId])
+  @@index([userId, status])
+  @@index([publisherId, status])
 }
 
 model SellerProfile {

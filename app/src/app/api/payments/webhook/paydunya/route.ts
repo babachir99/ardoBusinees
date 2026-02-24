@@ -222,6 +222,8 @@ export async function POST(request: NextRequest) {
       let tiakPayoutReadyCount = 0;
       let immoPurchaseId: string | null = null;
       let immoPurchaseStatus: string | null = null;
+      let autoPurchaseId: string | null = null;
+      let autoPurchaseStatus: string | null = null;
 
       if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
         if (currentLedger.contextType === "PRESTA_BOOKING") {
@@ -358,6 +360,117 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        if (currentLedger.contextType === "AUTO_MONETIZATION") {
+          const purchase = await tx.autoMonetizationPurchase.findFirst({
+            where: { paymentLedgerId: currentLedger.id },
+            select: {
+              id: true,
+              listingId: true,
+              publisherId: true,
+              kind: true,
+              durationDays: true,
+              status: true,
+              listing: {
+                select: {
+                  id: true,
+                  featuredUntil: true,
+                  boostUntil: true,
+                },
+              },
+            },
+          });
+
+          if (purchase) {
+            const confirmed = await tx.autoMonetizationPurchase.updateMany({
+              where: {
+                id: purchase.id,
+                status: "PENDING",
+              },
+              data: {
+                status: "CONFIRMED",
+              },
+            });
+
+            if (confirmed.count === 1) {
+              const now = new Date();
+
+              if (purchase.kind === "FEATURED" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.featuredUntil && purchase.listing.featuredUntil > now
+                    ? purchase.listing.featuredUntil
+                    : now;
+                const featuredUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
+                await tx.autoListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    isFeatured: true,
+                    featuredUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              } else if (purchase.kind === "BOOST" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.boostUntil && purchase.listing.boostUntil > now
+                    ? purchase.listing.boostUntil
+                    : now;
+                const boostUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
+                await tx.autoListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    boostUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              } else if (purchase.kind === "BOOST_PACK_10") {
+                await tx.autoMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 10,
+                    featuredCredits: 0,
+                  },
+                  update: {
+                    boostCredits: { increment: 10 },
+                  },
+                });
+              } else if (purchase.kind === "FEATURED_PACK_4") {
+                await tx.autoMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 0,
+                    featuredCredits: 4,
+                  },
+                  update: {
+                    featuredCredits: { increment: 4 },
+                  },
+                });
+              } else if (purchase.kind === "EXTRA_SLOTS_10") {
+                await tx.autoPublisher.updateMany({
+                  where: {
+                    id: purchase.publisherId,
+                    type: "DEALER",
+                    status: "ACTIVE",
+                  },
+                  data: {
+                    extraSlots: { increment: 10 },
+                  },
+                });
+              }
+            }
+
+            const resolved = await tx.autoMonetizationPurchase.findUnique({
+              where: { id: purchase.id },
+              select: { id: true, status: true },
+            });
+            autoPurchaseId = resolved?.id ?? purchase.id;
+            autoPurchaseStatus = resolved?.status ?? purchase.status;
+          }
+        }
         if (currentLedger.orderId) {
           const paidAt = new Date();
 
@@ -448,6 +561,33 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        if (currentLedger.contextType === "AUTO_MONETIZATION") {
+          const failed = await tx.autoMonetizationPurchase.updateMany({
+            where: {
+              paymentLedgerId: currentLedger.id,
+              status: "PENDING",
+            },
+            data: {
+              status: "FAILED",
+            },
+          });
+
+          if (failed.count === 0) {
+            const resolved = await tx.autoMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            autoPurchaseId = resolved?.id ?? null;
+            autoPurchaseStatus = resolved?.status ?? null;
+          } else {
+            const resolved = await tx.autoMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            autoPurchaseId = resolved?.id ?? null;
+            autoPurchaseStatus = resolved?.status ?? "FAILED";
+          }
+        }
         if (currentLedger.orderId) {
           await tx.payment.updateMany({
           where: {
@@ -487,6 +627,8 @@ export async function POST(request: NextRequest) {
         tiakPayoutReadyCount,
         immoPurchaseId,
         immoPurchaseStatus,
+        autoPurchaseId,
+        autoPurchaseStatus,
       };
     });
 
@@ -506,6 +648,8 @@ export async function POST(request: NextRequest) {
         tiakPayoutReadyCount: transition.tiakPayoutReadyCount,
         immoPurchaseId: transition.immoPurchaseId,
         immoPurchaseStatus: transition.immoPurchaseStatus,
+        autoPurchaseId: transition.autoPurchaseId,
+        autoPurchaseStatus: transition.autoPurchaseStatus,
       },
     });
 
@@ -525,6 +669,27 @@ export async function POST(request: NextRequest) {
         metadata: {
           ledgerId: transition.ledgerId,
           purchaseStatus: transition.immoPurchaseStatus,
+        },
+      });
+    }
+
+
+    if (transition.contextType === "AUTO_MONETIZATION") {
+      auditLog({
+        correlationId,
+        actor,
+        action:
+          transition.ledgerStatus === "CONFIRMED"
+            ? "auto.monetizationConfirmed"
+            : transition.ledgerStatus === "FAILED"
+              ? "auto.monetizationFailed"
+              : "auto.monetizationPending",
+        entity: { type: "AutoMonetizationPurchase", id: transition.autoPurchaseId ?? transition.contextId },
+        outcome: "SUCCESS",
+        reason: AuditReason.SUCCESS,
+        metadata: {
+          ledgerId: transition.ledgerId,
+          purchaseStatus: transition.autoPurchaseStatus,
         },
       });
     }

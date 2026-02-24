@@ -8,10 +8,10 @@ import {
   normalizeString,
   normalizeUpper,
   parseNullableInt,
-} from "@/app/api/auto/listings/_shared";
+} from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 
-const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
+const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "LPG", "OTHER"] as const;
 const GEARBOX_TYPES = ["MANUAL", "AUTO", "OTHER"] as const;
 type FuelType = (typeof FUEL_TYPES)[number];
 type GearboxType = (typeof GEARBOX_TYPES)[number];
@@ -34,7 +34,7 @@ function parseStatusAction(value: unknown): StatusAction | null {
 }
 
 async function loadListing(id: string) {
-  return prisma.autoListing.findUnique({
+  return prisma.carListing.findUnique({
     where: { id },
     select: {
       id: true,
@@ -53,9 +53,6 @@ async function loadListing(id: string) {
       fuelType: true,
       gearbox: true,
       status: true,
-      isFeatured: true,
-      featuredUntil: true,
-      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       publisher: {
@@ -73,16 +70,16 @@ async function loadListing(id: string) {
   });
 }
 
-type LoadedAutoListing = Awaited<ReturnType<typeof loadListing>>;
+type LoadedCarListing = Awaited<ReturnType<typeof loadListing>>;
 
-function sanitizePublicListing(listing: LoadedAutoListing) {
+function sanitizePublicListing(listing: LoadedCarListing) {
   if (!listing) return null;
   const { ownerId: _ownerId, ...safeListing } = listing;
   return safeListing;
 }
 
 async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
-  const publisher = await prisma.autoPublisher.findUnique({
+  const publisher = await prisma.carPublisher.findUnique({
     where: { id: publisherId },
     select: { id: true, type: true, status: true },
   });
@@ -95,7 +92,7 @@ async function resolvePublisherMembership(publisherId: string, userId: string, i
     return { publisher } as const;
   }
 
-  const membership = await prisma.autoPublisherMember.findFirst({
+  const membership = await prisma.carPublisherMember.findFirst({
     where: {
       publisherId,
       userId,
@@ -177,7 +174,7 @@ export async function PATCH(
         400,
         "INVALID_STATUS",
         normalizedStatusRaw === "PUBLISHED"
-          ? "Use POST /api/auto/listings/{id}/publish to publish listing."
+          ? "Use POST /api/cars/listings/{id}/publish to publish listing."
           : "status supports only PAUSED or ARCHIVED in this endpoint."
       ),
       correlationId
@@ -344,8 +341,8 @@ export async function PATCH(
     auditLog({
       correlationId,
       actor: { userId: session.user.id, role: session.user.role ?? null },
-      action: "auto.listingAttachPublisher",
-      entity: { type: "auto_listing", id },
+      action: "cars.listingAttachPublisher",
+      entity: { type: "car_listing", id },
       outcome: "SUCCESS",
       reason: AuditReason.SUCCESS,
       metadata: { publisherId: access.publisher.id },
@@ -380,7 +377,7 @@ export async function PATCH(
     where.status = { in: ["DRAFT", "PUBLISHED", "PAUSED"] };
   }
 
-  const result = await prisma.autoListing.updateMany({ where, data });
+  const result = await prisma.carListing.updateMany({ where, data });
 
   if (result.count === 0) {
     return withCorrelationId(
@@ -394,8 +391,8 @@ export async function PATCH(
   auditLog({
     correlationId,
     actor: { userId: session.user.id, role: session.user.role ?? null },
-    action: statusRequested ? "auto.listingStatusChange" : "auto.listingUpdate",
-    entity: { type: "auto_listing", id },
+    action: statusRequested ? "cars.listingStatusChange" : "cars.listingUpdate",
+    entity: { type: "car_listing", id },
     outcome: "SUCCESS",
     reason: AuditReason.SUCCESS,
     metadata: {

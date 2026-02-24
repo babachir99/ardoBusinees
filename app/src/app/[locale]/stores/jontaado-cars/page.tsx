@@ -21,7 +21,7 @@ export default async function CarsPage() {
         </Link>
         <div className="flex items-center gap-2">
           <Link
-            href="/auto"
+            href="/cars"
             className="rounded-full border border-sky-300/40 px-4 py-2 text-xs font-semibold text-sky-200 transition hover:border-sky-300/70"
           >
             {t("title")}
