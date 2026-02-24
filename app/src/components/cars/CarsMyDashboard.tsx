@@ -59,6 +59,7 @@ type CarMonetizationPurchase = {
 
 type Props = {
   locale: string;
+  canCreateDealerOnboarding: boolean;
   listings: CarListingItem[];
   dealers: DealerOption[];
   recentPurchases: CarMonetizationPurchase[];
@@ -118,7 +119,7 @@ function emptyForm(): ListingForm {
   };
 }
 
-export default function CarsMyDashboard({ locale, listings: initialListings, dealers, recentPurchases }: Props) {
+export default function CarsMyDashboard({ locale, canCreateDealerOnboarding, listings: initialListings, dealers, recentPurchases }: Props) {
   const router = useRouter();
   const [listings, setListings] = useState(initialListings);
   const [createForm, setCreateForm] = useState<ListingForm>(emptyForm());
@@ -129,6 +130,12 @@ export default function CarsMyDashboard({ locale, listings: initialListings, dea
   const [monetizationPending, setMonetizationPending] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [dealerCreateForm, setDealerCreateForm] = useState({ name: "", country: "SN", city: "" });
+  const [dealerCreateOpen, setDealerCreateOpen] = useState(false);
+  const [dealerCreateBusy, setDealerCreateBusy] = useState(false);
+  const [agentManagerOpen, setAgentManagerOpen] = useState<Record<string, boolean>>({});
+  const [agentAddByDealer, setAgentAddByDealer] = useState<Record<string, string>>({});
+  const [agentAddBusyDealerId, setAgentAddBusyDealerId] = useState<string | null>(null);
 
   const t = useMemo(
     () => ({
@@ -171,6 +178,16 @@ export default function CarsMyDashboard({ locale, listings: initialListings, dea
       createdAt: locale === "fr" ? "Cree le" : "Created",
       updateCard: locale === "fr" ? "Modifier" : "Update",
       myDealers: locale === "fr" ? "Mes concessions" : "My dealers",
+      proBlockTitle: locale === "fr" ? "CARS Pro" : "CARS Pro",
+      createDealer: locale === "fr" ? "Creer un concessionnaire" : "Create dealer",
+      createDealerHint: locale === "fr" ? "Configure ta vitrine concessionnaire pour publier en pro et gerer tes agents." : "Set up your dealer storefront to publish as a pro and manage agents.",
+      dealerNameLabel: locale === "fr" ? "Nom du concessionnaire" : "Dealer name",
+      dealerCreated: locale === "fr" ? "Concessionnaire cree." : "Dealer created.",
+      manageAgents: locale === "fr" ? "Gerer les agents" : "Manage agents",
+      agentUserIdLabel: locale === "fr" ? "User ID agent" : "Agent user ID",
+      addAgent: locale === "fr" ? "Ajouter agent" : "Add agent",
+      agentAdded: locale === "fr" ? "Agent ajoute." : "Agent added.",
+      dealerStorefront: locale === "fr" ? "Vitrine" : "Storefront",
       noDealerMember:
         locale === "fr"
           ? "Aucune adhesion concessionnaire active."
@@ -518,6 +535,71 @@ export default function CarsMyDashboard({ locale, listings: initialListings, dea
     void startCheckout(`pack:${publisherId}:${kind}`, { publisherId, kind });
   }
 
+  async function createDealer() {
+    if (!canCreateDealerOnboarding) return;
+
+    setDealerCreateBusy(true);
+    setErrorMsg("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/cars/publishers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: dealerCreateForm.name,
+          country: dealerCreateForm.country,
+          city: dealerCreateForm.city,
+        }),
+      });
+
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      if (!response.ok) {
+        setErrorMsg(body?.message ?? t.genericError);
+        return;
+      }
+
+      setMessage(t.dealerCreated);
+      setDealerCreateOpen(false);
+      setDealerCreateForm({ name: "", country: "SN", city: "" });
+      router.refresh();
+    } catch {
+      setErrorMsg(t.genericError);
+    } finally {
+      setDealerCreateBusy(false);
+    }
+  }
+
+  async function addAgent(dealerId: string) {
+    const userId = (agentAddByDealer[dealerId] ?? "").trim();
+    if (!userId) return;
+
+    setAgentAddBusyDealerId(dealerId);
+    setErrorMsg("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/cars/publishers/${dealerId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role: "AGENT" }),
+      });
+
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      if (!response.ok) {
+        setErrorMsg(body?.message ?? t.genericError);
+        return;
+      }
+
+      setMessage(t.agentAdded);
+      setAgentAddByDealer((prev) => ({ ...prev, [dealerId]: "" }));
+    } catch {
+      setErrorMsg(t.genericError);
+    } finally {
+      setAgentAddBusyDealerId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
@@ -527,7 +609,34 @@ export default function CarsMyDashboard({ locale, listings: initialListings, dea
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.myDealers}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200">{t.proBlockTitle}</p>
+            <h2 className="mt-1 text-sm font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.myDealers}</h2>
+          </div>
+          {canCreateDealerOnboarding && dealers.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setDealerCreateOpen((prev) => !prev)}
+              className="rounded-full border border-cyan-300/40 px-3 py-1 text-xs font-semibold text-cyan-200"
+            >
+              {t.createDealer}
+            </button>
+          ) : null}
+        </div>
+        {canCreateDealerOnboarding && dealers.length === 0 && dealerCreateOpen ? (
+          <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4">
+            <p className="text-xs text-zinc-300">{t.createDealerHint}</p>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <input value={dealerCreateForm.name} onChange={(event) => setDealerCreateForm((prev) => ({ ...prev, name: event.target.value }))} placeholder={t.dealerNameLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
+              <input value={dealerCreateForm.city} onChange={(event) => setDealerCreateForm((prev) => ({ ...prev, city: event.target.value }))} placeholder={t.cityLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
+              <input value={dealerCreateForm.country} onChange={(event) => setDealerCreateForm((prev) => ({ ...prev, country: event.target.value.toUpperCase() }))} placeholder={t.countryLabel} className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm" />
+              <button type="button" onClick={() => void createDealer()} disabled={dealerCreateBusy} className="md:col-span-3 rounded-xl border border-cyan-300/40 px-4 py-2 text-sm font-semibold text-cyan-200 disabled:opacity-60">
+                {dealerCreateBusy ? "..." : t.createDealer}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {dealers.length === 0 ? (
           <p className="mt-2 text-xs text-zinc-400">{t.noDealerMember}</p>
         ) : (
@@ -545,6 +654,36 @@ export default function CarsMyDashboard({ locale, listings: initialListings, dea
                   <button type="button" onClick={() => startPackPurchase(dealer.id, "FEATURED_PACK_4")} disabled={monetizationPending[`pack:${dealer.id}:FEATURED_PACK_4`] === true} className="rounded-full border border-amber-300/40 px-3 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60">{monetizationPending[`pack:${dealer.id}:FEATURED_PACK_4`] ? "..." : t.buyFeaturedPack}</button>
                   <button type="button" onClick={() => startPackPurchase(dealer.id, "EXTRA_SLOTS_10")} disabled={monetizationPending[`pack:${dealer.id}:EXTRA_SLOTS_10`] === true} className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs font-semibold text-emerald-100 disabled:opacity-60">{monetizationPending[`pack:${dealer.id}:EXTRA_SLOTS_10`] ? "..." : t.buyExtraSlots}</button>
                 </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/cars/dealers/${dealer.slug}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">{t.dealerStorefront}</Link>
+                  {dealer.role === "OWNER" ? (
+                    <button
+                      type="button"
+                      onClick={() => setAgentManagerOpen((prev) => ({ ...prev, [dealer.id]: !prev[dealer.id] }))}
+                      className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white"
+                    >
+                      {t.manageAgents}
+                    </button>
+                  ) : null}
+                </div>
+                {dealer.role === "OWNER" && agentManagerOpen[dealer.id] ? (
+                  <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+                    <input
+                      value={agentAddByDealer[dealer.id] ?? ""}
+                      onChange={(event) => setAgentAddByDealer((prev) => ({ ...prev, [dealer.id]: event.target.value }))}
+                      placeholder={t.agentUserIdLabel}
+                      className="rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void addAgent(dealer.id)}
+                      disabled={agentAddBusyDealerId === dealer.id || !(agentAddByDealer[dealer.id] ?? "").trim()}
+                      className="rounded-xl border border-cyan-300/40 px-4 py-2 text-sm font-semibold text-cyan-200 disabled:opacity-60"
+                    >
+                      {agentAddBusyDealerId === dealer.id ? "..." : t.addAgent}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="mt-3 space-y-1 text-xs text-zinc-300">
                   {(["BOOST_PACK_10", "FEATURED_PACK_4", "EXTRA_SLOTS_10"] as const).map((kind) => {
                     const purchase = latestDealerPurchaseByKind.get(`${dealer.id}:${kind}`);

@@ -44,6 +44,11 @@ export default async function CarsPage() {
             {t("title")}
           </h1>
           <p className="mt-3 text-sm text-zinc-300">{t("subtitle")}</p>
+          <div className="mt-5 flex flex-wrap gap-2 text-xs">
+            <Link href="/cars" className="rounded-full border border-cyan-300/40 px-3 py-1 font-semibold text-cyan-200">Explorer CARS</Link>
+            <Link href="/cars/dealers" className="rounded-full border border-white/20 px-3 py-1 font-semibold text-white">Concessionnaires</Link>
+            <Link href="/cars/my" className="rounded-full border border-white/20 px-3 py-1 font-semibold text-white">Mes annonces</Link>
+          </div>
         </section>
 
         <section className="grid gap-6 md:grid-cols-3 fade-up">
