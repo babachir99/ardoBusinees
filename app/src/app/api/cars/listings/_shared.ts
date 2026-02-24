@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CUID_PATTERN = /^c[a-z0-9]{24}$/i;
+
+export function isIdLikeKey(value: string) {
+  return UUID_PATTERN.test(value) || CUID_PATTERN.test(value);
+}
+
 export function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
 }
@@ -29,16 +37,16 @@ export function parseBoolean(value: unknown): boolean | null {
   return null;
 }
 
-export function normalizeTake(value: unknown, fallback = 24, max = 60) {
+export function normalizeTake(value: unknown, fallback = 24, max = 50) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(Math.max(Math.trunc(parsed), 1), max);
 }
 
-export function normalizeSkip(value: unknown) {
+export function normalizeSkip(value: unknown, max = 5000) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.max(Math.trunc(parsed), 0);
+  return Math.min(Math.max(Math.trunc(parsed), 0), max);
 }
 
 export function canAccessAdmin(user: { role?: string | null; roles?: string[] | null } | null | undefined) {
@@ -62,5 +70,6 @@ export function slugifyCarPublisher(input: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
 
-  return normalized || "cars-dealer";
+  const slug = normalized || "cars-dealer";
+  return isIdLikeKey(slug) ? `dealer-${slug}` : slug;
 }

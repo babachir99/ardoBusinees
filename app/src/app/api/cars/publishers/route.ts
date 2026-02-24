@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const country = normalizeUpper(searchParams.get("country"));
   const city = normalizeString(searchParams.get("city"));
   const verifiedOnly = parseBoolean(searchParams.get("verified"));
-  const take = normalizeTake(searchParams.get("take"), 24, 60);
+  const take = normalizeTake(searchParams.get("take"), 24, 50);
   const skip = normalizeSkip(searchParams.get("skip"));
 
   const where: Record<string, unknown> = {

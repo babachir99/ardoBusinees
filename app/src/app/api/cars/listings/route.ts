@@ -44,6 +44,12 @@ function parsePublisherType(value: unknown): PublisherType | null {
   return PUBLISHER_TYPES.includes(normalized as PublisherType) ? (normalized as PublisherType) : null;
 }
 
+function hasNegativeNumericInput(value: unknown) {
+  if (value === null || value === undefined || value === "") return false;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed < 0;
+}
+
 async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
   const publisher = await prisma.carPublisher.findUnique({
     where: { id: publisherId },
@@ -93,8 +99,11 @@ export async function GET(request: NextRequest) {
   const publisherType = parsePublisherType(searchParams.get("publisherType"));
   const verifiedOnly = parseBoolean(searchParams.get("verifiedOnly"));
   const sort = parseSort(searchParams.get("sort"));
-  const take = normalizeTake(searchParams.get("take"), 24, 60);
+  const take = normalizeTake(searchParams.get("take"), 24, 50);
   const skip = normalizeSkip(searchParams.get("skip"));
+  const maxYear = new Date().getFullYear() + 1;
+  const boundedYearMin = yearMin === null ? null : Math.min(Math.max(yearMin, 1950), maxYear);
+  const boundedYearMax = yearMax === null ? null : Math.min(Math.max(yearMax, 1950), maxYear);
 
   const where: Record<string, unknown> = {
     status: "PUBLISHED",
@@ -107,10 +116,10 @@ export async function GET(request: NextRequest) {
   if (fuelType) where.fuelType = fuelType;
   if (gearbox) where.gearbox = gearbox;
 
-  if (yearMin !== null || yearMax !== null) {
+  if (boundedYearMin !== null || boundedYearMax !== null) {
     where.year = {
-      ...(yearMin !== null ? { gte: yearMin } : {}),
-      ...(yearMax !== null ? { lte: yearMax } : {}),
+      ...(boundedYearMin !== null ? { gte: boundedYearMin } : {}),
+      ...(boundedYearMax !== null ? { lte: boundedYearMax } : {}),
     };
   }
 
@@ -234,6 +243,8 @@ export async function POST(request: NextRequest) {
   const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
   const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : "";
 
+  const maxYear = new Date().getFullYear() + 1;
+
   if (!title || !description || !city || !make || !model || priceCents === null || year === null || mileageKm === null || !fuelType || !gearbox) {
     return withCorrelationId(
       errorResponse(
@@ -245,9 +256,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (year < 1950 || year > 2100) {
+  if (hasNegativeNumericInput((body as { priceCents?: unknown }).priceCents)) {
     return withCorrelationId(
-      errorResponse(400, "VALIDATION_ERROR", "year must be between 1950 and 2100."),
+      errorResponse(400, "VALIDATION_ERROR", "priceCents must be non-negative."),
+      correlationId
+    );
+  }
+
+  if (hasNegativeNumericInput((body as { mileageKm?: unknown }).mileageKm)) {
+    return withCorrelationId(
+      errorResponse(400, "VALIDATION_ERROR", "mileageKm must be non-negative."),
+      correlationId
+    );
+  }
+
+  if (year < 1950 || year > maxYear) {
+    return withCorrelationId(
+      errorResponse(400, "VALIDATION_ERROR", `year must be between 1950 and ${maxYear}.`),
       correlationId
     );
   }

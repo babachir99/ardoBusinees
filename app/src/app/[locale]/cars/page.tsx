@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+﻿import { prisma } from "@/lib/prisma";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 import { getServerSession } from "next-auth";
@@ -108,7 +108,44 @@ export default async function CarsListingsPage({
         ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
         : [{ createdAt: "desc" as const }];
 
-  const [listings, dealers] = await Promise.all([
+  const productWhere: Record<string, unknown> = {
+    isActive: true,
+    categories: {
+      some: {
+        category: {
+          OR: [
+            { slug: { contains: "vehicul", mode: "insensitive" } },
+            { slug: { contains: "voitur", mode: "insensitive" } },
+            { slug: { contains: "car", mode: "insensitive" } },
+            { slug: { contains: "auto", mode: "insensitive" } },
+            { name: { contains: "vehicul", mode: "insensitive" } },
+            { name: { contains: "voitur", mode: "insensitive" } },
+            { name: { contains: "car", mode: "insensitive" } },
+            { name: { contains: "auto", mode: "insensitive" } },
+          ],
+        },
+      },
+    },
+  };
+
+  if (city) productWhere.pickupLocation = { contains: city, mode: "insensitive" };
+  if (priceMin !== null || priceMax !== null) {
+    productWhere.priceCents = {
+      ...(priceMin !== null ? { gte: priceMin } : {}),
+      ...(priceMax !== null ? { lte: priceMax } : {}),
+    };
+  }
+  if (make || model) {
+    const terms = [make, model].filter(Boolean);
+    productWhere.AND = terms.map((term) => ({
+      OR: [
+        { title: { contains: term, mode: "insensitive" } },
+        { description: { contains: term, mode: "insensitive" } },
+      ],
+    }));
+  }
+
+  const [listings, dealers, shopVehicleProducts] = await Promise.all([
     prisma.carListing.findMany({
       where,
       orderBy,
@@ -148,6 +185,26 @@ export default async function CarsListingsPage({
       take: 100,
       select: { id: true, name: true, slug: true, verified: true },
     }),
+    prisma.product.findMany({
+      where: productWhere,
+      orderBy: [{ createdAt: "desc" }],
+      take: 24,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        priceCents: true,
+        currency: true,
+        pickupLocation: true,
+        createdAt: true,
+        images: {
+          orderBy: [{ position: "asc" }],
+          take: 1,
+          select: { url: true },
+        },
+      },
+    }),
   ]);
 
   const t = {
@@ -178,8 +235,19 @@ export default async function CarsListingsPage({
     apply: locale === "fr" ? "Appliquer" : "Apply",
     myListings: locale === "fr" ? "Mes annonces" : "My listings",
     login: locale === "fr" ? "Se connecter" : "Sign in",
-    immo: "IMMO",
     dealers: locale === "fr" ? "Concessionnaires" : "Dealers",
+    shopVehicles: locale === "fr" ? "Produits SHOP (Vehicules)" : "SHOP vehicle products",
+    shopVehiclesHint:
+      locale === "fr"
+        ? "Produits e-commerce publies dans des categories vehicules/voitures (affichage auto dans CARS)."
+        : "E-commerce products published in vehicle/car categories (auto-shown in CARS).",
+    shopProduct: "SHOP",
+    viewProduct: locale === "fr" ? "Voir produit" : "View product",
+    pickupLocation: locale === "fr" ? "Retrait" : "Pickup",
+    noShopVehicles:
+      locale === "fr"
+        ? "Aucun produit SHOP vehicule correspondant pour le moment."
+        : "No matching SHOP vehicle products for now.",
     details: locale === "fr" ? "Voir" : "View",
     km: "km",
     individual: locale === "fr" ? "Particulier" : "Individual",
@@ -199,7 +267,6 @@ export default async function CarsListingsPage({
           <h1 className="text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 text-sm text-zinc-300">{t.subtitle}</p>
           <div className="mt-4 flex gap-3 text-xs">
-            <Link href="/immo" className="rounded-full border border-white/20 px-3 py-1">{t.immo}</Link>
             <Link href="/cars/dealers" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">{t.dealers}</Link>
             {session?.user?.id ? (
               <Link href="/cars/my" className="rounded-full border border-cyan-300/40 px-3 py-1 text-cyan-200">{t.myListings}</Link>
@@ -260,6 +327,42 @@ export default async function CarsListingsPage({
               <button className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950">{t.apply}</button>
             </div>
           </form>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-300">{t.shopVehicles}</h2>
+              <p className="mt-1 text-xs text-zinc-500">{t.shopVehiclesHint}</p>
+            </div>
+          </div>
+          {shopVehicleProducts.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-400">{t.noShopVehicles}</p>
+          ) : (
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {shopVehicleProducts.map((product) => (
+                <article key={product.id} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-full border border-emerald-300/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                      {t.shopProduct}
+                    </span>
+                    <p className="text-xs text-zinc-500">{new Date(product.createdAt).toLocaleDateString(locale)}</p>
+                  </div>
+                  <h3 className="mt-3 line-clamp-2 text-sm font-semibold text-white">{product.title}</h3>
+                  {product.description ? <p className="mt-2 line-clamp-2 text-xs text-zinc-300">{product.description}</p> : null}
+                  <p className="mt-3 text-sm text-emerald-200">{formatMoney(product.priceCents, product.currency, locale)}</p>
+                  {product.pickupLocation ? (
+                    <p className="mt-1 text-xs text-zinc-400">{t.pickupLocation}: {product.pickupLocation}</p>
+                  ) : null}
+                  <div className="mt-4 flex justify-end">
+                    <Link href={`/shop/${product.slug}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
+                      {t.viewProduct}
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

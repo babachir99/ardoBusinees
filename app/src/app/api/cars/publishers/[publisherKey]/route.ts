@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { errorResponse, normalizeString, normalizeTake } from "@/app/api/cars/listings/_shared";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CUID_PATTERN = /^c[a-z0-9]{24}$/i;
-
-function isIdLikePublisherKey(value: string) {
-  return UUID_PATTERN.test(value) || CUID_PATTERN.test(value);
-}
+import { errorResponse, isIdLikeKey, normalizeString, normalizeTake } from "@/app/api/cars/listings/_shared";
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +21,7 @@ export async function GET(
   };
 
   const publisher = await prisma.carPublisher.findFirst({
-    where: isIdLikePublisherKey(normalizedKey)
+    where: isIdLikeKey(normalizedKey)
       ? {
           ...publisherWhere,
           id: normalizedKey,

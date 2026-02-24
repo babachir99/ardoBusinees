@@ -33,6 +33,12 @@ function parseStatusAction(value: unknown): StatusAction | null {
   return null;
 }
 
+function hasNegativeNumericInput(value: unknown) {
+  if (value === null || value === undefined || value === "") return false;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed < 0;
+}
+
 async function loadListing(id: string) {
   return prisma.carListing.findUnique({
     where: { id },
@@ -200,6 +206,9 @@ export async function PATCH(
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "priceCents")) {
+    if (hasNegativeNumericInput((body as { priceCents?: unknown }).priceCents)) {
+      return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "priceCents must be non-negative."), correlationId);
+    }
     const priceCents = parseNullableInt((body as { priceCents?: unknown }).priceCents);
     if (priceCents === null) {
       return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "priceCents must be an integer."), correlationId);
@@ -249,13 +258,17 @@ export async function PATCH(
 
   if (Object.prototype.hasOwnProperty.call(body, "year")) {
     const year = parseNullableInt((body as { year?: unknown }).year);
-    if (year === null || year < 1950 || year > 2100) {
-      return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "year must be between 1950 and 2100."), correlationId);
+    const maxYear = new Date().getFullYear() + 1;
+    if (year === null || year < 1950 || year > maxYear) {
+      return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", `year must be between 1950 and ${maxYear}.`), correlationId);
     }
     data.year = year;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "mileageKm")) {
+    if (hasNegativeNumericInput((body as { mileageKm?: unknown }).mileageKm)) {
+      return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "mileageKm must be non-negative."), correlationId);
+    }
     const mileageKm = parseNullableInt((body as { mileageKm?: unknown }).mileageKm);
     if (mileageKm === null) {
       return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "mileageKm must be an integer."), correlationId);
