@@ -53,6 +53,8 @@ export async function POST(
           id: true,
           type: true,
           status: true,
+          includedPublishedQuota: true,
+          extraSlots: true,
         },
       },
     },
@@ -78,6 +80,23 @@ export async function POST(
       correlationId
     );
   }
+  if (listing.publisherId && listing.publisher && listing.publisher.type === "DEALER" && listing.publisher.status === "ACTIVE") {
+    const publishedCount = await prisma.carListing.count({
+      where: {
+        publisherId: listing.publisherId,
+        status: "PUBLISHED",
+      },
+    });
+
+    const allowedQuota = listing.publisher.includedPublishedQuota + listing.publisher.extraSlots;
+    if (publishedCount >= allowedQuota) {
+      return withCorrelationId(
+        errorResponse(409, "QUOTA_EXCEEDED", "Dealer published quota exceeded. Buy EXTRA_SLOTS_10 to publish more listings."),
+        correlationId
+      );
+    }
+  }
+
   const result = await prisma.carListing.updateMany({
     where: {
       id,

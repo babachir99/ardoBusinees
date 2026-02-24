@@ -217,6 +217,8 @@ export default async function AdminPage() {
     immoMonetizationItems,
     autoMonetizationIssueCount,
     autoMonetizationItems,
+    carsMonetizationIssueCount,
+    carsMonetizationItems,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -351,6 +353,40 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
+
+    prisma.carMonetizationPurchase
+      .count({
+        where: {
+          status: { in: ["PENDING", "FAILED"] },
+          createdAt: { gte: last7Days },
+        },
+      })
+      .catch(() => null),
+    prisma.carMonetizationPurchase
+      .findMany({
+        where: {
+          status: { in: ["PENDING", "FAILED", "CONFIRMED"] },
+          createdAt: { gte: last7Days },
+        },
+        orderBy: [{ createdAt: "asc" }],
+        take: 20,
+        select: {
+          id: true,
+          listingId: true,
+          status: true,
+          amountCents: true,
+          currency: true,
+          createdAt: true,
+          kind: true,
+          paymentLedger: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      })
+      .catch(() => null),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -364,7 +400,7 @@ export default async function AdminPage() {
   };
 
   type OpsQueueItem = {
-    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION";
+    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
     id: string;
     refLabel: string;
     status: string;
@@ -452,6 +488,20 @@ export default async function AdminPage() {
       },
       createdAtMs: item.createdAt.getTime(),
     }))),
+    ...((carsMonetizationItems ?? []).map((item) => ({
+      type: "CARS_MONETIZATION" as const,
+      id: item.id,
+      refLabel: `${item.kind} - ${item.listingId}`,
+      status: item.paymentLedger?.status ?? item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      amountLabel: formatMoney(item.amountCents, item.currency, locale),
+      action: {
+        kind: "link" as const,
+        label: t("opsHub.actions.inspect"),
+        href: `/admin?opsFilter=CARS_MONETIZATION&focus=${item.id}#ops-queue`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
   ];
 
   const queuePriority: Record<OpsQueueItem["type"], number> = {
@@ -459,6 +509,7 @@ export default async function AdminPage() {
     DISPUTE: 1,
     IMMO_MONETIZATION: 2,
     AUTO_MONETIZATION: 2,
+    CARS_MONETIZATION: 2,
     PAYMENT_FAILED: 3,
   };
 
@@ -470,7 +521,7 @@ export default async function AdminPage() {
       if (a.type === "PAYMENT_FAILED") {
         return b.createdAtMs - a.createdAtMs;
       }
-      if (a.type === "IMMO_MONETIZATION" || a.type === "AUTO_MONETIZATION") {
+      if (a.type === "IMMO_MONETIZATION" || a.type === "AUTO_MONETIZATION" || a.type === "CARS_MONETIZATION") {
         return b.createdAtMs - a.createdAtMs;
       }
       return a.createdAtMs - b.createdAtMs;
@@ -491,6 +542,8 @@ export default async function AdminPage() {
       typeof immoMonetizationIssueCount === "number" ? immoMonetizationIssueCount : null,
     autoMonetizationIssues:
       typeof autoMonetizationIssueCount === "number" ? autoMonetizationIssueCount : null,
+    carsMonetizationIssues:
+      typeof carsMonetizationIssueCount === "number" ? carsMonetizationIssueCount : null,
   };
 
   return (

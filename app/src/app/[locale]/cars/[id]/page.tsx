@@ -23,6 +23,7 @@ export default async function CarListingDetailPage({
       ownerId: true,
       title: true,
       description: true,
+      imageUrls: true,
       priceCents: true,
       currency: true,
       country: true,
@@ -75,6 +76,7 @@ export default async function CarListingDetailPage({
     individual: locale === "fr" ? "Particulier" : "Individual",
     verified: locale === "fr" ? "Verifie" : "Verified",
     viewDealer: locale === "fr" ? "Voir la vitrine" : "View storefront",
+    photos: locale === "fr" ? "Photos" : "Photos",
   };
 
   return (
@@ -90,6 +92,29 @@ export default async function CarListingDetailPage({
           <p className="mt-3 text-lg font-semibold text-cyan-200">
             {formatMoney(listing.priceCents, listing.currency, locale)}
           </p>
+
+          {listing.imageUrls.length > 0 ? (
+            <div className="mt-5 space-y-3">
+              <img
+                src={listing.imageUrls[0]}
+                alt={listing.title}
+                className="h-72 w-full rounded-2xl border border-white/10 object-cover"
+              />
+              {listing.imageUrls.length > 1 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {listing.imageUrls.slice(1, 4).map((url) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt={t.photos}
+                      className="h-24 w-full rounded-xl border border-white/10 object-cover"
+                      loading="lazy"
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
             <p className="text-xs text-zinc-400">{t.dealer}</p>

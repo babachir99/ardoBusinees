@@ -7,6 +7,7 @@ import {
   errorResponse,
   normalizeString,
   normalizeUpper,
+  parseImageUrls,
   parseNullableInt,
 } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
@@ -48,6 +49,7 @@ async function loadListing(id: string) {
       publisherId: true,
       title: true,
       description: true,
+      imageUrls: true,
       priceCents: true,
       currency: true,
       country: true,
@@ -59,6 +61,9 @@ async function loadListing(id: string) {
       fuelType: true,
       gearbox: true,
       status: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       publisher: {
@@ -81,7 +86,11 @@ type LoadedCarListing = Awaited<ReturnType<typeof loadListing>>;
 function sanitizePublicListing(listing: LoadedCarListing) {
   if (!listing) return null;
   const { ownerId: _ownerId, ...safeListing } = listing;
-  return safeListing;
+  const now = new Date();
+  return {
+    ...safeListing,
+    isFeatured: Boolean(safeListing.featuredUntil && safeListing.featuredUntil > now),
+  };
 }
 
 async function resolvePublisherMembership(publisherId: string, userId: string, isAdmin: boolean) {
@@ -203,6 +212,17 @@ export async function PATCH(
       return withCorrelationId(errorResponse(400, "VALIDATION_ERROR", "description cannot be empty."), correlationId);
     }
     data.description = description;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "imageUrls")) {
+    const imageUrls = parseImageUrls((body as { imageUrls?: unknown }).imageUrls);
+    if (imageUrls === null) {
+      return withCorrelationId(
+        errorResponse(400, "VALIDATION_ERROR", "imageUrls must be an array of upload/internal or http(s) URLs (max 20)."),
+        correlationId
+      );
+    }
+    data.imageUrls = imageUrls;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "priceCents")) {

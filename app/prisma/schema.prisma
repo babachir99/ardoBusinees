@@ -184,6 +184,7 @@ enum PaymentLedgerContextType {
   TIAK_DELIVERY
   IMMO_MONETIZATION
   AUTO_MONETIZATION
+  CARS_MONETIZATION
 }
 
 enum PaymentLedgerStatus {
@@ -293,6 +294,21 @@ enum AutoMonetizationKind {
 }
 
 enum AutoMonetizationPurchaseStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  EXPIRED
+}
+
+enum CarMonetizationKind {
+  FEATURED
+  BOOST
+  BOOST_PACK_10
+  FEATURED_PACK_4
+  EXTRA_SLOTS_10
+}
+
+enum CarMonetizationPurchaseStatus {
   PENDING
   CONFIRMED
   FAILED
@@ -438,6 +454,7 @@ model User {
   autoMonetizationPurchasesCreated AutoMonetizationPurchase[] @relation("AutoMonetizationCreatedBy")
   carListings               CarListing[]
   carPublisherMemberships   CarPublisherMember[]
+  carMonetizationPurchasesCreated CarMonetizationPurchase[] @relation("CarMonetizationCreatedBy")
 }
 
 model UserAddress {
@@ -699,6 +716,7 @@ model CarListing {
   status      CarListingStatus @default(DRAFT)
   title       String
   description String
+  imageUrls   String[]         @default([])
   priceCents  Int
   currency    String           @default("XOF")
   country     String           @default("SN")
@@ -709,17 +727,24 @@ model CarListing {
   mileageKm   Int
   fuelType    CarFuelType
   gearbox     CarGearbox
+  isFeatured  Boolean          @default(false)
+  featuredUntil DateTime?
+  boostUntil DateTime?
+  monetizationUpdatedAt DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   owner     User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   publisher CarPublisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  monetizationPurchases CarMonetizationPurchase[]
 
   @@index([status, createdAt])
   @@index([country, city, status])
   @@index([make, model, year, status])
   @@index([publisherId, status])
   @@index([ownerId, status, createdAt])
+  @@index([status, featuredUntil])
+  @@index([status, boostUntil])
 }
 
 model CarPublisher {
@@ -732,11 +757,15 @@ model CarPublisher {
   country   String?
   city      String?
   logoUrl   String?
+  includedPublishedQuota Int    @default(20)
+  extraSlots Int                @default(0)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
   members  CarPublisherMember[]
   listings CarListing[]
+  monetizationPurchases CarMonetizationPurchase[]
+  monetizationBalance CarMonetizationBalance?
 
   @@index([status, verified])
   @@index([country, city, status])
@@ -756,6 +785,39 @@ model CarPublisherMember {
   @@unique([publisherId, userId])
   @@index([userId, status])
   @@index([publisherId, status])
+}
+
+model CarMonetizationBalance {
+  publisherId      String   @id
+  boostCredits     Int      @default(0)
+  featuredCredits  Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  publisher CarPublisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+}
+
+model CarMonetizationPurchase {
+  id              String                        @id @default(cuid())
+  listingId       String?
+  publisherId     String
+  kind            CarMonetizationKind
+  durationDays    Int
+  amountCents     Int
+  currency        String                        @default("XOF")
+  status          CarMonetizationPurchaseStatus @default(PENDING)
+  paymentLedgerId String                        @unique
+  createdByUserId String
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+
+  listing       CarListing?         @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  publisher     CarPublisher        @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  paymentLedger PaymentLedger       @relation(fields: [paymentLedgerId], references: [id], onDelete: Cascade)
+  createdBy     User                @relation("CarMonetizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([status, kind])
+  @@index([listingId, createdAt])
+  @@index([publisherId, createdAt])
 }
 
 model SellerProfile {
@@ -989,6 +1051,7 @@ model PaymentLedger {
   order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
   immoMonetizationPurchase ImmoMonetizationPurchase?
   autoMonetizationPurchase AutoMonetizationPurchase?
+  carMonetizationPurchase  CarMonetizationPurchase?
 
   @@unique([contextType, contextId])
   @@index([orderId])

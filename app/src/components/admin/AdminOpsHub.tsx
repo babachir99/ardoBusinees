@@ -12,10 +12,11 @@ type OpsKpis = {
   kycPending: number | null;
   immoMonetizationIssues: number | null;
   autoMonetizationIssues: number | null;
+  carsMonetizationIssues: number | null;
 };
 
 type OpsQueueItem = {
-  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION";
+  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
   id: string;
   refLabel: string;
   status: string;
@@ -64,10 +65,10 @@ type Props = {
   queueItems: OpsQueueItem[];
 };
 
-type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION";
+type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
 
 function normalizeFilter(value: string | null): QueueFilter {
-  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED" || value === "IMMO_MONETIZATION" || value === "AUTO_MONETIZATION") {
+  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED" || value === "IMMO_MONETIZATION" || value === "AUTO_MONETIZATION" || value === "CARS_MONETIZATION") {
     return value;
   }
   return "ALL";
@@ -167,6 +168,13 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         href: { pathname: "/admin", query: { opsFilter: "AUTO_MONETIZATION" } },
         warn: typeof kpis.autoMonetizationIssues === "number" && kpis.autoMonetizationIssues > 0,
       },
+      {
+        key: "carsMonetization",
+        label: "CARS Monetization (PENDING/FAILED)",
+        value: kpis.carsMonetizationIssues,
+        href: { pathname: "/admin", query: { opsFilter: "CARS_MONETIZATION" } },
+        warn: typeof kpis.carsMonetizationIssues === "number" && kpis.carsMonetizationIssues > 0,
+      },
     ].filter((card) => card.key !== "kyc" || typeof card.value === "number"),
     [kpis, t, warnFlags]
   );
@@ -178,6 +186,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     { key: "PAYMENT_FAILED", label: t("filters.paymentsFailed") },
     { key: "IMMO_MONETIZATION", label: "IMMO monetization" },
     { key: "AUTO_MONETIZATION", label: "AUTO monetization" },
+    { key: "CARS_MONETIZATION", label: "CARS monetization" },
   ];
 
   const typeLabels: Record<OpsQueueItem["type"], string> = {
@@ -186,6 +195,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     PAYMENT_FAILED: t("queue.types.paymentFailed"),
     IMMO_MONETIZATION: "IMMO monetization",
     AUTO_MONETIZATION: "AUTO monetization",
+    CARS_MONETIZATION: "CARS monetization",
   };
 
   const statusLabels: Record<string, string> = {
@@ -205,6 +215,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     if (activeFilter === "DISPUTE") return queueItems.filter((item) => item.type === "DISPUTE");
     if (activeFilter === "IMMO_MONETIZATION") return queueItems.filter((item) => item.type === "IMMO_MONETIZATION");
     if (activeFilter === "AUTO_MONETIZATION") return queueItems.filter((item) => item.type === "AUTO_MONETIZATION");
+    if (activeFilter === "CARS_MONETIZATION") return queueItems.filter((item) => item.type === "CARS_MONETIZATION");
     return queueItems.filter((item) => item.type === "PAYMENT_FAILED");
   }, [activeFilter, queueItems]);
 

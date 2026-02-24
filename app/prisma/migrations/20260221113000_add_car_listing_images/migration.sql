@@ -1,0 +1,2 @@
+ALTER TABLE "marketplace"."CarListing"
+  ADD COLUMN IF NOT EXISTS "imageUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

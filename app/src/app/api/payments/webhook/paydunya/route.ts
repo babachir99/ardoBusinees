@@ -224,6 +224,8 @@ export async function POST(request: NextRequest) {
       let immoPurchaseStatus: string | null = null;
       let autoPurchaseId: string | null = null;
       let autoPurchaseStatus: string | null = null;
+      let carPurchaseId: string | null = null;
+      let carPurchaseStatus: string | null = null;
 
       if (effectiveLedgerStatus === PaymentLedgerStatus.CONFIRMED) {
         if (currentLedger.contextType === "PRESTA_BOOKING") {
@@ -471,6 +473,117 @@ export async function POST(request: NextRequest) {
             autoPurchaseStatus = resolved?.status ?? purchase.status;
           }
         }
+        if (currentLedger.contextType === "CARS_MONETIZATION") {
+          const purchase = await tx.carMonetizationPurchase.findFirst({
+            where: { paymentLedgerId: currentLedger.id },
+            select: {
+              id: true,
+              listingId: true,
+              publisherId: true,
+              kind: true,
+              durationDays: true,
+              status: true,
+              listing: {
+                select: {
+                  id: true,
+                  featuredUntil: true,
+                  boostUntil: true,
+                },
+              },
+            },
+          });
+
+          if (purchase) {
+            const confirmed = await tx.carMonetizationPurchase.updateMany({
+              where: {
+                id: purchase.id,
+                status: "PENDING",
+              },
+              data: {
+                status: "CONFIRMED",
+              },
+            });
+
+            if (confirmed.count === 1) {
+              const now = new Date();
+
+              if (purchase.kind === "FEATURED" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.featuredUntil && purchase.listing.featuredUntil > now
+                    ? purchase.listing.featuredUntil
+                    : now;
+                const featuredUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
+                await tx.carListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    isFeatured: true,
+                    featuredUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              } else if (purchase.kind === "BOOST" && purchase.listingId && purchase.listing) {
+                const base =
+                  purchase.listing.boostUntil && purchase.listing.boostUntil > now
+                    ? purchase.listing.boostUntil
+                    : now;
+                const boostUntil = new Date(
+                  base.getTime() + purchase.durationDays * 24 * 60 * 60 * 1000
+                );
+                await tx.carListing.update({
+                  where: { id: purchase.listingId },
+                  data: {
+                    boostUntil,
+                    monetizationUpdatedAt: now,
+                  },
+                });
+              } else if (purchase.kind === "BOOST_PACK_10") {
+                await tx.carMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 10,
+                    featuredCredits: 0,
+                  },
+                  update: {
+                    boostCredits: { increment: 10 },
+                  },
+                });
+              } else if (purchase.kind === "FEATURED_PACK_4") {
+                await tx.carMonetizationBalance.upsert({
+                  where: { publisherId: purchase.publisherId },
+                  create: {
+                    publisherId: purchase.publisherId,
+                    boostCredits: 0,
+                    featuredCredits: 4,
+                  },
+                  update: {
+                    featuredCredits: { increment: 4 },
+                  },
+                });
+              } else if (purchase.kind === "EXTRA_SLOTS_10") {
+                await tx.carPublisher.updateMany({
+                  where: {
+                    id: purchase.publisherId,
+                    type: "DEALER",
+                    status: "ACTIVE",
+                  },
+                  data: {
+                    extraSlots: { increment: 10 },
+                  },
+                });
+              }
+            }
+
+            const resolved = await tx.carMonetizationPurchase.findUnique({
+              where: { id: purchase.id },
+              select: { id: true, status: true },
+            });
+            carPurchaseId = resolved?.id ?? purchase.id;
+            carPurchaseStatus = resolved?.status ?? purchase.status;
+          }
+        }
         if (currentLedger.orderId) {
           const paidAt = new Date();
 
@@ -588,6 +701,33 @@ export async function POST(request: NextRequest) {
             autoPurchaseStatus = resolved?.status ?? "FAILED";
           }
         }
+        if (currentLedger.contextType === "CARS_MONETIZATION") {
+          const failed = await tx.carMonetizationPurchase.updateMany({
+            where: {
+              paymentLedgerId: currentLedger.id,
+              status: "PENDING",
+            },
+            data: {
+              status: "FAILED",
+            },
+          });
+
+          if (failed.count === 0) {
+            const resolved = await tx.carMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            carPurchaseId = resolved?.id ?? null;
+            carPurchaseStatus = resolved?.status ?? null;
+          } else {
+            const resolved = await tx.carMonetizationPurchase.findFirst({
+              where: { paymentLedgerId: currentLedger.id },
+              select: { id: true, status: true },
+            });
+            carPurchaseId = resolved?.id ?? null;
+            carPurchaseStatus = resolved?.status ?? "FAILED";
+          }
+        }
         if (currentLedger.orderId) {
           await tx.payment.updateMany({
           where: {
@@ -629,6 +769,8 @@ export async function POST(request: NextRequest) {
         immoPurchaseStatus,
         autoPurchaseId,
         autoPurchaseStatus,
+        carPurchaseId,
+        carPurchaseStatus,
       };
     });
 
@@ -650,6 +792,8 @@ export async function POST(request: NextRequest) {
         immoPurchaseStatus: transition.immoPurchaseStatus,
         autoPurchaseId: transition.autoPurchaseId,
         autoPurchaseStatus: transition.autoPurchaseStatus,
+        carPurchaseId: transition.carPurchaseId,
+        carPurchaseStatus: transition.carPurchaseStatus,
       },
     });
 
@@ -690,6 +834,28 @@ export async function POST(request: NextRequest) {
         metadata: {
           ledgerId: transition.ledgerId,
           purchaseStatus: transition.autoPurchaseStatus,
+        },
+      });
+    }
+
+
+
+    if (transition.contextType === "CARS_MONETIZATION") {
+      auditLog({
+        correlationId,
+        actor,
+        action:
+          transition.ledgerStatus === "CONFIRMED"
+            ? "cars.monetizationConfirmed"
+            : transition.ledgerStatus === "FAILED"
+              ? "cars.monetizationFailed"
+              : "cars.monetizationPending",
+        entity: { type: "CarMonetizationPurchase", id: transition.carPurchaseId ?? transition.contextId },
+        outcome: "SUCCESS",
+        reason: AuditReason.SUCCESS,
+        metadata: {
+          ledgerId: transition.ledgerId,
+          purchaseStatus: transition.carPurchaseStatus,
         },
       });
     }

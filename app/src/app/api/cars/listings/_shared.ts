@@ -37,6 +37,31 @@ export function parseBoolean(value: unknown): boolean | null {
   return null;
 }
 
+export function parseImageUrls(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const normalized = Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (normalized.length > 20) return null;
+
+  for (const url of normalized) {
+    const isInternal = url.startsWith("/uploads/");
+    const isExternal = /^https?:\/\//i.test(url);
+    if (!isInternal && !isExternal) {
+      return null;
+    }
+  }
+
+  return normalized;
+}
+
 export function normalizeTake(value: unknown, fallback = 24, max = 50) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;

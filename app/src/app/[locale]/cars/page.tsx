@@ -101,12 +101,26 @@ export default async function CarsListingsPage({
   }
 
   const sort = filters.sort === "price_asc" || filters.sort === "price_desc" ? filters.sort : "newest";
+  const proRanking = sort === "newest";
+  const now = new Date();
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
         ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
-        : [{ createdAt: "desc" as const }];
+        : [
+            { isFeatured: "desc" as const },
+            { featuredUntil: "desc" as const },
+            { boostUntil: "desc" as const },
+            { createdAt: "desc" as const },
+          ];
+
+  if (proRanking) {
+    await prisma.carListing.updateMany({
+      where: { status: "PUBLISHED", isFeatured: true, featuredUntil: { lt: now } },
+      data: { isFeatured: false },
+    }).catch(() => null);
+  }
 
   const productWhere: Record<string, unknown> = {
     isActive: true,
@@ -164,6 +178,10 @@ export default async function CarsListingsPage({
         mileageKm: true,
         fuelType: true,
         gearbox: true,
+        imageUrls: true,
+        isFeatured: true,
+        featuredUntil: true,
+        boostUntil: true,
         createdAt: true,
         publisherId: true,
         publisher: {
@@ -254,6 +272,8 @@ export default async function CarsListingsPage({
     dealerBadge: locale === "fr" ? "Concessionnaire" : "Dealer",
     individualBadge: locale === "fr" ? "Particulier" : "Individual",
     verified: locale === "fr" ? "Verifie" : "Verified",
+    featuredBadge: locale === "fr" ? "Mis en avant" : "Featured",
+    boostBadge: locale === "fr" ? "Boost" : "Boost",
     empty:
       locale === "fr"
         ? "Aucune annonce voiture publiee pour ces filtres."
@@ -371,7 +391,17 @@ export default async function CarsListingsPage({
           ) : (
             listings.map((listing) => (
               <article key={listing.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5">
-                <p className="text-xs text-zinc-400">{listing.make} {listing.model}</p>
+                {listing.imageUrls[0] ? (
+                  <img
+                    src={listing.imageUrls[0]}
+                    alt={listing.title}
+                    className="h-40 w-full rounded-xl border border-white/10 object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="h-40 w-full rounded-xl border border-dashed border-white/15 bg-zinc-950/40" />
+                )}
+                <p className="mt-3 text-xs text-zinc-400">{listing.make} {listing.model}</p>
                 <h2 className="mt-2 text-lg font-semibold text-white">{listing.title}</h2>
                 <p className="mt-2 line-clamp-2 text-sm text-zinc-300">{listing.description}</p>
                 <p className="mt-3 text-sm text-cyan-200">{formatMoney(listing.priceCents, listing.currency, locale)}</p>
@@ -385,6 +415,8 @@ export default async function CarsListingsPage({
                       </span>
                       {listing.publisher ? <span>{listing.publisher.name}</span> : null}
                       {listing.publisher?.verified ? <span className="text-cyan-300">{t.verified}</span> : null}
+                      {listing.featuredUntil && new Date(listing.featuredUntil) > now ? <span className="text-amber-300">{t.featuredBadge}</span> : null}
+                      {listing.boostUntil && new Date(listing.boostUntil) > now ? <span className="text-fuchsia-300">{t.boostBadge}</span> : null}
                     </span>
                   </p>
                   <Link href={`/cars/${listing.id}`} className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">{t.details}</Link>

@@ -10,6 +10,7 @@ import {
   normalizeTake,
   normalizeUpper,
   parseBoolean,
+  parseImageUrls,
   parseNullableInt,
 } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
@@ -98,7 +99,9 @@ export async function GET(request: NextRequest) {
   const publisherSlug = normalizeString(searchParams.get("publisherSlug"));
   const publisherType = parsePublisherType(searchParams.get("publisherType"));
   const verifiedOnly = parseBoolean(searchParams.get("verifiedOnly"));
+  const proRankingRaw = parseBoolean(searchParams.get("proRanking"));
   const sort = parseSort(searchParams.get("sort"));
+  const proRanking = proRankingRaw !== false && sort === "newest";
   const take = normalizeTake(searchParams.get("take"), 24, 50);
   const skip = normalizeSkip(searchParams.get("skip"));
   const maxYear = new Date().getFullYear() + 1;
@@ -162,12 +165,32 @@ export async function GET(request: NextRequest) {
     where.publisherId = { not: null };
   }
 
+  const now = new Date();
+
   const orderBy =
     sort === "price_asc"
       ? [{ priceCents: "asc" as const }, { createdAt: "desc" as const }]
       : sort === "price_desc"
       ? [{ priceCents: "desc" as const }, { createdAt: "desc" as const }]
+      : proRanking
+      ? [
+          { isFeatured: "desc" as const },
+          { featuredUntil: "desc" as const },
+          { boostUntil: "desc" as const },
+          { createdAt: "desc" as const },
+        ]
       : [{ createdAt: "desc" as const }];
+
+  if (proRanking) {
+    await prisma.carListing.updateMany({
+      where: {
+        status: "PUBLISHED",
+        isFeatured: true,
+        featuredUntil: { lt: now },
+      },
+      data: { isFeatured: false },
+    }).catch(() => null);
+  }
 
   const listings = await prisma.carListing.findMany({
     where,
@@ -188,7 +211,11 @@ export async function GET(request: NextRequest) {
       mileageKm: true,
       fuelType: true,
       gearbox: true,
+      imageUrls: true,
       status: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       publisherId: true,
@@ -206,7 +233,12 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ listings });
+  return NextResponse.json({
+    listings: listings.map((listing) => ({
+      ...listing,
+      isFeatured: Boolean(listing.featuredUntil && listing.featuredUntil > now),
+    })),
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -243,6 +275,8 @@ export async function POST(request: NextRequest) {
   const publisherIdRaw = (body as { publisherId?: unknown }).publisherId;
   const publisherId = typeof publisherIdRaw === "string" ? publisherIdRaw.trim() : "";
 
+  const parsedImageUrls = parseImageUrls((body as { imageUrls?: unknown }).imageUrls ?? []);
+
   const maxYear = new Date().getFullYear() + 1;
 
   if (!title || !description || !city || !make || !model || priceCents === null || year === null || mileageKm === null || !fuelType || !gearbox) {
@@ -266,6 +300,13 @@ export async function POST(request: NextRequest) {
   if (hasNegativeNumericInput((body as { mileageKm?: unknown }).mileageKm)) {
     return withCorrelationId(
       errorResponse(400, "VALIDATION_ERROR", "mileageKm must be non-negative."),
+      correlationId
+    );
+  }
+
+  if (parsedImageUrls === null) {
+    return withCorrelationId(
+      errorResponse(400, "VALIDATION_ERROR", "imageUrls must be an array of upload/internal or http(s) URLs (max 20)."),
       correlationId
     );
   }
@@ -310,6 +351,7 @@ export async function POST(request: NextRequest) {
       mileageKm,
       fuelType,
       gearbox,
+      imageUrls: parsedImageUrls ?? [],
     },
     select: {
       id: true,
@@ -325,7 +367,11 @@ export async function POST(request: NextRequest) {
       mileageKm: true,
       fuelType: true,
       gearbox: true,
+      imageUrls: true,
       status: true,
+      isFeatured: true,
+      featuredUntil: true,
+      boostUntil: true,
       createdAt: true,
       updatedAt: true,
       ownerId: true,
