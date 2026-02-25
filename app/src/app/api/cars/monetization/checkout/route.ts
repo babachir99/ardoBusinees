@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, errorResponse, normalizeString } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { checkRateLimit, getRateLimitHeaders, resolveClientIp } from "@/lib/rate-limit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const PLATFORM_FEE_BPS = 1000;
 
@@ -47,6 +48,9 @@ function isListingKind(kind: CarMonetizationKind) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "cars.monetizationCheckoutCreate";

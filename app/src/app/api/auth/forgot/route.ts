@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
+import { sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = String(body?.email ?? "").toLowerCase().trim();
+  const rateLimited = assertAuthRateLimit(request, {
+    routeKey: "forgot",
+    identifier: email || null,
+    ipLimit: 10,
+    identifierLimit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (rateLimited) {
+    return rateLimited;
+  }
   if (!email) {
     return NextResponse.json({ error: "email is required" }, { status: 400 });
   }
@@ -15,12 +27,15 @@ export async function POST(request: NextRequest) {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = sha256Hex(token);
   const expires = new Date(Date.now() + 1000 * 60 * 30);
+
+  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
 
   await prisma.verificationToken.create({
     data: {
       identifier: email,
-      token,
+      token: tokenHash,
       expires,
     },
   });
@@ -32,5 +47,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, token });
+  return NextResponse.json(shouldEchoAuthDebugTokens() ? { ok: true, token } : { ok: true });
 }

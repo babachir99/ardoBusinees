@@ -2,6 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { assertSameOrigin } from "@/lib/request-security";
+
+function serializeSellerDetailPublic(seller: {
+  id: string;
+  displayName: string;
+  slug: string;
+  rating: number;
+  createdAt: Date;
+  updatedAt: Date;
+  user: { name: string | null };
+  products: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    priceCents: number;
+    currency: string;
+    createdAt: Date;
+    images: Array<{ url: string; alt: string | null; position: number }>;
+  }>;
+  services: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    priceCents: number;
+    currency: string;
+    createdAt: Date;
+  }>;
+}) {
+  return {
+    id: seller.id,
+    displayName: seller.displayName,
+    slug: seller.slug,
+    rating: seller.rating,
+    createdAt: seller.createdAt,
+    updatedAt: seller.updatedAt,
+    user: { name: seller.user.name },
+    products: seller.products,
+    services: seller.services,
+  };
+}
 
 export async function GET(
   _request: NextRequest,
@@ -10,10 +50,45 @@ export async function GET(
   const { id } = await params;
   const seller = await prisma.sellerProfile.findUnique({
     where: { id },
-    include: {
-      user: { select: { id: true, name: true } },
-      products: { take: 10, orderBy: { createdAt: "desc" } },
-      services: { take: 10, orderBy: { createdAt: "desc" } },
+    select: {
+      id: true,
+      displayName: true,
+      slug: true,
+      rating: true,
+      createdAt: true,
+      updatedAt: true,
+      user: { select: { name: true } },
+      products: {
+        where: { isActive: true },
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          priceCents: true,
+          currency: true,
+          createdAt: true,
+          images: {
+            select: { url: true, alt: true, position: true },
+            orderBy: { position: "asc" },
+            take: 4,
+          },
+        },
+      },
+      services: {
+        where: { isActive: true },
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          priceCents: true,
+          currency: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -21,13 +96,16 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(seller);
+  return NextResponse.json(serializeSellerDetailPublic(seller));
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -104,9 +182,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

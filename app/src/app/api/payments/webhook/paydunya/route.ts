@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertAllowedHost } from "@/lib/request-security";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -62,6 +63,9 @@ export async function POST(request: NextRequest) {
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const actor = { system: true as const };
   const action = "payments.webhook";
+
+  const hostBlocked = assertAllowedHost(request);
+  if (hostBlocked) return respond(hostBlocked);
 
   const rawBody = await request.text();
   if (!verifySignature(rawBody, request)) {

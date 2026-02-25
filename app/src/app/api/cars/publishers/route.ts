@@ -14,6 +14,7 @@ import {
   slugifyCarPublisher,
 } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 async function ensureUniqueSlug(base: string) {
   const existing = await prisma.carPublisher.findMany({
@@ -76,6 +77,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const session = await getServerSession(authOptions);
 

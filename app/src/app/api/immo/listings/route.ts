@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, parseImageUrls } from "@/app/api/immo/listings/_shared";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 const PROPERTY_TYPES = ["APARTMENT", "HOUSE", "LAND", "COMMERCIAL", "OTHER"] as const;
@@ -227,6 +228,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");

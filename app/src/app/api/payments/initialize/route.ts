@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
 
 const PLATFORM_FEE_BPS = 1000;
 
@@ -61,6 +62,11 @@ export async function POST(request: NextRequest) {
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "payments.initialize";
+
+  const hostBlocked = assertAllowedHost(request);
+  if (hostBlocked) return respond(hostBlocked);
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return respond(csrfBlocked);
 
   try {
     if (!hasPaymentLedgerDelegate()) {

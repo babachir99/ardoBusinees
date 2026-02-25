@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { slugify } from "@/lib/slug";
 import { Prisma, SellerStatus, UserRole } from "@prisma/client";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedSellerStatuses = new Set(Object.values(SellerStatus));
 
@@ -11,6 +12,26 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function serializeSellerPublic(seller: {
+  id: string;
+  displayName: string;
+  slug: string;
+  rating: number;
+  createdAt: Date;
+  updatedAt: Date;
+  user: { name: string | null };
+}) {
+  return {
+    id: seller.id,
+    displayName: seller.displayName,
+    slug: seller.slug,
+    rating: seller.rating,
+    createdAt: seller.createdAt,
+    updatedAt: seller.updatedAt,
+    user: { name: seller.user.name },
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -21,17 +42,27 @@ export async function GET(request: NextRequest) {
     : 20;
 
   const sellers = await prisma.sellerProfile.findMany({
+    where: { status: "APPROVED" },
     take,
     orderBy: { createdAt: "desc" },
-    include: {
-      user: { select: { id: true, name: true } },
+    select: {
+      id: true,
+      displayName: true,
+      slug: true,
+      rating: true,
+      createdAt: true,
+      updatedAt: true,
+      user: { select: { name: true } },
     },
   });
 
-  return NextResponse.json(sellers);
+  return NextResponse.json(sellers.map(serializeSellerPublic));
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

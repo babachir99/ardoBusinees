@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUserRoles } from "@/lib/userRoles";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -35,6 +36,8 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

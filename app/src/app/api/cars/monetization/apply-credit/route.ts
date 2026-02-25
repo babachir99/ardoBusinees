@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, errorResponse, normalizeString } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { checkRateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const CREDIT_DURATIONS = {
   FEATURED: 7,
@@ -22,6 +23,9 @@ function parseKind(value: unknown): CreditKind | null {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "cars.monetizationApplyCredit";

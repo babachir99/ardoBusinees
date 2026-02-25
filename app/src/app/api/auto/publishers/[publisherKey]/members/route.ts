@@ -4,11 +4,15 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, errorResponse, normalizeString } from "@/app/api/auto/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ publisherKey: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const session = await getServerSession(authOptions);
 

@@ -10,6 +10,7 @@ import {
   parseNullableInt,
 } from "@/app/api/immo/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 const PROPERTY_TYPES = ["APARTMENT", "HOUSE", "LAND", "COMMERCIAL", "OTHER"] as const;
@@ -80,7 +81,7 @@ async function loadListing(id: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
@@ -112,6 +113,9 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");

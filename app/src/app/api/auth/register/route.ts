@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import crypto from "crypto";
 import { mapLegacyRoleToUserRoleType } from "@/lib/userRoles";
+import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
+import { sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -11,6 +13,8 @@ export async function POST(request: NextRequest) {
   }
 
   const email = String(body.email ?? "").toLowerCase().trim();
+  const rateLimited = assertAuthRateLimit(request, { routeKey: "register", identifier: email || null, ipLimit: 10, identifierLimit: 5, windowMs: 15 * 60 * 1000 });
+  if (rateLimited) return rateLimited;
   const password = String(body.password ?? "");
   const name = body.name ? String(body.name) : undefined;
   const phone = body.phone ? String(body.phone) : undefined;
@@ -33,6 +37,7 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = await hash(password, 10);
   const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = sha256Hex(token);
   const expires = new Date(Date.now() + 1000 * 60 * 60);
 
   const roleType = mapLegacyRoleToUserRoleType("CUSTOMER");
@@ -68,16 +73,20 @@ export async function POST(request: NextRequest) {
     })
     .catch(() => null);
 
+  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
+
   await prisma.verificationToken.create({
     data: {
       identifier: email,
-      token,
+      token: tokenHash,
       expires,
     },
   });
 
   return NextResponse.json(
-    { id: user.id, email: user.email, token },
+    shouldEchoAuthDebugTokens()
+      ? { id: user.id, email: user.email, token }
+      : { id: user.id, email: user.email },
     { status: 201 }
   );
 }

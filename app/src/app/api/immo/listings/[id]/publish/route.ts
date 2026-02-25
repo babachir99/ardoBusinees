@@ -3,11 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, canPublishImmo, errorResponse } from "@/app/api/immo/listings/_shared";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");

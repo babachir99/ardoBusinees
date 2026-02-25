@@ -11,6 +11,7 @@ import {
   slugifyImmoPublisher,
 } from "@/app/api/immo/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 function parseTake(value: unknown, fallback = 24, max = 60) {
   const parsed = Number(value);
@@ -82,6 +83,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
 

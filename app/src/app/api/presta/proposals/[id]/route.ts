@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTrustedInternalApiUrl } from "@/lib/request-security";
 
 const allowedStatuses = new Set<PrestaProposalStatus>([
   PrestaProposalStatus.ACCEPTED,
@@ -495,11 +496,12 @@ export async function PATCH(
         },
       });
 
-      const initializeUrl = new URL("/api/payments/initialize", request.url);
+      const initializeUrl = getTrustedInternalApiUrl("/api/payments/initialize");
       const initializeResponse = await fetch(initializeUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Origin: initializeUrl.origin,
           cookie: request.headers.get("cookie") ?? "",
         },
         body: JSON.stringify({

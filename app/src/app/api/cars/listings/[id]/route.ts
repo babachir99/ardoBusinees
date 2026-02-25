@@ -11,6 +11,7 @@ import {
   parseNullableInt,
 } from "@/app/api/cars/listings/_shared";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const FUEL_TYPES = ["GASOLINE", "DIESEL", "HYBRID", "ELECTRIC", "LPG", "OTHER"] as const;
 const GEARBOX_TYPES = ["MANUAL", "AUTO", "OTHER"] as const;
@@ -125,7 +126,7 @@ async function resolvePublisherMembership(publisherId: string, userId: string, i
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
@@ -152,6 +153,9 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return csrfBlocked;
+
   const correlationId = getCorrelationId(request);
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

@@ -9,6 +9,7 @@ import {
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 type ReleaseType = "PRESTA" | "TIAK";
 
@@ -88,6 +89,9 @@ export async function POST(request: NextRequest) {
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "payout.release";
+
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) return respond(csrfBlocked);
 
   if (!hasPayoutDelegates()) {
     auditLog({

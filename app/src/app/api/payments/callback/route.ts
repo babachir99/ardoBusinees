@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma/client";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -24,15 +25,36 @@ export async function POST(request: NextRequest) {
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "payments.callback";
 
+  const hostBlocked = assertAllowedHost(request);
+  if (hostBlocked) return respond(hostBlocked);
+
   const session = await getServerSession(authOptions);
   const callbackToken = request.headers.get("x-payments-callback-token");
   const expectedToken = process.env.PAYMENTS_CALLBACK_TOKEN;
 
   const hasTokenAccess = Boolean(expectedToken && callbackToken === expectedToken);
   const isAdmin = session?.user?.role === "ADMIN";
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
   const actor = isAdmin
     ? { userId: session?.user?.id ?? null, role: session?.user?.role ?? null }
     : { system: true as const };
+
+  if (isAdmin) {
+    const csrfBlocked = assertSameOrigin(request);
+    if (csrfBlocked) return respond(csrfBlocked);
+  }
+
+  if (isProduction && !isAdmin) {
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "Payment" },
+      outcome: "DENIED",
+      reason: AuditReason.FORBIDDEN,
+    });
+    return respond(NextResponse.json({ error: "Forbidden" }, { status: 403 }));
+  }
 
   if (!hasTokenAccess && !isAdmin) {
     auditLog({

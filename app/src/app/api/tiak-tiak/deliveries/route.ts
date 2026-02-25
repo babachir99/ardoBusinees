@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTrustedInternalApiUrl } from "@/lib/request-security";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 
@@ -344,11 +345,12 @@ export async function POST(request: NextRequest) {
   let paymentInitialization: unknown = null;
 
   if (isOnlinePayment && delivery.orderId) {
-    const initializeUrl = new URL("/api/payments/initialize", request.url);
+    const initializeUrl = getTrustedInternalApiUrl("/api/payments/initialize");
     const initializeResponse = await fetch(initializeUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Origin: initializeUrl.origin,
         cookie: request.headers.get("cookie") ?? "",
       },
       body: JSON.stringify({
