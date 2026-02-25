@@ -5,10 +5,13 @@ function isProduction() {
   return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
 }
 
-export function allowInsecureInternalCalls() {
+function isHostedNonLocal() {
   const vercelEnv = String(process.env.VERCEL_ENV ?? "").trim().toLowerCase();
-  const hostedNonLocal = vercelEnv === "preview" || vercelEnv === "staging";
-  if (isProduction() || hostedNonLocal) return false;
+  return vercelEnv === "preview" || vercelEnv === "staging";
+}
+
+export function allowInsecureInternalCalls() {
+  if (isProduction() || isHostedNonLocal()) return false;
   return process.env.ALLOW_INSECURE_INTERNAL_CALLS === "1";
 }
 
@@ -40,7 +43,7 @@ export function sha256Hex(value: string) {
 }
 
 export function assertAllowedHost(request: Request) {
-  if (!isProduction()) return null;
+  if (!(isProduction() || isHostedNonLocal())) return null;
 
   const allowedHosts = parseCsvEnv(process.env.ALLOWED_HOSTS);
   if (allowedHosts.length === 0) {

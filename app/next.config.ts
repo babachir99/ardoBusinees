@@ -26,6 +26,15 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers,
       },
+      {
+        source: "/uploads/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Cache-Control", value: "private, max-age=0, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Content-Security-Policy", value: "default-src 'none'; sandbox" },
+        ],
+      },
     ];
   },
 };

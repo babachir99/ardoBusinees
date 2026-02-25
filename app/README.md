@@ -40,6 +40,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 - Set `AUTH_DEBUG_TOKENS=0` (or leave unset) in production so auth endpoints never echo reset/verification tokens.
 - Configure `PUBLIC_APP_ORIGIN`, `INTERNAL_BASE_URL`, and `ALLOWED_HOSTS` with trusted production values.
+- Include ALL public webhook/callback hostnames (prod + preview/staging domains) in `ALLOWED_HOSTS`, otherwise PayDunya webhooks will be blocked.
 - Keep `ALLOW_INSECURE_INTERNAL_CALLS=0` in production and preview/staging environments.
 - Set `INTERNAL_API_TOKEN` for server-to-server internal API calls (payment initialization bridges) and keep it secret.
 - Rotate and protect `NEXTAUTH_SECRET`, `PAYDUNYA_WEBHOOK_SECRET`, and `PAYMENTS_CALLBACK_TOKEN`.
@@ -47,4 +48,6 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Replace in-memory rate limiting with a shared backend (Redis) before horizontal scaling.
 - Use a least-privilege database runtime user (no schema migration permissions).
 - Treat local `public/uploads` storage as temporary; move uploads to an isolated asset domain/bucket.
+- For production, set `PUBLIC_ASSET_BASE_URL` to an isolated asset domain/bucket.
+- TODO: `/public/uploads` is still same-origin static serving; move uploads to a dedicated asset domain/bucket (or serve via a hardened download route) before production scale.
 - Monitor audit logs for auth abuse, payout conflicts, and payment webhook failures.

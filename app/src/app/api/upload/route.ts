@@ -10,6 +10,7 @@ import {
   resolveClientIp,
 } from "@/lib/rate-limit";
 import { assertSameOrigin } from "@/lib/request-security";
+import { getPublicUploadUrl } from "@/lib/upload-url";
 
 const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOADS_PER_WINDOW = 15;
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
   await fs.writeFile(path.join(uploadDir, filename), buffer);
 
   return NextResponse.json(
-    { url: `/uploads/${filename}` },
+    { url: getPublicUploadUrl(filename) },
     { headers: getRateLimitHeaders(rate) }
   );
 }
