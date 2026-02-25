@@ -502,7 +502,10 @@ export async function PATCH(
         headers: {
           "Content-Type": "application/json",
           Origin: initializeUrl.origin,
-          cookie: request.headers.get("cookie") ?? "",
+          "x-internal-request": "1",
+          ...(process.env.INTERNAL_API_TOKEN
+            ? { "x-internal-api-token": process.env.INTERNAL_API_TOKEN }
+            : {}),
         },
         body: JSON.stringify({
           orderId: order.id,

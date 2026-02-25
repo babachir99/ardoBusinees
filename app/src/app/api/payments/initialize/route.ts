@@ -58,6 +58,21 @@ function normalizeProvider(value: unknown): string {
   return normalized || "provider_pending";
 }
 
+function isProductionEnv() {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+}
+
+function hasValidInternalApiToken(request: NextRequest) {
+  const expected = process.env.INTERNAL_API_TOKEN;
+  if (!expected) return false;
+  const provided = request.headers.get("x-internal-api-token")?.trim();
+  return Boolean(provided && provided === expected);
+}
+
+function isMarkedInternalRequest(request: NextRequest) {
+  return request.headers.get("x-internal-request")?.trim() === "1";
+}
+
 export async function POST(request: NextRequest) {
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
@@ -88,7 +103,25 @@ export async function POST(request: NextRequest) {
     }
 
     const session = await getServerSession(authOptions);
-    if (!session) {
+    const internalMarked = isMarkedInternalRequest(request);
+    const internalTokenValid = hasValidInternalApiToken(request);
+    const internalAccessAllowed =
+      internalMarked && (internalTokenValid || !isProductionEnv());
+
+    if (internalMarked && isProductionEnv() && !internalTokenValid) {
+      auditLog({
+        correlationId,
+        actor: { system: true },
+        action,
+        entity: { type: "Order" },
+        outcome: "DENIED",
+        reason: AuditReason.FORBIDDEN,
+        metadata: { internalMarked: true, tokenValid: false },
+      });
+      return respond(errorResponse(403, "FORBIDDEN", "Invalid internal token."));
+    }
+
+    if (!session && !internalAccessAllowed) {
       auditLog({
         correlationId,
         actor: { system: true },
@@ -96,11 +129,14 @@ export async function POST(request: NextRequest) {
         entity: { type: "Order" },
         outcome: "DENIED",
         reason: AuditReason.UNAUTHORIZED,
+        metadata: { internalMarked },
       });
       return respond(errorResponse(401, "UNAUTHORIZED", "Authentication required."));
     }
 
-    const actor = { userId: session.user.id, role: session.user.role };
+    const actor = session
+      ? { userId: session.user.id, role: session.user.role }
+      : ({ system: true as const });
 
     const body = await request.json().catch(() => null);
     const orderIds = getRequestedOrderIds(body);
@@ -143,9 +179,11 @@ export async function POST(request: NextRequest) {
       return respond(errorResponse(404, "ORDER_NOT_FOUND", "One or more orders were not found."));
     }
 
-    const forbiddenOrder = orders.find(
-      (order) => !canAccessOrder(order as OrderWithSeller, session.user.id, session.user.role)
-    );
+    const forbiddenOrder = session
+      ? orders.find(
+          (order) => !canAccessOrder(order as OrderWithSeller, session.user.id, session.user.role)
+        )
+      : null;
 
     if (forbiddenOrder) {
       auditLog({
