@@ -18,6 +18,21 @@ export default function Footer() {
           <Link href="/contact" className="hover:text-white">
             Contact
           </Link>
+          <Link href="/trust" className="hover:text-white">
+            Trust Center
+          </Link>
+          <Link href="/trust/faq" className="hover:text-white">
+            FAQ
+          </Link>
+          <Link href="/trust/privacy" className="hover:text-white">
+            Confidentialite
+          </Link>
+          <Link href="/trust/terms" className="hover:text-white">
+            Conditions
+          </Link>
+          <Link href="/trust/report" className="hover:text-white">
+            Signaler
+          </Link>
         </div>
       </div>
     </footer>

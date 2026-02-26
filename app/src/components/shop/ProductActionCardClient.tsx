@@ -23,6 +23,8 @@ type InquiryOffer = {
 };
 
 type InquiryPayload = {
+  blocked?: boolean;
+  blockedMessage?: string | null;
   isSellerOwner: boolean;
   meId: string;
   messages: InquiryMessage[];
@@ -79,6 +81,7 @@ export default function ProductActionCardClient({
   const [showExternalContacts, setShowExternalContacts] = useState(false);
 
   const disabledByOwner = Boolean(isSellerOwner || payload?.isSellerOwner);
+  const blockedByTrust = Boolean(payload?.blocked);
   const canNegotiate = productType === "LOCAL";
   const hasExternalContacts = Boolean(sellerPhoneHref || sellerEmailHref || sellerWhatsappHref);
 
@@ -104,6 +107,9 @@ export default function ProductActionCardClient({
       notAllowed: isFr
         ? "Action indisponible sur ton produit."
         : "Action unavailable on your own product.",
+      blockedByTrust: isFr
+        ? "Contact indisponible: un compte a bloque l'autre."
+        : "Contact unavailable: one account has blocked the other.",
       loading: isFr ? "Chargement..." : "Loading...",
       localOnly: isFr
         ? "Messagerie et offres disponibles uniquement pour les produits locaux."
@@ -133,7 +139,8 @@ export default function ProductActionCardClient({
       return null;
     } finally {
       setLoading(false);
-    }  }, [productId]);
+    }
+  }, [productId]);
 
   const openPanel = async (next: "chat" | "offer") => {
     if (!canNegotiate) {
@@ -150,7 +157,7 @@ export default function ProductActionCardClient({
 
   useEffect(() => {
     if (!openChatDefault || autoOpenedChat) return;
-    if (!isAuthenticated || disabledByOwner || !canNegotiate) return;
+    if (!isAuthenticated || disabledByOwner || blockedByTrust || !canNegotiate) return;
 
     setAutoOpenedChat(true);
     setPanel("chat");
@@ -158,7 +165,7 @@ export default function ProductActionCardClient({
     if (!payload) {
       void loadInquiry();
     }
-  }, [autoOpenedChat, canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, openChatDefault, payload]);
+  }, [autoOpenedChat, blockedByTrust, canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, openChatDefault, payload]);
 
   const sendMessage = async () => {
     const message = messageDraft.trim();
@@ -252,11 +259,12 @@ export default function ProductActionCardClient({
 
       {isAuthenticated ? (
         canNegotiate ? (
+          blockedByTrust ? null : (
           <>
             <button
               type="button"
               onClick={() => openPanel("offer")}
-              disabled={disabledByOwner}
+              disabled={disabledByOwner || blockedByTrust}
               className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-zinc-900/70 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/45 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {labels.offer}
@@ -264,12 +272,13 @@ export default function ProductActionCardClient({
             <button
               type="button"
               onClick={() => openPanel("chat")}
-              disabled={disabledByOwner}
+              disabled={disabledByOwner || blockedByTrust}
               className="inline-flex items-center justify-center rounded-xl border border-sky-300/50 bg-sky-300/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:border-sky-300/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {labels.contact}
             </button>
           </>
+          )
         ) : (
           <p className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
             {labels.localOnly}
@@ -284,7 +293,7 @@ export default function ProductActionCardClient({
         </Link>
       )}
 
-      {canNegotiate && hasExternalContacts && isAuthenticated && !disabledByOwner && (
+      {canNegotiate && hasExternalContacts && isAuthenticated && !disabledByOwner && !blockedByTrust && (
         <button
           type="button"
           onClick={() => setShowExternalContacts((value) => !value)}
@@ -294,7 +303,7 @@ export default function ProductActionCardClient({
         </button>
       )}
 
-      {canNegotiate && hasExternalContacts && showExternalContacts && isAuthenticated && !disabledByOwner && (
+      {canNegotiate && hasExternalContacts && showExternalContacts && isAuthenticated && !disabledByOwner && !blockedByTrust && (
         <div className="grid gap-2">
           {sellerPhoneHref && (
             <a
@@ -329,6 +338,7 @@ export default function ProductActionCardClient({
 
       {error && <p className="text-xs text-rose-300">{error}</p>}
       {disabledByOwner && <p className="text-xs text-zinc-500">{labels.notAllowed}</p>}
+      {blockedByTrust && <p className="text-xs text-rose-300">{payload?.blockedMessage || labels.blockedByTrust}</p>}
       {!canNegotiate && <p className="text-xs text-zinc-500">{labels.localOnly}</p>}
 
       {panel === "chat" && (

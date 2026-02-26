@@ -6,6 +6,7 @@ import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
 } from "@/lib/messagePolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 export async function GET(
   _request: NextRequest,
@@ -46,6 +47,13 @@ export async function GET(
   if (product.type !== "LOCAL") {
     return NextResponse.json(
       { error: "Offers are available only for local products." },
+      { status: 403 }
+    );
+  }
+
+  if (product.seller?.userId && (await isEitherBlocked(session.user.id, product.seller.userId))) {
+    return NextResponse.json(
+      { error: "Offers disabled because one account blocked the other." },
       { status: 403 }
     );
   }
@@ -166,6 +174,13 @@ export async function POST(
   if (product.type !== "LOCAL") {
     return NextResponse.json(
       { error: "Offers are available only for local products." },
+      { status: 403 }
+    );
+  }
+
+  if (product.seller?.userId && (await isEitherBlocked(session.user.id, product.seller.userId))) {
+    return NextResponse.json(
+      { error: "Offers disabled because one account blocked the other." },
       { status: 403 }
     );
   }

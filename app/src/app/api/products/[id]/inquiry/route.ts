@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 export async function GET(
   _request: NextRequest,
@@ -45,6 +46,26 @@ export async function GET(
 
   if (!isSellerOwner && product.type !== "LOCAL") {
     return NextResponse.json({
+      blocked: false,
+      isSellerOwner: false,
+      canNegotiate: false,
+      productId: product.id,
+      productTitle: product.title,
+      meId: session.user.id,
+      inquiry: null,
+      messages: [],
+      offers: [],
+    });
+  }
+
+  const blocked = product.seller?.userId
+    ? await isEitherBlocked(session.user.id, product.seller.userId)
+    : false;
+
+  if (blocked) {
+    return NextResponse.json({
+      blocked: true,
+      blockedMessage: "Messaging disabled because one account blocked the other.",
       isSellerOwner: false,
       canNegotiate: false,
       productId: product.id,
@@ -58,6 +79,7 @@ export async function GET(
 
   if (isSellerOwner) {
     return NextResponse.json({
+      blocked: false,
       isSellerOwner: true,
       productId: product.id,
       productTitle: product.title,
@@ -103,6 +125,7 @@ export async function GET(
   }
 
   return NextResponse.json({
+    blocked: false,
     isSellerOwner: false,
     productId: product.id,
     productTitle: product.title,

@@ -7,6 +7,7 @@ import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
 } from "@/lib/messagePolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 export async function POST(
   request: NextRequest,
@@ -73,6 +74,13 @@ export async function POST(
   if (product.type !== "LOCAL") {
     return NextResponse.json(
       { error: "Messaging is available only for local products." },
+      { status: 403 }
+    );
+  }
+
+  if (product.seller?.userId && (await isEitherBlocked(session.user.id, product.seller.userId))) {
+    return NextResponse.json(
+      { error: "Messaging disabled because one account blocked the other." },
       { status: 403 }
     );
   }
