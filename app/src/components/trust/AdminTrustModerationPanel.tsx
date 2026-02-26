@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type TrustReportItem = {
   id: string;
@@ -28,9 +28,9 @@ type TrustDisputeItem = {
   updatedAt: string;
 };
 
-export default function AdminTrustModerationPanel({ locale, initialReports, initialDisputes }: { locale: string; initialReports: TrustReportItem[]; initialDisputes: TrustDisputeItem[]; }) {
+export default function AdminTrustModerationPanel({ locale, initialReports, initialDisputes, initialTab = "reports", focusId = null }: { locale: string; initialReports: TrustReportItem[]; initialDisputes: TrustDisputeItem[]; initialTab?: "reports" | "disputes"; focusId?: string | null; }) {
   const isFr = locale === "fr";
-  const [tab, setTab] = useState<"reports" | "disputes">("reports");
+  const [tab, setTab] = useState<"reports" | "disputes">(initialTab);
   const [reports, setReports] = useState(initialReports);
   const [disputes, setDisputes] = useState(initialDisputes);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -63,6 +63,13 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
 
   const counts = useMemo(() => ({ reports: reports.length, disputes: disputes.length }), [reports.length, disputes.length]);
 
+  useEffect(() => {
+    if (!focusId) return;
+    const row = document.getElementById(`trust-row-${focusId}`);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusId, tab, reports, disputes]);
+
   return (
     <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -84,11 +91,11 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
             <thead className="text-xs uppercase tracking-wide text-zinc-400"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">Reporter</th><th className="px-2 py-2">Reported</th><th className="px-2 py-2">Reason</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Actions</th></tr></thead>
             <tbody>
               {reports.map((item) => (
-                <tr key={item.id} className="border-t border-white/5 align-top">
+                <tr key={item.id} id={`trust-row-${item.id}`} className={`border-t border-white/5 align-top ${focusId === item.id ? "bg-cyan-300/5" : ""}`}>
                   <td className="px-2 py-3 text-zinc-300">{new Date(item.createdAt).toLocaleString(locale)}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.reporter?.name ?? item.reporterId}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.reported?.name ?? item.reportedId}</td>
-                  <td className="px-2 py-3 text-zinc-200"><div>{item.reason}</div><details className="mt-1 text-xs text-zinc-400"><summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary><p className="mt-1 whitespace-pre-wrap">{item.description ?? "-"}</p></details></td>
+                  <td className="px-2 py-3 text-zinc-200"><div>{item.reason}</div><details open={focusId === item.id} className="mt-1 text-xs text-zinc-400"><summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary><p className="mt-1 whitespace-pre-wrap">{item.description ?? "-"}</p></details></td>
                   <td className="px-2 py-3 text-zinc-300">{item.status}</td>
                   <td className="px-2 py-3"><div className="flex flex-wrap gap-2">{reportStatuses.map((status) => <button key={status} type="button" onClick={() => patchRecord("reports", item.id, status)} disabled={busyKey === `reports:${item.id}:${status}` || item.status === status} className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-zinc-200 disabled:opacity-40">{status}</button>)}</div></td>
                 </tr>
@@ -103,12 +110,12 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
             <thead className="text-xs uppercase tracking-wide text-zinc-400"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">User</th><th className="px-2 py-2">Vertical</th><th className="px-2 py-2">Ref</th><th className="px-2 py-2">Reason</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Actions</th></tr></thead>
             <tbody>
               {disputes.map((item) => (
-                <tr key={item.id} className="border-t border-white/5 align-top">
+                <tr key={item.id} id={`trust-row-${item.id}`} className={`border-t border-white/5 align-top ${focusId === item.id ? "bg-cyan-300/5" : ""}`}>
                   <td className="px-2 py-3 text-zinc-300">{new Date(item.createdAt).toLocaleString(locale)}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.user?.name ?? item.userId}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.vertical}</td>
                   <td className="px-2 py-3 text-zinc-300">{item.orderId ?? "-"}</td>
-                  <td className="px-2 py-3 text-zinc-200"><div>{item.reason}</div><details className="mt-1 text-xs text-zinc-400"><summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary><p className="mt-1 whitespace-pre-wrap">{item.description}</p></details></td>
+                  <td className="px-2 py-3 text-zinc-200"><div>{item.reason}</div><details open={focusId === item.id} className="mt-1 text-xs text-zinc-400"><summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary><p className="mt-1 whitespace-pre-wrap">{item.description}</p></details></td>
                   <td className="px-2 py-3 text-zinc-300">{item.status}</td>
                   <td className="px-2 py-3"><div className="flex flex-wrap gap-2">{disputeStatuses.map((status) => <button key={status} type="button" onClick={() => patchRecord("disputes", item.id, status)} disabled={busyKey === `disputes:${item.id}:${status}` || item.status === status} className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-zinc-200 disabled:opacity-40">{status}</button>)}</div></td>
                 </tr>

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import GpTripReviewForm from "@/components/gp/GpTripReviewForm";
+import UserSafetyActions from "@/components/trust/UserSafetyActions";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
@@ -186,6 +187,12 @@ export default async function TransporterProfilePage({
             </div>
           </div>
         </section>
+
+        {session?.user?.id && !isOwner ? (
+          <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-4">
+            <UserSafetyActions userId={transporter.id} locale={locale} />
+          </section>
+        ) : null}
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">

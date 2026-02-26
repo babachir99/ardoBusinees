@@ -13,10 +13,12 @@ type OpsKpis = {
   immoMonetizationIssues: number | null;
   autoMonetizationIssues: number | null;
   carsMonetizationIssues: number | null;
+  trustReportsPending: number | null;
+  trustDisputesActive: number | null;
 };
 
 type OpsQueueItem = {
-  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
+  type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION" | "TRUST";
   id: string;
   refLabel: string;
   status: string;
@@ -155,6 +157,20 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         warn: warnFlags.kycPending,
       },
       {
+        key: "trustReports",
+        label: "Trust Reports (Pending)",
+        value: kpis.trustReportsPending,
+        href: "/admin/trust",
+        warn: typeof kpis.trustReportsPending === "number" && kpis.trustReportsPending > 0,
+      },
+      {
+        key: "trustDisputes",
+        label: "Trust Disputes (Open/In review)",
+        value: kpis.trustDisputesActive,
+        href: "/admin/trust",
+        warn: typeof kpis.trustDisputesActive === "number" && kpis.trustDisputesActive > 0,
+      },
+      {
         key: "immoMonetization",
         label: "IMMO Monetization (PENDING/FAILED)",
         value: kpis.immoMonetizationIssues,
@@ -196,6 +212,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     IMMO_MONETIZATION: "IMMO monetization",
     AUTO_MONETIZATION: "AUTO monetization",
     CARS_MONETIZATION: "CARS monetization",
+    TRUST: "Trust moderation",
   };
 
   const statusLabels: Record<string, string> = {
@@ -205,6 +222,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     PENDING: t("statuses.PENDING"),
     OPEN: t("statuses.OPEN"),
     IN_REVIEW: t("statuses.IN_REVIEW"),
+    UNDER_REVIEW: t("statuses.IN_REVIEW"),
     CONFIRMED: t("statuses.CONFIRMED"),
     INITIATED: t("statuses.INITIATED"),
   };

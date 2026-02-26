@@ -219,6 +219,10 @@ export default async function AdminPage() {
     autoMonetizationItems,
     carsMonetizationIssueCount,
     carsMonetizationItems,
+    trustReportsPendingCount,
+    trustDisputesActiveCount,
+    trustReportItems,
+    trustDisputeItems,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -387,6 +391,43 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
+    prisma.report
+      .count({ where: { status: "PENDING" } })
+      .catch(() => null),
+    prisma.trustDispute
+      .count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } })
+      .catch(() => null),
+    prisma.report
+      .findMany({
+        where: { status: { in: ["PENDING", "UNDER_REVIEW"] } },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          reporterId: true,
+          reportedId: true,
+          status: true,
+          reason: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
+    prisma.trustDispute
+      .findMany({
+        where: { status: { in: ["OPEN", "IN_REVIEW"] } },
+        orderBy: { createdAt: "asc" },
+        take: 20,
+        select: {
+          id: true,
+          vertical: true,
+          orderId: true,
+          userId: true,
+          status: true,
+          reason: true,
+          createdAt: true,
+        },
+      })
+      .catch(() => null),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -400,7 +441,7 @@ export default async function AdminPage() {
   };
 
   type OpsQueueItem = {
-    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
+    type: "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION" | "TRUST";
     id: string;
     refLabel: string;
     status: string;
@@ -502,6 +543,32 @@ export default async function AdminPage() {
       },
       createdAtMs: item.createdAt.getTime(),
     }))),
+    ...((trustReportItems ?? []).map((item) => ({
+      type: "TRUST" as const,
+      id: item.id,
+      refLabel: `Report - ${item.reportedId}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      action: {
+        kind: "link" as const,
+        label: t("opsHub.actions.inspect"),
+        href: `/admin/trust?tab=reports&focus=${item.id}`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
+    ...((trustDisputeItems ?? []).map((item) => ({
+      type: "TRUST" as const,
+      id: item.id,
+      refLabel: `Trust dispute - ${item.vertical}${item.orderId ? ` - ${item.orderId}` : ""}`,
+      status: item.status,
+      ageLabel: formatAgeLabel(item.createdAt),
+      action: {
+        kind: "link" as const,
+        label: t("opsHub.actions.openDispute"),
+        href: `/admin/trust?tab=disputes&focus=${item.id}`,
+      },
+      createdAtMs: item.createdAt.getTime(),
+    }))),
   ];
 
   const queuePriority: Record<OpsQueueItem["type"], number> = {
@@ -510,6 +577,7 @@ export default async function AdminPage() {
     IMMO_MONETIZATION: 2,
     AUTO_MONETIZATION: 2,
     CARS_MONETIZATION: 2,
+    TRUST: 1,
     PAYMENT_FAILED: 3,
   };
 
@@ -544,6 +612,10 @@ export default async function AdminPage() {
       typeof autoMonetizationIssueCount === "number" ? autoMonetizationIssueCount : null,
     carsMonetizationIssues:
       typeof carsMonetizationIssueCount === "number" ? carsMonetizationIssueCount : null,
+    trustReportsPending:
+      typeof trustReportsPendingCount === "number" ? trustReportsPendingCount : null,
+    trustDisputesActive:
+      typeof trustDisputesActiveCount === "number" ? trustDisputesActiveCount : null,
   };
 
   return (

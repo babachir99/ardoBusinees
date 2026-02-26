@@ -9,8 +9,9 @@ import AdminTrustModerationPanel from "@/components/trust/AdminTrustModerationPa
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminTrustPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AdminTrustPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string; focus?: string }>; }) {
   const { locale } = await params;
+  const resolvedSearchParams = await searchParams;
   const session = await getServerSession(authOptions);
   const isFr = locale === "fr";
 
@@ -39,6 +40,8 @@ export default async function AdminTrustPage({ params }: { params: Promise<{ loc
     : [[], []];
 
   const normalizeDisputeStatus = (status: string) => (status === "IN_REVIEW" ? "UNDER_REVIEW" : status);
+  const initialTab = resolvedSearchParams?.tab === "disputes" ? "disputes" : "reports";
+  const focusId = typeof resolvedSearchParams?.focus === "string" && resolvedSearchParams.focus.trim() ? resolvedSearchParams.focus.trim() : null;
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -52,6 +55,8 @@ export default async function AdminTrustPage({ params }: { params: Promise<{ loc
         ) : (
           <AdminTrustModerationPanel
             locale={locale}
+            initialTab={initialTab}
+            focusId={focusId}
             initialReports={reports.map((item: any) => ({ id: item.id, reporterId: item.reporterId, reportedId: item.reportedId, reporter: item.reporter ? { id: item.reporter.id, name: item.reporter.name ?? null } : undefined, reported: item.reported ? { id: item.reported.id, name: item.reported.name ?? null } : undefined, reason: item.reason, description: item.description ?? null, status: item.status, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
             initialDisputes={disputes.map((item: any) => ({ id: item.id, userId: item.userId, user: item.user ? { id: item.user.id, name: item.user.name ?? null } : undefined, orderId: item.orderId ?? null, vertical: item.vertical, reason: item.reason, description: item.description, status: normalizeDisputeStatus(item.status), createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
           />
