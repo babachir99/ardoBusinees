@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, context: Parameters<typeof hand
   const isCredentialsCallback = request.nextUrl.pathname.endsWith("/api/auth/callback/credentials");
   if (isCredentialsCallback) {
     const email = await extractCredentialEmail(request);
-    const rateLimited = assertAuthRateLimit(request, {
+    const rateLimited = await assertAuthRateLimit(request, {
       routeKey: "login",
       identifier: email,
       ipLimit: 15,

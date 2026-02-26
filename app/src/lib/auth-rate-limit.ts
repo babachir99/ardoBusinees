@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit, resolveClientIp } from "@/lib/rate-limit";
+import { checkRateLimitAsync, resolveClientIp } from "@/lib/rate-limit";
 
 function normalizeIdentifier(value: string | null | undefined) {
   const trimmed = String(value ?? "").trim().toLowerCase();
@@ -21,7 +21,7 @@ function tooManyResponse(retryAfterSeconds: number, scope: string) {
   );
 }
 
-export function assertAuthRateLimit(
+export async function assertAuthRateLimit(
   request: NextRequest,
   options: {
     routeKey: string;
@@ -37,14 +37,14 @@ export function assertAuthRateLimit(
   const identifierLimit = options.identifierLimit ?? 8;
   const ip = resolveClientIp(request);
 
-  const ipRate = checkRateLimit({ key: `auth:${routeKey}:ip:${ip}`, limit: ipLimit, windowMs });
+  const ipRate = await checkRateLimitAsync({ key: `auth:${routeKey}:ip:${ip}`, limit: ipLimit, windowMs });
   if (!ipRate.allowed) {
     return tooManyResponse(ipRate.retryAfterSeconds, "ip");
   }
 
   const identifier = normalizeIdentifier(options.identifier);
   if (identifier) {
-    const idRate = checkRateLimit({
+    const idRate = await checkRateLimitAsync({
       key: `auth:${routeKey}:id:${identifier}`,
       limit: identifierLimit,
       windowMs,

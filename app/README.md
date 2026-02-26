@@ -46,8 +46,76 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Rotate and protect `NEXTAUTH_SECRET`, `PAYDUNYA_WEBHOOK_SECRET`, and `PAYMENTS_CALLBACK_TOKEN`.
 - Enforce HTTPS at the reverse proxy and keep HSTS enabled in production.
 - Replace in-memory rate limiting with a shared backend (Redis) before horizontal scaling.
+- For distributed auth rate limiting in production, configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (fallback is in-memory only).
 - Use a least-privilege database runtime user (no schema migration permissions).
 - Treat local `public/uploads` storage as temporary; move uploads to an isolated asset domain/bucket.
 - For production, set `PUBLIC_ASSET_BASE_URL` to an isolated asset domain/bucket.
 - TODO: `/public/uploads` is still same-origin static serving; move uploads to a dedicated asset domain/bucket (or serve via a hardened download route) before production scale.
 - Monitor audit logs for auth abuse, payout conflicts, and payment webhook failures.
+
+
+## Security Validation Runbook (Staging/Prod)
+
+Set these environment variables on the server (staging first, then production):
+
+```bash
+PUBLIC_APP_ORIGIN=https://ton-domaine.tld
+ALLOWED_HOSTS=ton-domaine.tld,www.ton-domaine.tld
+INTERNAL_BASE_URL=https://ton-domaine.tld
+INTERNAL_API_TOKEN=<random-long-secret>
+ALLOW_INSECURE_INTERNAL_CALLS=0
+AUTH_DEBUG_TOKENS=0
+NEXTAUTH_SECRET=<secret>
+PAYDUNYA_WEBHOOK_SECRET=<secret>
+PAYMENTS_CALLBACK_TOKEN=<secret>
+UPSTASH_REDIS_REST_URL=<optional-for-distributed-rate-limit>
+UPSTASH_REDIS_REST_TOKEN=<optional-for-distributed-rate-limit>
+PUBLIC_ASSET_BASE_URL=<optional-assets-domain>
+```
+
+PowerShell (current session):
+
+```powershell
+$env:PUBLIC_APP_ORIGIN="https://ton-domaine.tld"
+$env:ALLOWED_HOSTS="ton-domaine.tld,www.ton-domaine.tld"
+$env:INTERNAL_BASE_URL="https://ton-domaine.tld"
+$env:INTERNAL_API_TOKEN="<random-long-secret>"
+$env:ALLOW_INSECURE_INTERNAL_CALLS="0"
+$env:AUTH_DEBUG_TOKENS="0"
+$env:NEXTAUTH_SECRET="<secret>"
+$env:PAYDUNYA_WEBHOOK_SECRET="<secret>"
+$env:PAYMENTS_CALLBACK_TOKEN="<secret>"
+$env:UPSTASH_REDIS_REST_URL="<optional-for-distributed-rate-limit>"
+$env:UPSTASH_REDIS_REST_TOKEN="<optional-for-distributed-rate-limit>"
+$env:PUBLIC_ASSET_BASE_URL="<optional-assets-domain>"
+```
+
+Build and run:
+
+```bash
+npm run build
+npm start
+```
+
+Run security smoke checks (from another terminal in `app/`):
+
+```bash
+export BASE_URL=https://ton-domaine.tld
+export COOKIE_ADMIN='next-auth.session-token=<token_admin_valide>'
+export INTERNAL_API_TOKEN='<internal_api_token>' # optional but recommended for smoke [7b]
+bash scripts/smoke/security_regression.sh
+```
+
+PowerShell:
+
+```powershell
+$env:BASE_URL="https://ton-domaine.tld"
+$env:COOKIE_ADMIN="next-auth.session-token=<token_admin_valide>"
+$env:INTERNAL_API_TOKEN="<internal_api_token>" # optional but recommended for smoke [7b]
+bash scripts/smoke/security_regression.sh
+```
+
+Notes:
+- Run this on staging before production.
+- `ALLOW_INSECURE_INTERNAL_CALLS` must stay `0` on production/preview/staging.
+- Include all webhook/callback hostnames in `ALLOWED_HOSTS`.

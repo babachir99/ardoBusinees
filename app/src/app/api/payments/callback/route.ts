@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
 
   const hasTokenAccess = Boolean(expectedToken && callbackToken === expectedToken);
   const isAdmin = session?.user?.role === "ADMIN";
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+  const vercelEnv = String(process.env.VERCEL_ENV ?? "").trim().toLowerCase();
+  const isHostedNonLocal = vercelEnv === "preview" || vercelEnv === "staging";
+  const isProduction = process.env.NODE_ENV === "production" || vercelEnv === "production";
+  const isProductionLikeHosted = isProduction || isHostedNonLocal;
   const actor = isAdmin
     ? { userId: session?.user?.id ?? null, role: session?.user?.role ?? null }
     : { system: true as const };
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
     if (csrfBlocked) return respond(csrfBlocked);
   }
 
-  if (isProduction && !isAdmin) {
+  if (isProductionLikeHosted && !isAdmin) {
     auditLog({
       correlationId,
       actor,

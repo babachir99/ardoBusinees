@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
-import { assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
+import { allowInsecureInternalCalls, assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
 
 const PLATFORM_FEE_BPS = 1000;
 
@@ -58,9 +58,6 @@ function normalizeProvider(value: unknown): string {
   return normalized || "provider_pending";
 }
 
-function isProductionEnv() {
-  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-}
 
 function hasValidInternalApiToken(request: NextRequest) {
   const expected = process.env.INTERNAL_API_TOKEN;
@@ -105,10 +102,11 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
     const internalMarked = isMarkedInternalRequest(request);
     const internalTokenValid = hasValidInternalApiToken(request);
+    const insecureInternalAllowed = allowInsecureInternalCalls();
     const internalAccessAllowed =
-      internalMarked && (internalTokenValid || !isProductionEnv());
+      internalMarked && (internalTokenValid || insecureInternalAllowed);
 
-    if (internalMarked && isProductionEnv() && !internalTokenValid) {
+    if (internalMarked && !insecureInternalAllowed && !internalTokenValid) {
       auditLog({
         correlationId,
         actor: { system: true },

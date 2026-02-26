@@ -15,6 +15,18 @@ export type RateLimitResult = {
 const STORE_KEY = "__jontaado_rate_limit_store__" as const;
 const MAX_KEYS_BEFORE_CLEANUP = 5000;
 
+type UpstashRestConfig = {
+  url: string;
+  token: string;
+};
+
+function getUpstashRestConfig(): UpstashRestConfig | null {
+  const url = String(process.env.UPSTASH_REDIS_REST_URL ?? "").trim();
+  const token = String(process.env.UPSTASH_REDIS_REST_TOKEN ?? "").trim();
+  if (!url || !token) return null;
+  return { url: url.replace(/\/+$/, ""), token };
+}
+
 function getStore(): Map<string, RateLimitEntry> {
   const globalWithStore = globalThis as typeof globalThis & {
     [STORE_KEY]?: Map<string, RateLimitEntry>;
@@ -98,10 +110,64 @@ export function checkRateLimit({
   };
 }
 
+export async function checkRateLimitAsync(args: {
+  key: string;
+  limit: number;
+  windowMs: number;
+}): Promise<RateLimitResult> {
+  const external = await checkRateLimitUpstash(args);
+  if (external) return external;
+  return checkRateLimit(args);
+}
+
 export function getRateLimitHeaders(result: RateLimitResult): Record<string, string> {
   return {
     "X-RateLimit-Remaining": String(result.remaining),
     "X-RateLimit-Reset": String(Math.floor(result.resetAt / 1000)),
     "Retry-After": String(result.retryAfterSeconds),
   };
+}
+
+async function checkRateLimitUpstash({
+  key,
+  limit,
+  windowMs,
+}: {
+  key: string;
+  limit: number;
+  windowMs: number;
+}): Promise<RateLimitResult | null> {
+  const config = getUpstashRestConfig();
+  if (!config) return null;
+  const now = Date.now();
+  try {
+    const response = await fetch(`${config.url}/pipeline`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([["INCR", key], ["PEXPIRE", key, String(windowMs), "NX"], ["PTTL", key]]),
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const body = (await response.json().catch(() => null)) as
+      | Array<{ result?: unknown; error?: string | null }>
+      | null;
+    if (!Array.isArray(body) || body.length < 3 || body.some((item) => item?.error)) return null;
+    const count = Number(body[0]?.result ?? 0);
+    let ttlMs = Number(body[2]?.result ?? -1);
+    if (!Number.isFinite(count) || count <= 0) return null;
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0) ttlMs = windowMs;
+    const resetAt = now + ttlMs;
+    const allowed = count <= limit;
+    return {
+      allowed,
+      remaining: allowed ? Math.max(limit - count, 0) : 0,
+      resetAt,
+      retryAfterSeconds: Math.max(Math.ceil(ttlMs / 1000), 0),
+    };
+  } catch {
+    return null;
+  }
 }

@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = String(body?.email ?? "").toLowerCase().trim();
   const token = String(body?.token ?? "");
-  const rateLimited = assertAuthRateLimit(request, { routeKey: "verify", identifier: email || null, ipLimit: 20, identifierLimit: 10, windowMs: 15 * 60 * 1000 });
+  const rateLimited = await assertAuthRateLimit(request, { routeKey: "verify", identifier: email || null, ipLimit: 20, identifierLimit: 10, windowMs: 15 * 60 * 1000 });
   if (rateLimited) return rateLimited;
 
   if (!email || !token) {

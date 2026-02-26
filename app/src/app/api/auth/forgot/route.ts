@@ -7,7 +7,7 @@ import { sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const email = String(body?.email ?? "").toLowerCase().trim();
-  const rateLimited = assertAuthRateLimit(request, {
+  const rateLimited = await assertAuthRateLimit(request, {
     routeKey: "forgot",
     identifier: email || null,
     ipLimit: 10,

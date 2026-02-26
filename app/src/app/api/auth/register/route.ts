@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   }
 
   const email = String(body.email ?? "").toLowerCase().trim();
-  const rateLimited = assertAuthRateLimit(request, { routeKey: "register", identifier: email || null, ipLimit: 10, identifierLimit: 5, windowMs: 15 * 60 * 1000 });
+  const rateLimited = await assertAuthRateLimit(request, { routeKey: "register", identifier: email || null, ipLimit: 10, identifierLimit: 5, windowMs: 15 * 60 * 1000 });
   if (rateLimited) return rateLimited;
   const password = String(body.password ?? "");
   const name = body.name ? String(body.name) : undefined;

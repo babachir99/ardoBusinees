@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${BASE_URL:=http://localhost:3000}"
 : "${COOKIE_ADMIN:=next-auth.session-token=<ADMIN_TOKEN>}"
+: "${INTERNAL_API_TOKEN:=}"
 
 echo "[1] forgot/register token echo disabled (run app in production mode to validate)"
 curl -i -X POST "${BASE_URL}/api/auth/forgot"   -H "Content-Type: application/json"   --data '{"email":"user@example.com"}' || true
@@ -29,5 +30,26 @@ rg -n 'new URL\(\s*"/api/payments/initialize"\s*,\s*request\.url' src/app/api ||
 
 echo "[5b] static regression: internal payment init calls should use trusted base helper + explicit Origin"
 rg -n 'getTrustedInternalApiUrl\("/api/payments/initialize"\)|Origin: initializeUrl.origin' src/app/api/presta src/app/api/tiak-tiak || true
+
+
+echo "[6] static regression: startup security fail-fast guard must exist (next.config.ts)"
+rg -n 'assertStartupSecurityEnv|ALLOWED_HOSTS|PUBLIC_APP_ORIGIN|INTERNAL_BASE_URL|INTERNAL_API_TOKEN|ALLOW_INSECURE_INTERNAL_CALLS' next.config.ts || true
+
+echo "[7] internal payment init must reject x-internal-request without token (expect 403 unless local insecure override is enabled)"
+curl -i -X POST "${BASE_URL}/api/payments/initialize" \
+  -H "Content-Type: application/json" \
+  -H "x-internal-request: 1" \
+  --data '{}' || true
+
+if [ -n "${INTERNAL_API_TOKEN}" ]; then
+  echo "[7b] internal payment init with valid token should pass auth gate (expect not 403; likely 400 INVALID_INPUT without orderId)"
+  curl -i -X POST "${BASE_URL}/api/payments/initialize" \
+    -H "Content-Type: application/json" \
+    -H "x-internal-request: 1" \
+    -H "x-internal-api-token: ${INTERNAL_API_TOKEN}" \
+    --data '{}' || true
+else
+  echo "[7b] skipped (set INTERNAL_API_TOKEN to validate internal auth gate positive path)"
+fi
 
 echo "Done."
