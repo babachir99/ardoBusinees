@@ -7,6 +7,7 @@ export class ConsoleProvider implements EmailProvider {
         ts: new Date().toISOString(),
         channel: "email.console",
         outboxId: input.outboxId,
+        dedupeKey: input.dedupeKey,
         subject: input.subject,
       })
     );

@@ -1,7 +1,11 @@
 import { randomUUID } from "crypto";
 import { EmailOutboxStatus, NotificationKind, Prisma, type NotificationPreference } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { EmailProvider } from "@/lib/notifications/providers/EmailProvider";
+import {
+  EmailProviderError,
+  isRetryableEmailProviderError,
+  type EmailProvider,
+} from "@/lib/notifications/providers/EmailProvider";
 import { ConsoleProvider } from "@/lib/notifications/providers/ConsoleProvider";
 import { ResendProvider } from "@/lib/notifications/providers/ResendProvider";
 import {
@@ -168,6 +172,7 @@ async function lockPendingRows(limit: number, now: Date, lockId: string) {
     kind: NotificationKind;
     templateKey: string;
     payloadJson: Prisma.JsonValue;
+    dedupeKey: string;
     attempts: number;
   }>;
 
@@ -187,7 +192,6 @@ async function lockPendingRows(limit: number, now: Date, lockId: string) {
 
   return prisma.emailOutbox.findMany({
     where: {
-      id: { in: ids },
       lockId,
     },
     select: {
@@ -197,14 +201,33 @@ async function lockPendingRows(limit: number, now: Date, lockId: string) {
       kind: true,
       templateKey: true,
       payloadJson: true,
+      dedupeKey: true,
       attempts: true,
     },
-    orderBy: [{ createdAt: "asc" }],
+    orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
+    take: limit,
   });
 }
 
 function getRetryDelayMs(nextAttempt: number) {
   return Math.min(nextAttempt * 5 * 60 * 1000, 60 * 60 * 1000);
+}
+
+function getProviderErrorCode(error: unknown): string {
+  if (error instanceof EmailProviderError) {
+    return (error.code || "PROVIDER_ERROR").slice(0, 120);
+  }
+
+  if (error instanceof Error) {
+    return error.name ? `PROVIDER_${error.name.toUpperCase()}`.slice(0, 120) : "PROVIDER_ERROR";
+  }
+
+  return "PROVIDER_ERROR";
+}
+
+function shouldRetrySend(error: unknown, nextAttempt: number): boolean {
+  if (!isRetryableEmailProviderError(error)) return false;
+  return nextAttempt < MAX_ATTEMPTS;
 }
 
 function safePayloadFromJson(value: Prisma.JsonValue): NotificationTemplatePayload {
@@ -236,6 +259,7 @@ async function processOutboxRow(params: {
     kind: NotificationKind;
     templateKey: string;
     payloadJson: Prisma.JsonValue;
+    dedupeKey: string;
     attempts: number;
   };
   lockId: string;
@@ -272,6 +296,8 @@ async function processOutboxRow(params: {
   try {
     const sendResult = await provider.send({
       outboxId: row.id,
+      dedupeKey: row.dedupeKey,
+      idempotencyKey: row.dedupeKey,
       toEmail: row.toEmail,
       subject: rendered.subject,
       html: rendered.html,
@@ -298,8 +324,10 @@ async function processOutboxRow(params: {
     return "sent";
   } catch (error) {
     const nextAttempt = row.attempts + 1;
-    const terminalFailure = nextAttempt >= MAX_ATTEMPTS;
-    const nextScheduledAt = new Date(now.getTime() + getRetryDelayMs(nextAttempt));
+    const retryable = shouldRetrySend(error, nextAttempt);
+    const nextScheduledAt = retryable
+      ? new Date(now.getTime() + getRetryDelayMs(nextAttempt))
+      : now;
 
     await prisma.emailOutbox.updateMany({
       where: {
@@ -307,10 +335,10 @@ async function processOutboxRow(params: {
         lockId,
       },
       data: {
-        status: terminalFailure ? EmailOutboxStatus.FAILED : EmailOutboxStatus.PENDING,
+        status: retryable ? EmailOutboxStatus.PENDING : EmailOutboxStatus.FAILED,
         attempts: nextAttempt,
-        lastError: error instanceof Error ? error.message.slice(0, 400) : "SEND_FAILED",
-        scheduledAt: terminalFailure ? now : nextScheduledAt,
+        lastError: getProviderErrorCode(error),
+        scheduledAt: nextScheduledAt,
         lockId: null,
         lockedAt: null,
         updatedAt: now,

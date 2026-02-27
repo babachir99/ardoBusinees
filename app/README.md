@@ -164,6 +164,8 @@ bash scripts/smoke/trust_smoke.sh
 - Providers: `EMAIL_PROVIDER=console` (dev) or `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` + `RESEND_FROM_EMAIL`.
 - Cron auth: send `x-cron-secret: <CRON_SECRET>` (or `Authorization: Bearer <CRON_SECRET>`).
 - Marketing unsubscribe: links use signed tokens via `/api/unsubscribe?token=...`.
+- Unsubscribe signing uses `HMAC_SECRET_CURRENT` (active) and optionally `HMAC_SECRET_PREVIOUS` for secret rotation.
+- Unsubscribe tokens are marketing-only and expire (`UNSUBSCRIBE_TOKEN_TTL_SECONDS`, default 30 days).
 - Current hooks: order paid, delivery status updates, price-drop alerts (favorites), payment reminders, weekly deals digest.
 
 Example cron trigger:

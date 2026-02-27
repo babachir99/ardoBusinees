@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
   const template = await getContactTemplate({
     vertical,
     context: {
+      itemTitle: searchParams.get("itemTitle") ?? searchParams.get("title") ?? undefined,
+      contextRef: searchParams.get("contextRef") ?? searchParams.get("ref") ?? undefined,
       listingTitle: searchParams.get("listingTitle") ?? undefined,
       productTitle: searchParams.get("productTitle") ?? undefined,
       serviceTitle: searchParams.get("serviceTitle") ?? undefined,

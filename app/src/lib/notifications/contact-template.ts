@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NotificationVertical } from "@prisma/client";
 
 export type ContactTemplateContext = {
+  itemTitle?: string;
+  contextRef?: string;
   listingTitle?: string;
   productTitle?: string;
   serviceTitle?: string;
@@ -11,6 +13,13 @@ export type ContactTemplateContext = {
 };
 
 type ContactTemplateResult = {
+  key: string;
+  vertical: NotificationVertical;
+  subject: string;
+  body: string;
+};
+
+type ContactTemplateDefault = {
   key: string;
   vertical: NotificationVertical;
   subject: string;
@@ -27,36 +36,92 @@ const CONTACT_TEMPLATE_KEY_BY_VERTICAL: Record<NotificationVertical, string> = {
   CARS: "CARS_CONTACT_DEALER",
 };
 
-const FALLBACK_TEMPLATE: Record<string, { subject: string; body: string }> = {
-  SHOP_CONTACT_SELLER: {
+export const CONTACT_TEMPLATE_DEFAULTS: ContactTemplateDefault[] = [
+  {
+    key: "SHOP_CONTACT_SELLER",
+    vertical: "SHOP",
     subject: "Question sur {{productTitle}}",
     body: "Bonjour, je vous contacte au sujet de {{productTitle}}.",
   },
-  PRESTA_CONTACT_PROVIDER: {
+  {
+    key: "PRESTA_CONTACT_PROVIDER",
+    vertical: "PRESTA",
     subject: "Demande de service {{serviceTitle}}",
     body: "Bonjour, je souhaite discuter de {{serviceTitle}}.",
   },
-  GP_CONTACT_TRANSPORTER: {
+  {
+    key: "GP_CONTACT_TRANSPORTER",
+    vertical: "GP",
     subject: "Question transport {{orderRef}}",
     body: "Bonjour, je vous contacte pour le transport {{orderRef}}.",
   },
-  TIAK_CONTACT_COURIER: {
+  {
+    key: "TIAK_CONTACT_COURIER",
+    vertical: "TIAK",
     subject: "Course {{orderRef}}",
     body: "Bonjour, je vous contacte au sujet de la course {{orderRef}}.",
   },
-  IMMO_CONTACT_AGENCY: {
+  {
+    key: "IMMO_CONTACT_AGENCY",
+    vertical: "IMMO",
     subject: "Interet pour {{listingTitle}}",
     body: "Bonjour, je suis interesse par {{listingTitle}}.",
   },
-  CARS_CONTACT_DEALER: {
+  {
+    key: "CARS_CONTACT_DEALER",
+    vertical: "CARS",
     subject: "Question sur {{listingTitle}}",
     body: "Bonjour, je souhaite plus d'informations sur {{listingTitle}}.",
   },
-  GENERIC_CONTACT: {
+  {
+    key: "GENERIC_CONTACT",
+    vertical: "GENERIC",
     subject: "Nouveau contact JONTAADO",
     body: "Bonjour, je vous contacte via JONTAADO.",
   },
-};
+];
+
+const DEFAULT_BY_KEY = CONTACT_TEMPLATE_DEFAULTS.reduce<Record<string, ContactTemplateDefault>>(
+  (accumulator, template) => {
+    accumulator[template.key] = template;
+    return accumulator;
+  },
+  {}
+);
+
+let defaultsAttempted = false;
+
+function coalesce(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function normalizeTemplateContext(context: ContactTemplateContext): ContactTemplateContext {
+  const itemTitle = coalesce(
+    context.itemTitle,
+    context.productTitle,
+    context.serviceTitle,
+    context.listingTitle
+  );
+  const contextRef = coalesce(context.contextRef, context.orderRef);
+
+  return {
+    ...context,
+    itemTitle,
+    contextRef,
+    productTitle: coalesce(context.productTitle, itemTitle),
+    serviceTitle: coalesce(context.serviceTitle, itemTitle),
+    listingTitle: coalesce(context.listingTitle, itemTitle),
+    orderRef: coalesce(context.orderRef, contextRef),
+    proposedDates: coalesce(context.proposedDates),
+    phoneOptional: coalesce(context.phoneOptional),
+  };
+}
 
 function interpolate(value: string, context: ContactTemplateContext): string {
   return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, rawKey: string) => {
@@ -66,6 +131,25 @@ function interpolate(value: string, context: ContactTemplateContext): string {
       ? replacement.trim()
       : "";
   });
+}
+
+async function ensureContactTemplateDefaults() {
+  if (defaultsAttempted) return;
+  defaultsAttempted = true;
+
+  try {
+    await prisma.messageTemplate.createMany({
+      data: CONTACT_TEMPLATE_DEFAULTS.map((template) => ({
+        key: template.key,
+        vertical: template.vertical,
+        subjectDefault: template.subject,
+        bodyDefault: template.body,
+      })),
+      skipDuplicates: true,
+    });
+  } catch {
+    // Keep runtime fallback templates working even if seeding fails.
+  }
 }
 
 function normalizeVertical(value: string | null | undefined): NotificationVertical {
@@ -84,8 +168,10 @@ export async function getContactTemplate(params: {
   context?: ContactTemplateContext;
 }): Promise<ContactTemplateResult> {
   const vertical = normalizeVertical(params.vertical);
-  const context = params.context ?? {};
   const key = CONTACT_TEMPLATE_KEY_BY_VERTICAL[vertical];
+  const context = normalizeTemplateContext(params.context ?? {});
+
+  await ensureContactTemplateDefaults();
 
   const stored = await prisma.messageTemplate.findUnique({
     where: { key },
@@ -97,15 +183,15 @@ export async function getContactTemplate(params: {
     },
   });
 
-  const fallback = FALLBACK_TEMPLATE[key] ?? FALLBACK_TEMPLATE.GENERIC_CONTACT;
+  const fallback = DEFAULT_BY_KEY[key] ?? DEFAULT_BY_KEY.GENERIC_CONTACT;
   const subjectRaw = stored?.subjectDefault || fallback.subject;
   const bodyRaw = stored?.bodyDefault || fallback.body;
 
   return {
     key,
-    vertical: stored?.vertical ?? vertical,
-    subject: interpolate(subjectRaw, context).trim() || interpolate(fallback.subject, context),
-    body: interpolate(bodyRaw, context).trim() || interpolate(fallback.body, context),
+    vertical: stored?.vertical ?? fallback.vertical,
+    subject: interpolate(subjectRaw, context).trim() || interpolate(fallback.subject, context).trim(),
+    body: interpolate(bodyRaw, context).trim() || interpolate(fallback.body, context).trim(),
   };
 }
 

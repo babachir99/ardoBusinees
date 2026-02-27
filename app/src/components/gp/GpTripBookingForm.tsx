@@ -95,6 +95,7 @@ export default function GpTripBookingForm({
   const [status, setStatus] = useState<BookingStatus | null>(initialStatus ?? null);
   const [canContact, setCanContact] = useState(false);
   const [contactUnlockStatusHint, setContactUnlockStatusHint] = useState<string | null>(null);
+  const [contactTemplateLoaded, setContactTemplateLoaded] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -158,6 +159,43 @@ export default function GpTripBookingForm({
       cancelled = true;
     };
   }, [isLoggedIn, isOwner, tripId]);
+
+  useEffect(() => {
+    setContactTemplateLoaded(false);
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!open || !isLoggedIn || isOwner) return;
+    if (contactTemplateLoaded) return;
+    if (message.trim().length > 0) return;
+
+    const params = new URLSearchParams({
+      vertical: "GP",
+      contextRef: tripId,
+      orderRef: tripId,
+    });
+
+    let cancelled = false;
+    setContactTemplateLoaded(true);
+
+    void fetch(`/api/messages/templates?${params.toString()}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const payload = (await response.json().catch(() => null)) as
+          | { template?: { body?: string | null } }
+          | null;
+        return payload?.template?.body?.trim() || null;
+      })
+      .then((body) => {
+        if (cancelled || !body) return;
+        setMessage((current) => (current.trim().length > 0 ? current : body));
+      })
+      .catch(() => null);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contactTemplateLoaded, isLoggedIn, isOwner, message, open, tripId]);
 
   if (isOwner) return null;
 
