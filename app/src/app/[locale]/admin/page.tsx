@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
+import { hasUserRole } from "@/lib/userRoles";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -16,7 +17,7 @@ export default async function AdminPage() {
   const locale = await getLocale();
   const t = await getTranslations("Admin");
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !hasUserRole(session.user, "ADMIN")) {
     return (
       <div className="min-h-screen bg-jonta text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12">

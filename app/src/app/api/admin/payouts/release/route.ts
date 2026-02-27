@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { assertSameOrigin } from "@/lib/request-security";
+import { hasUserRole } from "@/lib/userRoles";
 
 type ReleaseType = "PRESTA" | "TIAK";
 
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
 
   const session = await getServerSession(authOptions);
   const actor = { userId: session?.user?.id ?? null, role: session?.user?.role ?? null };
-  if (!session?.user?.id || session.user.role !== "ADMIN") {
+  if (!session?.user?.id || !hasUserRole(session.user, "ADMIN")) {
     auditLog({
       correlationId,
       actor,
