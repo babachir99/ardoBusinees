@@ -1,4 +1,7 @@
-﻿import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
 import UserSafetyActions from "@/components/trust/UserSafetyActions";
 
 type PurchaseInfoPanelProps = {
@@ -44,6 +47,35 @@ export default function PurchaseInfoPanel({
 }: PurchaseInfoPanelProps) {
   const isFr = locale === "fr";
   const leadDays = preorderLeadDays ?? 14;
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
+
+  const canShowSafetyActions = Boolean(isAuthenticated && sellerUserId && !isSellerOwner);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!actionsRef.current) return;
+      if (!actionsRef.current.contains(event.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActionsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [actionsOpen]);
 
   const deliveryLabel =
     productType === "PREORDER"
@@ -117,7 +149,39 @@ export default function PurchaseInfoPanel({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-semibold text-white">{sellerDisplay}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="truncate text-lg font-semibold text-white">{sellerDisplay}</p>
+
+              {canShowSafetyActions ? (
+                <div className="relative" ref={actionsRef}>
+                  <button
+                    type="button"
+                    aria-label={isFr ? "Plus d'actions" : "More actions"}
+                    aria-haspopup="menu"
+                    aria-expanded={actionsOpen}
+                    onClick={() => setActionsOpen((value) => !value)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-sm font-semibold text-zinc-300 transition hover:border-white/35 hover:bg-white/5"
+                  >
+                    ...
+                  </button>
+
+                  {actionsOpen && sellerUserId ? (
+                    <div
+                      role="menu"
+                      className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-white/15 bg-zinc-900/95 p-2 shadow-2xl"
+                    >
+                      <UserSafetyActions
+                        userId={sellerUserId}
+                        locale={locale}
+                        variant="menu"
+                        onActionComplete={() => setActionsOpen(false)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
             <p className="text-sm text-zinc-300">
               {isFr ? "Note" : "Rating"} {ratingValue}
             </p>
@@ -140,10 +204,8 @@ export default function PurchaseInfoPanel({
             : "Use this panel to contact the seller through internal chat and track offers safely."}
         </p>
 
-        {isAuthenticated && sellerUserId && !isSellerOwner ? (
-          <div className="mt-3">
-            <UserSafetyActions userId={sellerUserId} locale={locale} />
-          </div>
+        {canShowSafetyActions && sellerUserId ? (
+          <UserSafetyActions userId={sellerUserId} locale={locale} variant="inline" />
         ) : null}
 
         <ProductActionCardClient
@@ -192,8 +254,3 @@ export default function PurchaseInfoPanel({
     </aside>
   );
 }
-
-
-
-
-
