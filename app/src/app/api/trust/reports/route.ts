@@ -15,6 +15,7 @@ import {
   trustError,
   trustJson,
   validateReasonAndDescription,
+  parseProofUrls,
   enforceTrustCreateRateLimit,
   TRUST_DUPLICATE_WINDOW_MS,
 } from "@/app/api/trust/_shared";
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const reportedUserId = String(body?.reportedUserId ?? "").trim();
   const validation = validateReasonAndDescription(body?.reason, body?.description);
-  if (!reportedUserId || validation.error) {
-    return trustError("VALIDATION_ERROR", validation.error ?? "reportedUserId is required.", 400, correlationId);
+  const proofUrls = parseProofUrls(body?.proofUrls);
+  if (!reportedUserId || validation.error || !proofUrls) {
+    return trustError("VALIDATION_ERROR", validation.error ?? (!proofUrls ? "Invalid proofUrls." : "reportedUserId is required."), 400, correlationId);
   }
   if (reportedUserId === session.user.id) {
     return trustError("VALIDATION_ERROR", "You cannot report your own account.", 400, correlationId);
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest) {
       reportedId: reportedUserId,
       reason: validation.reason,
       description: validation.description,
+      proofUrls,
       status: "PENDING",
     },
     include: {

@@ -12,6 +12,7 @@ type TrustReportItem = {
   assignedAdmin?: { id: string; name: string | null };
   reason: string;
   description: string | null;
+  proofUrls: string[];
   status: "PENDING" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED";
   resolutionCode: string | null;
   internalNote: string | null;
@@ -30,6 +31,7 @@ type TrustDisputeItem = {
   vertical: "SHOP" | "PRESTA" | "GP" | "TIAK" | "IMMO" | "CARS";
   reason: string;
   description: string;
+  proofUrls: string[];
   status: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED";
   resolutionCode: string | null;
   internalNote: string | null;
@@ -242,6 +244,16 @@ export default function AdminTrustModerationPanel({
                     <details open={focusId === item.id} className="mt-1 text-xs text-zinc-400">
                       <summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary>
                       <p className="mt-1 whitespace-pre-wrap">{item.description ?? "-"}</p>
+                      {item.proofUrls.length > 0 && (
+                        <div className="mt-2 grid gap-1">
+                          <p className="text-[11px] text-zinc-500">{isFr ? "Preuves" : "Evidence"}</p>
+                          {item.proofUrls.map((url) => (
+                            <a key={url} href={url} target="_blank" rel="noreferrer" className="truncate text-[11px] text-cyan-300 hover:text-cyan-200">
+                              {url}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-2 grid gap-2">
                         <input
                           value={reportCodeDrafts[item.id] ?? ""}
@@ -291,6 +303,16 @@ export default function AdminTrustModerationPanel({
                     <details open={focusId === item.id} className="mt-1 text-xs text-zinc-400">
                       <summary className="cursor-pointer">{isFr ? "Details" : "Details"}</summary>
                       <p className="mt-1 whitespace-pre-wrap">{item.description}</p>
+                      {item.proofUrls.length > 0 && (
+                        <div className="mt-2 grid gap-1">
+                          <p className="text-[11px] text-zinc-500">{isFr ? "Preuves" : "Evidence"}</p>
+                          {item.proofUrls.map((url) => (
+                            <a key={url} href={url} target="_blank" rel="noreferrer" className="truncate text-[11px] text-cyan-300 hover:text-cyan-200">
+                              {url}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-2 grid gap-2">
                         <input
                           value={disputeCodeDrafts[item.id] ?? ""}

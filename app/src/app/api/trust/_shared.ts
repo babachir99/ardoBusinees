@@ -98,6 +98,31 @@ export function parseTakeSkip(url: URL, defaults = { take: 20, skip: 0, maxTake:
   return { take, skip };
 }
 
+function isAllowedProofUrl(value: string) {
+  if (value.startsWith("/uploads/")) return true;
+  const assetBase = process.env.PUBLIC_ASSET_BASE_URL?.trim();
+  if (!assetBase) return false;
+  try {
+    const parsed = new URL(value);
+    const assetOrigin = new URL(assetBase).origin;
+    return parsed.origin === assetOrigin && parsed.pathname.startsWith("/uploads/");
+  } catch {
+    return false;
+  }
+}
+
+export function parseProofUrls(value: unknown) {
+  if (value === undefined || value === null) return [] as string[];
+  if (!Array.isArray(value)) return null;
+  const cleaned = value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (!cleaned.every(isAllowedProofUrl)) return null;
+  return Array.from(new Set(cleaned));
+}
+
 export function validateReasonAndDescription(reason: unknown, description: unknown) {
   const normalizedReason = String(reason ?? "").trim();
   const normalizedDescription = String(description ?? "").trim();
@@ -182,6 +207,7 @@ export function serializeReport(record: any) {
       : undefined,
     reason: record.reason,
     description: record.description ?? null,
+    proofUrls: Array.isArray(record.proofUrls) ? record.proofUrls : [],
     status: record.status,
     assignedAdminId: record.assignedAdminId ?? null,
     assignedAdmin: record.assignedAdmin
@@ -212,6 +238,7 @@ export function serializeTrustDispute(record: any) {
     vertical: record.vertical,
     reason: record.reason,
     description: record.description,
+    proofUrls: Array.isArray(record.proofUrls) ? record.proofUrls : [],
     status: presentTrustDisputeStatus(record.status),
     assignedAdminId: record.assignedAdminId ?? null,
     assignedAdmin: record.assignedAdmin

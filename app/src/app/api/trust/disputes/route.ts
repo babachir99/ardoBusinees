@@ -15,6 +15,7 @@ import {
   trustError,
   trustJson,
   validateReasonAndDescription,
+  parseProofUrls,
   enforceTrustCreateRateLimit,
   TRUST_DUPLICATE_WINDOW_MS,
 } from "@/app/api/trust/_shared";
@@ -38,9 +39,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const vertical = parseVertical(body?.vertical);
   const validation = validateReasonAndDescription(body?.reason, body?.description);
+  const proofUrls = parseProofUrls(body?.proofUrls);
   const orderId = String(body?.orderId ?? "").trim() || null;
-  if (!vertical || validation.error) {
-    return trustError("VALIDATION_ERROR", validation.error ?? "Invalid vertical.", 400, correlationId);
+  if (!vertical || validation.error || !proofUrls) {
+    return trustError("VALIDATION_ERROR", validation.error ?? (!proofUrls ? "Invalid proofUrls." : "Invalid vertical."), 400, correlationId);
   }
 
   const db = getTrustDb();
@@ -66,6 +68,7 @@ export async function POST(request: NextRequest) {
       vertical,
       reason: validation.reason,
       description: validation.description,
+      proofUrls,
       status: "OPEN",
     },
     include: { user: { select: { id: true, name: true } } },

@@ -1542,6 +1542,7 @@ model Report {
   assignedAdminId String?
   reason          String
   description     String?
+  proofUrls       String[]     @default([])
   status          ReportStatus @default(PENDING)
   resolutionCode  String?
   internalNote    String?
@@ -1567,6 +1568,7 @@ model TrustDispute {
   vertical        Vertical
   reason          String
   description     String
+  proofUrls       String[]      @default([])
   status          DisputeStatus @default(OPEN)
   resolutionCode  String?
   internalNote    String?
