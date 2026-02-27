@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 type OpsKpis = {
   payoutsReady: number | null;
@@ -62,6 +62,22 @@ type ReconciliationFindings = {
   }>;
 };
 
+type NotificationsHealth = {
+  counts: {
+    PENDING: number;
+    SENT: number;
+    FAILED: number;
+    CANCELLED: number;
+  };
+  oldestPendingAgeSeconds: number | null;
+  failedLast24h: number;
+  sentLast24h: number;
+  topTemplateFailures: Array<{
+    templateKey: string;
+    count: number;
+  }>;
+};
+
 type Props = {
   kpis: OpsKpis;
   queueItems: OpsQueueItem[];
@@ -96,8 +112,48 @@ const ALERT_THRESHOLDS = {
   TRUST_DISPUTES_ACTIVE: 3,
 } as const;
 
+const NOTIFICATION_ALERT_THRESHOLDS = {
+  FAILED_24H_WARN: 5,
+  FAILED_24H_CRITICAL: 20,
+  OLDEST_PENDING_WARN_SECONDS: 60 * 60,
+  OLDEST_PENDING_CRITICAL_SECONDS: 6 * 60 * 60,
+  TOP_TEMPLATE_FAILURE_WARN: 5,
+} as const;
+
 export default function AdminOpsHub({ kpis, queueItems }: Props) {
   const t = useTranslations("Admin.opsHub");
+  const locale = useLocale();
+  const isFr = locale.toLowerCase().startsWith("fr");
+  const uiText = {
+    trustReportsPending: isFr ? "Signalements trust (en attente)" : "Trust Reports (Pending)",
+    trustDisputesActive: isFr ? "Litiges trust (ouverts/en revue)" : "Trust Disputes (Open/In review)",
+    immoMonetization: isFr ? "Monetisation IMMO (EN_ATTENTE/ECHEC)" : "IMMO Monetization (PENDING/FAILED)",
+    autoMonetization: isFr ? "Monetisation AUTO (EN_ATTENTE/ECHEC)" : "AUTO Monetization (PENDING/FAILED)",
+    carsMonetization: isFr ? "Monetisation CARS (EN_ATTENTE/ECHEC)" : "CARS Monetization (PENDING/FAILED)",
+    immoMonetizationTab: isFr ? "Monetisation IMMO" : "IMMO monetization",
+    autoMonetizationTab: isFr ? "Monetisation AUTO" : "AUTO monetization",
+    carsMonetizationTab: isFr ? "Monetisation CARS" : "CARS monetization",
+    trustTab: isFr ? "Trust" : "Trust",
+    trustModeration: isFr ? "Moderation trust" : "Trust moderation",
+    trustReportsAlert: isFr ? "Signalements trust en attente" : "Trust reports pending",
+    trustDisputesAlert: isFr ? "Litiges trust actifs" : "Trust disputes active",
+    notificationsFailed24h: isFr ? "Notifications en echec (24h)" : "Notifications failed (24h)",
+    oldestPendingAge: isFr ? "Age max notification en attente" : "Oldest pending notification age",
+    openNotificationsHealth: isFr ? "Ouvrir la sante notifications" : "Open notifications health",
+    templateFailures: isFr ? "Echecs de template" : "Template failures",
+    notificationHealthUnavailable: isFr ? "Sante notifications indisponible." : "Notification health unavailable.",
+    notificationsHealthTitle: isFr ? "Sante des notifications" : "Notifications health",
+    notificationsHealthSubtitle: isFr ? "Metriques outbox en lecture seule (sans PII)." : "Read-only outbox health metrics (no PII).",
+    notificationsRefreshing: isFr ? "Actualisation..." : "Refreshing...",
+    notificationsRefresh: isFr ? "Actualiser" : "Refresh",
+    notificationsLoad: isFr ? "Charger" : "Load",
+    pendingLabel: isFr ? "EN ATTENTE" : "PENDING",
+    failed24hLabel: isFr ? "ECHEC (24h)" : "FAILED (24h)",
+    sent24hLabel: isFr ? "ENVOYE (24h)" : "SENT (24h)",
+    oldestPendingAgeLabel: isFr ? "Age max en attente" : "Oldest pending age",
+    loadNotificationHealthHint: isFr ? "Chargez la sante notifications pour voir les echecs et l'anciennete de file." : "Load notification health to view failures and queue age.",
+    topTemplateFailuresTitle: isFr ? "Top des echecs de template" : "Top template failures",
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeFilter = normalizeFilter(searchParams.get("opsFilter"));
@@ -109,6 +165,16 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
   const [reconLoading, setReconLoading] = useState(false);
   const [reconError, setReconError] = useState("");
   const [reconData, setReconData] = useState<ReconciliationFindings | null>(null);
+
+  const [notificationsHealth, setNotificationsHealth] = useState<NotificationsHealth | null>(null);
+  const [notificationsHealthLoading, setNotificationsHealthLoading] = useState(false);
+  const [notificationsHealthError, setNotificationsHealthError] = useState("");
+  const [notificationsHealthLoaded, setNotificationsHealthLoaded] = useState(false);
+
+  useEffect(() => {
+    if (notificationsHealthLoaded || notificationsHealthLoading) return;
+    void handleLoadNotificationsHealth();
+  }, [notificationsHealthLoaded, notificationsHealthLoading]);
 
   const warnFlags = useMemo(
     () => ({
@@ -166,35 +232,35 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       },
       {
         key: "trustReports",
-        label: "Trust Reports (Pending)",
+        label: uiText.trustReportsPending,
         value: kpis.trustReportsPending,
         href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
         warn: typeof kpis.trustReportsPending === "number" && kpis.trustReportsPending > 0,
       },
       {
         key: "trustDisputes",
-        label: "Trust Disputes (Open/In review)",
+        label: uiText.trustDisputesActive,
         value: kpis.trustDisputesActive,
         href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
         warn: typeof kpis.trustDisputesActive === "number" && kpis.trustDisputesActive > 0,
       },
       {
         key: "immoMonetization",
-        label: "IMMO Monetization (PENDING/FAILED)",
+        label: uiText.immoMonetization,
         value: kpis.immoMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "IMMO_MONETIZATION" } },
         warn: typeof kpis.immoMonetizationIssues === "number" && kpis.immoMonetizationIssues > 0,
       },
       {
         key: "autoMonetization",
-        label: "AUTO Monetization (PENDING/FAILED)",
+        label: uiText.autoMonetization,
         value: kpis.autoMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "AUTO_MONETIZATION" } },
         warn: typeof kpis.autoMonetizationIssues === "number" && kpis.autoMonetizationIssues > 0,
       },
       {
         key: "carsMonetization",
-        label: "CARS Monetization (PENDING/FAILED)",
+        label: uiText.carsMonetization,
         value: kpis.carsMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "CARS_MONETIZATION" } },
         warn: typeof kpis.carsMonetizationIssues === "number" && kpis.carsMonetizationIssues > 0,
@@ -208,20 +274,20 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     { key: "PAYOUT", label: t("filters.payouts") },
     { key: "DISPUTE", label: t("filters.disputes") },
     { key: "PAYMENT_FAILED", label: t("filters.paymentsFailed") },
-    { key: "IMMO_MONETIZATION", label: "IMMO monetization" },
-    { key: "AUTO_MONETIZATION", label: "AUTO monetization" },
-    { key: "CARS_MONETIZATION", label: "CARS monetization" },
-    { key: "TRUST", label: "Trust" },
+    { key: "IMMO_MONETIZATION", label: uiText.immoMonetizationTab },
+    { key: "AUTO_MONETIZATION", label: uiText.autoMonetizationTab },
+    { key: "CARS_MONETIZATION", label: uiText.carsMonetizationTab },
+    { key: "TRUST", label: uiText.trustTab },
   ];
 
   const typeLabels: Record<OpsQueueItem["type"], string> = {
     PAYOUT: t("queue.types.payout"),
     DISPUTE: t("queue.types.dispute"),
     PAYMENT_FAILED: t("queue.types.paymentFailed"),
-    IMMO_MONETIZATION: "IMMO monetization",
-    AUTO_MONETIZATION: "AUTO monetization",
-    CARS_MONETIZATION: "CARS monetization",
-    TRUST: "Trust moderation",
+    IMMO_MONETIZATION: uiText.immoMonetizationTab,
+    AUTO_MONETIZATION: uiText.autoMonetizationTab,
+    CARS_MONETIZATION: uiText.carsMonetizationTab,
+    TRUST: uiText.trustModeration,
   };
 
   const statusLabels: Record<string, string> = {
@@ -294,7 +360,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       alerts.push({
         id: "warn-trust-reports",
         severity: "WARN",
-        message: `Trust reports pending: ${kpis.trustReportsPending}`,
+        message: `${uiText.trustReportsAlert}: ${kpis.trustReportsPending}`,
         href: "/admin?opsFilter=TRUST#ops-queue",
         actionLabel: t("alerts.actions.openQueue"),
       });
@@ -304,7 +370,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       alerts.push({
         id: "warn-trust-disputes",
         severity: "WARN",
-        message: `Trust disputes active: ${kpis.trustDisputesActive}`,
+        message: `${uiText.trustDisputesAlert}: ${kpis.trustDisputesActive}`,
         href: "/admin?opsFilter=TRUST#ops-queue",
         actionLabel: t("alerts.actions.openQueue"),
       });
@@ -352,8 +418,58 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       }
     }
 
+    if (notificationsHealth) {
+      if (notificationsHealth.failedLast24h >= NOTIFICATION_ALERT_THRESHOLDS.FAILED_24H_CRITICAL) {
+        alerts.push({
+          id: "critical-notifications-failed",
+          severity: "CRITICAL",
+          message: `${uiText.notificationsFailed24h}: ${notificationsHealth.failedLast24h}`,
+          href: "#ops-notifications-health",
+          actionLabel: uiText.openNotificationsHealth,
+        });
+      } else if (notificationsHealth.failedLast24h >= NOTIFICATION_ALERT_THRESHOLDS.FAILED_24H_WARN) {
+        alerts.push({
+          id: "warn-notifications-failed",
+          severity: "WARN",
+          message: `${uiText.notificationsFailed24h}: ${notificationsHealth.failedLast24h}`,
+          href: "#ops-notifications-health",
+          actionLabel: uiText.openNotificationsHealth,
+        });
+      }
+
+      const age = notificationsHealth.oldestPendingAgeSeconds;
+      if (typeof age === "number" && age >= NOTIFICATION_ALERT_THRESHOLDS.OLDEST_PENDING_CRITICAL_SECONDS) {
+        alerts.push({
+          id: "critical-notifications-oldest-pending",
+          severity: "CRITICAL",
+          message: `${uiText.oldestPendingAge}: ${Math.floor(age / 60)}m`,
+          href: "#ops-notifications-health",
+          actionLabel: uiText.openNotificationsHealth,
+        });
+      } else if (typeof age === "number" && age >= NOTIFICATION_ALERT_THRESHOLDS.OLDEST_PENDING_WARN_SECONDS) {
+        alerts.push({
+          id: "warn-notifications-oldest-pending",
+          severity: "WARN",
+          message: `${uiText.oldestPendingAge}: ${Math.floor(age / 60)}m`,
+          href: "#ops-notifications-health",
+          actionLabel: uiText.openNotificationsHealth,
+        });
+      }
+
+      const topFailure = notificationsHealth.topTemplateFailures[0];
+      if (topFailure && topFailure.count >= NOTIFICATION_ALERT_THRESHOLDS.TOP_TEMPLATE_FAILURE_WARN) {
+        alerts.push({
+          id: "warn-notifications-template-failures",
+          severity: "WARN",
+          message: `${uiText.templateFailures}: ${topFailure.templateKey} (${topFailure.count})`,
+          href: "#ops-notifications-health",
+          actionLabel: uiText.openNotificationsHealth,
+        });
+      }
+    }
+
     return alerts;
-  }, [kpis, reconData, t, warnFlags]);
+  }, [kpis, notificationsHealth, reconData, t, warnFlags]);
 
   async function handleRelease(item: OpsQueueItem) {
     if (item.action.kind !== "release") return;
@@ -420,6 +536,39 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       setReconError(t("messages.dryRunFailed"));
     } finally {
       setReconLoading(false);
+    }
+  }
+
+  async function handleLoadNotificationsHealth() {
+    setNotificationsHealthLoaded(true);
+    setNotificationsHealthLoading(true);
+    setNotificationsHealthError("");
+
+    try {
+      const response = await fetch("/api/admin/notifications/health", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setNotificationsHealthError(uiText.notificationHealthUnavailable);
+        return;
+      }
+
+      const body = (await response.json().catch(() => null)) as
+        | { health?: NotificationsHealth }
+        | null;
+
+      if (!body?.health) {
+        setNotificationsHealthError(uiText.notificationHealthUnavailable);
+        return;
+      }
+
+      setNotificationsHealth(body.health);
+    } catch {
+      setNotificationsHealthError(uiText.notificationHealthUnavailable);
+    } finally {
+      setNotificationsHealthLoading(false);
     }
   }
 
@@ -509,6 +658,65 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      <div id="ops-notifications-health" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">{uiText.notificationsHealthTitle}</h3>
+            <p className="mt-1 text-xs text-zinc-400">{uiText.notificationsHealthSubtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleLoadNotificationsHealth()}
+            disabled={notificationsHealthLoading}
+            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {notificationsHealthLoading ? uiText.notificationsRefreshing : notificationsHealth ? uiText.notificationsRefresh : uiText.notificationsLoad}
+          </button>
+        </div>
+
+        {notificationsHealthError ? (
+          <p className="mt-3 text-xs text-rose-300">{notificationsHealthError}</p>
+        ) : null}
+
+        {notificationsHealth ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+              <p className="text-zinc-500">{uiText.pendingLabel}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.counts.PENDING}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+              <p className="text-zinc-500">{uiText.failed24hLabel}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.failedLast24h}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+              <p className="text-zinc-500">{uiText.sent24hLabel}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.sentLast24h}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+              <p className="text-zinc-500">{uiText.oldestPendingAgeLabel}</p>
+              <p className="mt-1 text-sm font-semibold text-white">
+                {typeof notificationsHealth.oldestPendingAgeSeconds === "number"
+                  ? `${Math.floor(notificationsHealth.oldestPendingAgeSeconds / 60)}m`
+                  : "-"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-zinc-400">{uiText.loadNotificationHealthHint}</p>
+        )}
+
+        {notificationsHealth && notificationsHealth.topTemplateFailures.length > 0 ? (
+          <div className="mt-3 rounded-xl border border-white/10 bg-zinc-900/50 p-3">
+            <p className="text-xs font-semibold text-white">{uiText.topTemplateFailuresTitle}</p>
+            <div className="mt-2 space-y-1 text-xs text-zinc-300">
+              {notificationsHealth.topTemplateFailures.slice(0, 5).map((entry) => (
+                <p key={entry.templateKey}>{entry.templateKey} - {entry.count}</p>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div id="ops-queue" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40">
@@ -652,3 +860,4 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     </section>
   );
 }
+

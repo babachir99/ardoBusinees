@@ -177,3 +177,22 @@ curl -X POST "http://localhost:3000/api/cron/notifications" \
   --data '{"limit":50}'
 ```
 
+Quick QA check (static + optional runtime checks):
+
+```bash
+npm run qa:notifications
+```
+
+Optional runtime assertions for `/api/admin/notifications/health`:
+- Set `BASE_URL` + `COOKIE_ADMIN` to validate admin `200` response shape.
+- Set `COOKIE_USER` to validate non-admin `403 FORBIDDEN` response.
+
+Example:
+
+```bash
+BASE_URL=http://localhost:3000 \
+COOKIE_ADMIN='next-auth.session-token=<admin_token>' \
+COOKIE_USER='next-auth.session-token=<user_token>' \
+npm run qa:notifications
+```
+

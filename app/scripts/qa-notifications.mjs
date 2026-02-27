@@ -27,6 +27,61 @@ function loadTsModule(source, filename) {
   return module.exports;
 }
 
+
+async function runRuntimeHealthCheck() {
+  const baseUrl = String(process.env.BASE_URL ?? "").trim();
+  const adminCookie = String(process.env.COOKIE_ADMIN ?? "").trim();
+  const userCookie = String(process.env.COOKIE_USER ?? "").trim();
+
+  if (!baseUrl) {
+    return { adminExecuted: false, userExecuted: false };
+  }
+
+  let adminExecuted = false;
+  let userExecuted = false;
+
+  if (adminCookie) {
+    const adminResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/admin/notifications/health`, {
+      method: "GET",
+      headers: {
+        cookie: adminCookie,
+        accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    assert.equal(adminResponse.status, 200, "runtime health endpoint should return 200 for admin");
+
+    const adminBody = await adminResponse.json().catch(() => null);
+    assert.ok(adminBody && typeof adminBody === "object", "runtime health payload should be JSON object");
+    assert.equal(adminBody.ok, true, "runtime health ok flag");
+    assert.equal(adminBody.code, "NOTIFICATIONS_HEALTH", "runtime health code");
+    assert.ok(adminBody.health && typeof adminBody.health === "object", "runtime health object present");
+    assert.ok(adminBody.health.counts && typeof adminBody.health.counts === "object", "runtime counts object present");
+    adminExecuted = true;
+  }
+
+  if (userCookie) {
+    const userResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/admin/notifications/health`, {
+      method: "GET",
+      headers: {
+        cookie: userCookie,
+        accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    assert.equal(userResponse.status, 403, "runtime health endpoint should return 403 for non-admin");
+    const userBody = await userResponse.json().catch(() => null);
+    assert.ok(userBody && typeof userBody === "object", "runtime non-admin payload should be JSON object");
+    assert.equal(userBody.ok, false, "runtime non-admin ok flag");
+    assert.equal(userBody.code, "FORBIDDEN", "runtime non-admin code");
+    userExecuted = true;
+  }
+
+  return { adminExecuted, userExecuted };
+}
+
 function assertContains(source, pattern, label) {
   if (!pattern.test(source)) {
     throw new Error(`Missing ${label}`);
@@ -102,8 +157,18 @@ async function main() {
   assert.equal(normalizeDeliveryStep("GP", "BOARDED"), "IN_TRANSIT");
   assert.equal(normalizeDeliveryStep("TIAK", "PICKED_UP"), "PICKED_UP");
 
+  const runtimeCheck = await runRuntimeHealthCheck();
+  const runtimeParts = [];
+  if (runtimeCheck.adminExecuted) runtimeParts.push("admin health check executed");
+  if (runtimeCheck.userExecuted) runtimeParts.push("non-admin authz check executed");
+  const runtimeSuffix =
+    runtimeParts.length > 0
+      ? ` Runtime checks: ${runtimeParts.join(" + ")}.`
+      : " Runtime checks skipped (set BASE_URL and COOKIE_ADMIN and/or COOKIE_USER).";
 
-  console.log("[qa:notifications] OK - notification guardrails and hooks detected.");
+  console.log(
+    `[qa:notifications] OK - notification guardrails and hooks detected.${runtimeSuffix}`
+  );
 }
 
 main().catch((error) => {
