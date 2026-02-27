@@ -119,3 +119,39 @@ Notes:
 - Run this on staging before production.
 - `ALLOW_INSECURE_INTERNAL_CALLS` must stay `0` on production/preview/staging.
 - Include all webhook/callback hostnames in `ALLOWED_HOSTS`.
+
+## Trust Smoke Runbook (Windows + Bash)
+
+Use this to validate Trust Center flows (`reports`, `disputes`, `blocks`) with real sessions.
+
+Prerequisites:
+- App running on the same host used by your browser session (`localhost` vs `192.168.x.x` must match).
+- A valid user cookie file (example: `_tmp_cookie_agent.txt`).
+- A valid admin cookie (either `_tmp_cookie_admin.txt` or `COOKIE_ADMIN` env var).
+
+PowerShell setup (from `app/`):
+
+```powershell
+$env:BASE_URL="http://localhost:3000"
+$env:COOKIE_USER_FILE="_tmp_cookie_agent.txt"
+$env:COOKIE_ADMIN_FILE="_tmp_cookie_admin.txt"   # or set $env:COOKIE_ADMIN directly
+$env:REPORT_USER_ID="<USER_ID_TO_REPORT>"
+$env:BLOCK_USER_ID="<USER_ID_TO_BLOCK>"
+$env:ORDER_REF_ID="<ORDER_OR_REF_ID>"
+$env:REPORT_ID="<REPORT_ID>"
+```
+
+Validate sessions before smoke:
+
+```powershell
+curl.exe -i --cookie $env:COOKIE_USER_FILE "$env:BASE_URL/api/profile"
+curl.exe -i --cookie $env:COOKIE_ADMIN_FILE "$env:BASE_URL/api/profile"
+```
+
+Both checks should return `200`. If admin returns `401`, refresh/regenerate admin cookie first.
+
+Run smoke:
+
+```powershell
+bash scripts/smoke/trust_smoke.sh
+```
