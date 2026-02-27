@@ -16,6 +16,7 @@ import {
 } from "@/lib/notifications/templates/registry";
 import { buildUnsubscribeUrl, type UnsubscribeScope } from "@/lib/notifications/unsubscribe";
 import { normalizeDeliveryStep } from "@/lib/notifications/delivery-step";
+import { redactError } from "@/lib/notifications/redact";
 
 const LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 8;
@@ -228,11 +229,12 @@ function getRetryDelayMs(nextAttempt: number) {
 
 function getProviderErrorCode(error: unknown): string {
   if (error instanceof EmailProviderError) {
-    return (error.code || "PROVIDER_ERROR").slice(0, 120);
+    return redactError(error.code || "PROVIDER_ERROR") || "PROVIDER_ERROR";
   }
 
   if (error instanceof Error) {
-    return error.name ? `PROVIDER_${error.name.toUpperCase()}`.slice(0, 120) : "PROVIDER_ERROR";
+    const code = error.name ? `PROVIDER_${error.name.toUpperCase()}` : "PROVIDER_ERROR";
+    return redactError(code) || "PROVIDER_ERROR";
   }
 
   return "PROVIDER_ERROR";

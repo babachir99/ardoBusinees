@@ -5,7 +5,6 @@ import vm from "node:vm";
 import process from "node:process";
 import ts from "typescript";
 
-
 function loadTsModule(source, filename) {
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -27,6 +26,15 @@ function loadTsModule(source, filename) {
   return module.exports;
 }
 
+function assertNoPiiLeak(serializedBody, label) {
+  assert.doesNotMatch(serializedBody, /"toEmail"\s*:/i, `${label} should not leak toEmail`);
+  assert.doesNotMatch(serializedBody, /"payloadJson"\s*:/i, `${label} should not leak payloadJson`);
+  assert.doesNotMatch(
+    serializedBody,
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+    `${label} should not leak email addresses`
+  );
+}
 
 async function runRuntimeHealthCheck() {
   const baseUrl = String(process.env.BASE_URL ?? "").trim();
@@ -34,11 +42,18 @@ async function runRuntimeHealthCheck() {
   const userCookie = String(process.env.COOKIE_USER ?? "").trim();
 
   if (!baseUrl) {
-    return { adminExecuted: false, userExecuted: false };
+    return {
+      adminExecuted: false,
+      userExecuted: false,
+      deadlettersExecuted: false,
+      deadletterDetailExecuted: false,
+    };
   }
 
   let adminExecuted = false;
   let userExecuted = false;
+  let deadlettersExecuted = false;
+  let deadletterDetailExecuted = false;
 
   if (adminCookie) {
     const adminResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/admin/notifications/health`, {
@@ -59,6 +74,50 @@ async function runRuntimeHealthCheck() {
     assert.ok(adminBody.health && typeof adminBody.health === "object", "runtime health object present");
     assert.ok(adminBody.health.counts && typeof adminBody.health.counts === "object", "runtime counts object present");
     adminExecuted = true;
+
+    const deadlettersResponse = await fetch(
+      `${baseUrl.replace(/\/$/, "")}/api/admin/notifications/deadletters?take=5`,
+      {
+        method: "GET",
+        headers: {
+          cookie: adminCookie,
+          accept: "application/json",
+        },
+        cache: "no-store",
+      }
+    );
+
+    assert.equal(deadlettersResponse.status, 200, "runtime deadletters endpoint should return 200 for admin");
+    const deadlettersText = await deadlettersResponse.text();
+    assertNoPiiLeak(deadlettersText, "deadletters list response");
+
+    const deadlettersBody = JSON.parse(deadlettersText);
+    assert.equal(deadlettersBody.ok, true, "runtime deadletters list ok flag");
+    assert.equal(deadlettersBody.code, "NOTIFICATION_DEADLETTERS", "runtime deadletters list code");
+    assert.ok(Array.isArray(deadlettersBody.items), "runtime deadletters items should be array");
+    deadlettersExecuted = true;
+
+    if (deadlettersBody.items.length > 0 && deadlettersBody.items[0]?.id) {
+      const detailResponse = await fetch(
+        `${baseUrl.replace(/\/$/, "")}/api/admin/notifications/deadletters/${deadlettersBody.items[0].id}`,
+        {
+          method: "GET",
+          headers: {
+            cookie: adminCookie,
+            accept: "application/json",
+          },
+          cache: "no-store",
+        }
+      );
+
+      assert.equal(detailResponse.status, 200, "runtime deadletter detail should return 200 for admin");
+      const detailText = await detailResponse.text();
+      assertNoPiiLeak(detailText, "deadletter detail response");
+      const detailBody = JSON.parse(detailText);
+      assert.equal(detailBody.ok, true, "runtime deadletter detail ok flag");
+      assert.equal(detailBody.code, "NOTIFICATION_DEADLETTER", "runtime deadletter detail code");
+      deadletterDetailExecuted = true;
+    }
   }
 
   if (userCookie) {
@@ -79,7 +138,7 @@ async function runRuntimeHealthCheck() {
     userExecuted = true;
   }
 
-  return { adminExecuted, userExecuted };
+  return { adminExecuted, userExecuted, deadlettersExecuted, deadletterDetailExecuted };
 }
 
 function assertContains(source, pattern, label) {
@@ -96,6 +155,9 @@ async function main() {
   const provider = await readFile(path.join(root, "src", "lib", "notifications", "providers", "ResendProvider.ts"), "utf8");
   const unsubscribe = await readFile(path.join(root, "src", "lib", "notifications", "unsubscribe.ts"), "utf8");
   const healthRoute = await readFile(path.join(root, "src", "app", "api", "admin", "notifications", "health", "route.ts"), "utf8");
+  const deadlettersRoute = await readFile(path.join(root, "src", "app", "api", "admin", "notifications", "deadletters", "route.ts"), "utf8");
+  const deadletterDetailRoute = await readFile(path.join(root, "src", "app", "api", "admin", "notifications", "deadletters", "[id]", "route.ts"), "utf8");
+  const redactUtil = await readFile(path.join(root, "src", "lib", "notifications", "redact.ts"), "utf8");
   const deliveryStep = await readFile(path.join(root, "src", "lib", "notifications", "delivery-step.ts"), "utf8");
   const callbackRoute = await readFile(path.join(root, "src", "app", "api", "payments", "callback", "route.ts"), "utf8");
   const webhookRoute = await readFile(path.join(root, "src", "app", "api", "payments", "webhook", "paydunya", "route.ts"), "utf8");
@@ -117,6 +179,7 @@ async function main() {
   // QA case 2: non-retryable provider errors fail definitively
   assertContains(service, /const retryable = shouldRetrySend\(error, nextAttempt\);/, "retryability gate");
   assertContains(service, /lastError:\s*getProviderErrorCode\(error\)/, "sanitized provider error code persisted");
+  assertContains(service, /redactError/, "notification service error redaction usage");
 
   assertContains(service, /idempotencyKey:\s*row\.dedupeKey/, "provider idempotency key uses dedupeKey");
   assertContains(provider, /"Idempotency-Key":\s*input\.idempotencyKey/, "Resend idempotency header");
@@ -142,6 +205,12 @@ async function main() {
   assertContains(healthRoute, /code:\s*"NOTIFICATIONS_HEALTH"/, "notifications health response code");
   assertContains(healthRoute, /counts/, "notifications health counts shape");
   assertContains(healthRoute, /topTemplateFailures/, "notifications health top failures shape");
+  assertContains(deadlettersRoute, /code:\s*"NOTIFICATION_DEADLETTERS"/, "deadletters list response code");
+  assertContains(deadlettersRoute, /payloadKeys/, "deadletters payloadKeys field");
+  assertContains(deadletterDetailRoute, /code:\s*"NOTIFICATION_DEADLETTER"/, "deadletter detail response code");
+  assertContains(deadletterDetailRoute, /hint:\s*classifyHint/, "deadletter detail hint classification");
+  assertContains(redactUtil, /redactError/, "redaction utility export");
+  assertContains(redactUtil, /MAX_REDACTED_LENGTH|REDACTED_ERROR_MAX_LENGTH/, "redaction length cap");
   assertContains(callbackRoute, /queueOrderPaidEmail\(/, "callback paid notification hook");
   assertContains(webhookRoute, /queueOrderPaidEmail\(/, "webhook paid notification hook");
   assertContains(eventsRoute, /queueDeliveryUpdateEmail\(/, "delivery update notification hook");
@@ -161,6 +230,9 @@ async function main() {
   const runtimeParts = [];
   if (runtimeCheck.adminExecuted) runtimeParts.push("admin health check executed");
   if (runtimeCheck.userExecuted) runtimeParts.push("non-admin authz check executed");
+  if (runtimeCheck.deadlettersExecuted) runtimeParts.push("deadletters list redaction check executed");
+  if (runtimeCheck.deadletterDetailExecuted) runtimeParts.push("deadletter detail redaction check executed");
+
   const runtimeSuffix =
     runtimeParts.length > 0
       ? ` Runtime checks: ${runtimeParts.join(" + ")}.`
@@ -175,3 +247,4 @@ main().catch((error) => {
   console.error("[qa:notifications] FAILED:", error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
+
