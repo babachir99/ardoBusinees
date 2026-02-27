@@ -4,6 +4,8 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryCard from "@/components/tiak/TiakDeliveryCard";
+import PublicUserCard from "@/components/trust/PublicUserCard";
+import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
 
 type Props = {
@@ -66,6 +68,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [couriers, setCouriers] = useState<TiakCourierProfile[]>([]);
   const [couriersLoading, setCouriersLoading] = useState(false);
   const [couriersError, setCouriersError] = useState<string | null>(null);
+  const [selectedCourierProfile, setSelectedCourierProfile] = useState<TiakCourierProfile | null>(null);
 
   const [myProfile, setMyProfile] = useState<TiakCourierProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -406,7 +409,9 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
   return (
     <div className="space-y-8">
-      <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+      <div id="tiak-create-delivery-form">
+        <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+      </div>
 
       <TiakCourierAvailabilityPanel
         locale={locale}
@@ -536,15 +541,35 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
         <div className="grid gap-3 md:grid-cols-2">
           {couriers.map((profile) => (
-            <article key={profile.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-              <p className="text-sm font-semibold text-white">{profile.courier.name ?? "Courier"}</p>
-              <p className="mt-1 text-xs text-zinc-400">{profile.vehicleType ?? "-"}</p>
-              <p className="mt-2 text-xs text-zinc-300">Cities: {profile.cities.length ? profile.cities.join(", ") : "-"}</p>
-              <p className="mt-1 text-xs text-zinc-300">Areas: {profile.areas.length ? profile.areas.join(", ") : "-"}</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                {locale === "fr" ? "Mise a jour" : "Updated"}: {new Date(profile.updatedAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
-              </p>
-            </article>
+            <PublicUserCard
+              key={profile.id}
+              locale={locale}
+              userId={profile.courierId}
+              viewerUserId={currentUserId}
+              name={profile.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
+              avatarUrl={profile.courier.image}
+              roleLabel={locale === "fr" ? "Coursier" : "Courier"}
+              reliabilityLabel={
+                locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"
+              }
+              updatedAt={profile.updatedAt}
+              details={[
+                {
+                  label: locale === "fr" ? "Vehicule" : "Vehicle",
+                  value: profile.vehicleType ?? "-",
+                },
+                {
+                  label: locale === "fr" ? "Villes" : "Cities",
+                  value: profile.cities.length ? profile.cities.join(", ") : "-",
+                },
+                {
+                  label: locale === "fr" ? "Zones" : "Areas",
+                  value: profile.areas.length ? profile.areas.join(", ") : "-",
+                },
+              ]}
+              onViewProfile={() => setSelectedCourierProfile(profile)}
+              viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
+            />
           ))}
 
           {!couriersLoading && couriers.length === 0 && (
@@ -553,6 +578,64 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
             </div>
           )}
         </div>
+
+        <UserProfileDrawer
+          open={Boolean(selectedCourierProfile)}
+          onClose={() => setSelectedCourierProfile(null)}
+          locale={locale}
+          userId={selectedCourierProfile?.courierId}
+          viewerUserId={currentUserId}
+          name={selectedCourierProfile?.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
+          avatarUrl={selectedCourierProfile?.courier.image ?? null}
+          roleLabel={locale === "fr" ? "Coursier" : "Courier"}
+          reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
+          details={
+            selectedCourierProfile
+              ? [
+                  {
+                    label: locale === "fr" ? "Vehicule" : "Vehicle",
+                    value: selectedCourierProfile.vehicleType ?? "-",
+                  },
+                  {
+                    label: locale === "fr" ? "Villes" : "Cities",
+                    value: selectedCourierProfile.cities.length
+                      ? selectedCourierProfile.cities.join(", ")
+                      : "-",
+                  },
+                  {
+                    label: locale === "fr" ? "Zones" : "Areas",
+                    value: selectedCourierProfile.areas.length
+                      ? selectedCourierProfile.areas.join(", ")
+                      : "-",
+                  },
+                  {
+                    label: locale === "fr" ? "Horaires" : "Hours",
+                    value: selectedCourierProfile.availableHours ?? "-",
+                  },
+                  {
+                    label: locale === "fr" ? "Charge max" : "Max weight",
+                    value:
+                      typeof selectedCourierProfile.maxWeightKg === "number"
+                        ? `${selectedCourierProfile.maxWeightKg} kg`
+                        : "-",
+                  },
+                ]
+              : []
+          }
+          primaryAction={
+            selectedCourierProfile && isLoggedIn && currentUserId !== selectedCourierProfile.courierId
+              ? {
+                  label: locale === "fr" ? "Faire une demande" : "Create request",
+                  onClick: () => {
+                    setSelectedCourierProfile(null);
+                    document
+                      .getElementById("tiak-create-delivery-form")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  },
+                }
+              : undefined
+          }
+        />
       </section>
 
       <section className="space-y-3">

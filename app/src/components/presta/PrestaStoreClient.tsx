@@ -1,7 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { type FormEvent, useEffect, useState } from "react";
+import PublicUserCard from "@/components/trust/PublicUserCard";
+import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
@@ -126,6 +127,7 @@ export default function PrestaStoreClient({
   const [providerPanelView, setProviderPanelView] = useState<"proposals" | "payouts">("proposals");
 
   const [bookingService, setBookingService] = useState<BookingTarget | null>(null);
+  const [selectedServiceProfile, setSelectedServiceProfile] = useState<PrestaService | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingMethod, setBookingMethod] = useState("WAVE");
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -574,57 +576,134 @@ export default function PrestaStoreClient({
         {tab !== "provider" && error && <p className="text-sm text-rose-300">{error}</p>}
 
         {tab === "offers" ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {services.map((service) => (
-              <article key={service.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-                <div className="flex items-start gap-3">
-                  {service.provider.image ? (
-                    <Image src={service.provider.image} alt={service.provider.name ?? "Provider"} width={42} height={42} className="h-10 w-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-white">
-                      {(service.provider.name ?? "P").slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-base font-semibold text-white">{service.title}</h3>
-                    <p className="text-xs text-zinc-400">{service.provider.name ?? "Provider"}</p>
-                  </div>
+          <>
+            <div className="grid gap-3 md:grid-cols-2">
+              {services.map((service) => (
+                <div key={service.id} className="space-y-2">
+                  <PublicUserCard
+                    locale={locale}
+                    userId={service.provider.id}
+                    viewerUserId={currentUserId}
+                    name={service.provider.name ?? (locale === "fr" ? "Prestataire" : "Provider")}
+                    avatarUrl={service.provider.image}
+                    roleLabel={locale === "fr" ? "Prestataire" : "Provider"}
+                    reliabilityLabel={
+                      locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"
+                    }
+                    updatedAt={null}
+                    details={[
+                      {
+                        label: locale === "fr" ? "Service" : "Service",
+                        value: service.title,
+                      },
+                      {
+                        label: locale === "fr" ? "Categorie" : "Category",
+                        value: service.category ?? "-",
+                      },
+                      {
+                        label: locale === "fr" ? "Ville" : "City",
+                        value: service.city ?? "-",
+                      },
+                    ]}
+                    onViewProfile={() => setSelectedServiceProfile(service)}
+                    viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
+                  >
+                    <p className="mt-2 text-sm text-zinc-300">{shortDescription(service.description) || "-"}</p>
+                    <p className="mt-2 text-sm font-semibold text-emerald-300">
+                      {formatAmount(service.basePriceCents, service.currency)}
+                    </p>
+
+                    {!service.contactLocked && service.contactPhone ? (
+                      <p className="mt-1 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
+                    ) : null}
+
+                    {service.contactUnlockStatusHint === "BLOCKED_USER" ? (
+                      <p className="mt-1 text-xs text-rose-300">
+                        {locale === "fr"
+                          ? "Interaction bloquee (utilisateur bloque)."
+                          : "Interaction blocked (blocked user)."}
+                      </p>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => openBooking({ id: service.id, title: service.title })}
+                      disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
+                      className={`mt-3 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white ${
+                        service.contactUnlockStatusHint === "BLOCKED_USER"
+                          ? "cursor-not-allowed opacity-50"
+                          : "hover:bg-white/20"
+                      }`}
+                    >
+                      {locale === "fr" ? "Reserver" : "Book"}
+                    </button>
+                  </PublicUserCard>
                 </div>
+              ))}
 
-                <p className="mt-3 text-sm text-zinc-300">{shortDescription(service.description) || "-"}</p>
-                <p className="mt-3 text-sm font-semibold text-emerald-300">{formatAmount(service.basePriceCents, service.currency)}</p>
+              {!loading && services.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
+                  Aucun service pour le moment.
+                </div>
+              )}
+            </div>
 
-                {!service.contactLocked && service.contactPhone && (
-                  <p className="mt-2 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
-                )}
-
-                {service.contactUnlockStatusHint === "BLOCKED_USER" && (
-                  <p className="mt-2 text-xs text-rose-300">
-                    {locale === "fr" ? "Interaction bloquee (utilisateur bloque)." : "Interaction blocked (blocked user)."}
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => openBooking({ id: service.id, title: service.title })}
-                  disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
-                  className={`mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white ${
-                    service.contactUnlockStatusHint === "BLOCKED_USER"
-                      ? "cursor-not-allowed opacity-50"
-                      : "hover:bg-white/20"
-                  }`}
-                >
-                  {locale === "fr" ? "Reserver" : "Book"}
-                </button>
-              </article>
-            ))}
-
-            {!loading && services.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-                Aucun service pour le moment.
-              </div>
-            )}
-          </div>
+            <UserProfileDrawer
+              open={Boolean(selectedServiceProfile)}
+              onClose={() => setSelectedServiceProfile(null)}
+              locale={locale}
+              userId={selectedServiceProfile?.provider.id}
+              viewerUserId={currentUserId}
+              name={selectedServiceProfile?.provider.name ?? (locale === "fr" ? "Prestataire" : "Provider")}
+              avatarUrl={selectedServiceProfile?.provider.image ?? null}
+              roleLabel={locale === "fr" ? "Prestataire" : "Provider"}
+              reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
+              details={
+                selectedServiceProfile
+                  ? [
+                      {
+                        label: locale === "fr" ? "Service" : "Service",
+                        value: selectedServiceProfile.title,
+                      },
+                      {
+                        label: locale === "fr" ? "Categorie" : "Category",
+                        value: selectedServiceProfile.category ?? "-",
+                      },
+                      {
+                        label: locale === "fr" ? "Ville" : "City",
+                        value: selectedServiceProfile.city ?? "-",
+                      },
+                      {
+                        label: locale === "fr" ? "Paiement" : "Payment",
+                        value: selectedServiceProfile.acceptedPaymentMethods.join(", "),
+                      },
+                    ]
+                  : []
+              }
+              primaryAction={
+                selectedServiceProfile && selectedServiceProfile.contactUnlockStatusHint !== "BLOCKED_USER"
+                  ? {
+                      label: locale === "fr" ? "Reserver ce service" : "Book this service",
+                      onClick: () => {
+                        openBooking({
+                          id: selectedServiceProfile.id,
+                          title: selectedServiceProfile.title,
+                        });
+                        setSelectedServiceProfile(null);
+                      },
+                    }
+                  : undefined
+              }
+            >
+              {selectedServiceProfile?.contactUnlockStatusHint === "BLOCKED_USER" ? (
+                <p className="mt-3 text-xs text-rose-300">
+                  {locale === "fr"
+                    ? "Interaction bloquee (utilisateur bloque)."
+                    : "Interaction blocked (blocked user)."}
+                </p>
+              ) : null}
+            </UserProfileDrawer>
+          </>
         ) : tab === "needs" ? (
           <div className="grid gap-3 md:grid-cols-2">
             {needs.map((need) => (
