@@ -7,6 +7,7 @@ import {
   hasTrustDelegates,
   parseTakeSkip,
   parseVertical,
+  parseAssignedAdminInput,
   requireTrustAdmin,
   requireTrustSession,
   serializeTrustDispute,
@@ -98,7 +99,12 @@ export async function GET(request: NextRequest) {
   const { take, skip } = parseTakeSkip(url);
   const statusParam = String(url.searchParams.get("status") ?? "").trim().toUpperCase();
   const status = statusParam === "UNDER_REVIEW" ? "IN_REVIEW" : statusParam;
-  const where = (["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"].includes(status) ? { status } : {}) as Record<string, unknown>;
+  const vertical = parseVertical(url.searchParams.get("vertical"));
+  const assignedAdminInput = parseAssignedAdminInput(url.searchParams.get("assignedAdminId"));
+  const where: Record<string, unknown> = {};
+  if (["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"].includes(status)) where.status = status;
+  if (vertical) where.vertical = vertical;
+  if (assignedAdminInput.provided) where.assignedAdminId = assignedAdminInput.value;
 
   const db = getTrustDb();
   const [items, total] = await Promise.all([
@@ -107,7 +113,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
       take,
       skip,
-      include: { user: { select: { id: true, name: true } } },
+      include: { user: { select: { id: true, name: true } }, assignedAdmin: { select: { id: true, name: true } } },
     }),
     db.trustDispute.count({ where }),
   ]);

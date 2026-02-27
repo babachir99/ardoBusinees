@@ -128,6 +128,35 @@ export function parseTrustDisputeStatusInput(value: unknown): (typeof TRUST_DISP
   return (TRUST_DISPUTE_STATUS_DB as readonly string[]).includes(raw) ? (raw as any) : null;
 }
 
+export function parseOptionalStatus(value: unknown) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  return parseReportStatus(value);
+}
+
+export function parseOptionalTrustDisputeStatus(value: unknown) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  return parseTrustDisputeStatusInput(value);
+}
+
+export function parseAssignedAdminInput(value: unknown) {
+  if (value === undefined || value === null) return { provided: false as const, value: null as string | null };
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return { provided: true as const, value: null as string | null };
+  return { provided: true as const, value: normalized.slice(0, 120) };
+}
+
+export function parseInternalNoteInput(value: unknown) {
+  if (value === undefined) return { provided: false as const, value: null as string | null };
+  const normalized = String(value ?? "").trim();
+  return { provided: true as const, value: normalized ? normalized.slice(0, 2000) : null };
+}
+
+export function parseResolutionCodeInput(value: unknown) {
+  if (value === undefined) return { provided: false as const, value: null as string | null };
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return { provided: true as const, value: normalized ? normalized.slice(0, 64) : null };
+}
+
 export function presentTrustDisputeStatus(status: string): TrustPublicDisputeStatus {
   if (status === "IN_REVIEW") return "UNDER_REVIEW";
   if (status === "OPEN" || status === "RESOLVED" || status === "REJECTED") return status;
@@ -154,6 +183,16 @@ export function serializeReport(record: any) {
     reason: record.reason,
     description: record.description ?? null,
     status: record.status,
+    assignedAdminId: record.assignedAdminId ?? null,
+    assignedAdmin: record.assignedAdmin
+      ? {
+          id: record.assignedAdmin.id,
+          name: record.assignedAdmin.name ?? null,
+        }
+      : undefined,
+    resolutionCode: record.resolutionCode ?? null,
+    internalNote: record.internalNote ?? null,
+    reviewedAt: record.reviewedAt ?? null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -174,6 +213,16 @@ export function serializeTrustDispute(record: any) {
     reason: record.reason,
     description: record.description,
     status: presentTrustDisputeStatus(record.status),
+    assignedAdminId: record.assignedAdminId ?? null,
+    assignedAdmin: record.assignedAdmin
+      ? {
+          id: record.assignedAdmin.id,
+          name: record.assignedAdmin.name ?? null,
+        }
+      : undefined,
+    resolutionCode: record.resolutionCode ?? null,
+    internalNote: record.internalNote ?? null,
+    reviewedAt: record.reviewedAt ?? null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

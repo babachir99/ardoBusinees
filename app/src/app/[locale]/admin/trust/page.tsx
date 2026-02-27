@@ -34,8 +34,8 @@ export default async function AdminTrustPage({ params, searchParams }: { params:
   const trustReady = Boolean(db?.report && db?.trustDispute);
   const [reports, disputes] = trustReady
     ? await Promise.all([
-        db.report.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { reporter: { select: { id: true, name: true } }, reported: { select: { id: true, name: true } } } }),
-        db.trustDispute.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { user: { select: { id: true, name: true } } } }),
+        db.report.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { reporter: { select: { id: true, name: true } }, reported: { select: { id: true, name: true } }, assignedAdmin: { select: { id: true, name: true } } } }),
+        db.trustDispute.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { user: { select: { id: true, name: true } }, assignedAdmin: { select: { id: true, name: true } } } }),
       ])
     : [[], []];
 
@@ -57,8 +57,9 @@ export default async function AdminTrustPage({ params, searchParams }: { params:
             locale={locale}
             initialTab={initialTab}
             focusId={focusId}
-            initialReports={reports.map((item: any) => ({ id: item.id, reporterId: item.reporterId, reportedId: item.reportedId, reporter: item.reporter ? { id: item.reporter.id, name: item.reporter.name ?? null } : undefined, reported: item.reported ? { id: item.reported.id, name: item.reported.name ?? null } : undefined, reason: item.reason, description: item.description ?? null, status: item.status, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
-            initialDisputes={disputes.map((item: any) => ({ id: item.id, userId: item.userId, user: item.user ? { id: item.user.id, name: item.user.name ?? null } : undefined, orderId: item.orderId ?? null, vertical: item.vertical, reason: item.reason, description: item.description, status: normalizeDisputeStatus(item.status), createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
+            currentAdminId={session.user.id}
+            initialReports={reports.map((item: any) => ({ id: item.id, reporterId: item.reporterId, reportedId: item.reportedId, reporter: item.reporter ? { id: item.reporter.id, name: item.reporter.name ?? null } : undefined, reported: item.reported ? { id: item.reported.id, name: item.reported.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, reason: item.reason, description: item.description ?? null, status: item.status, resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
+            initialDisputes={disputes.map((item: any) => ({ id: item.id, userId: item.userId, user: item.user ? { id: item.user.id, name: item.user.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, orderId: item.orderId ?? null, vertical: item.vertical, reason: item.reason, description: item.description, status: normalizeDisputeStatus(item.status), resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
           />
         )}
       </main>

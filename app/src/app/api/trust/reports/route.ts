@@ -6,6 +6,7 @@ import {
   getTrustDb,
   hasTrustDelegates,
   parseReportStatus,
+  parseAssignedAdminInput,
   parseTakeSkip,
   requireTrustAdmin,
   requireTrustSession,
@@ -105,9 +106,12 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const { take, skip } = parseTakeSkip(url);
   const status = parseReportStatus(url.searchParams.get("status"));
+  const assignedAdminInput = parseAssignedAdminInput(url.searchParams.get("assignedAdminId"));
 
   const db = getTrustDb();
-  const where = status ? { status } : {};
+  const where: Record<string, unknown> = {};
+  if (status) where.status = status;
+  if (assignedAdminInput.provided) where.assignedAdminId = assignedAdminInput.value;
   const [items, total] = await Promise.all([
     db.report.findMany({
       where,
@@ -117,6 +121,7 @@ export async function GET(request: NextRequest) {
       include: {
         reporter: { select: { id: true, name: true } },
         reported: { select: { id: true, name: true } },
+        assignedAdmin: { select: { id: true, name: true } },
       },
     }),
     db.report.count({ where }),
