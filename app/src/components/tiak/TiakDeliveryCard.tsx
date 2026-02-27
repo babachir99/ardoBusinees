@@ -30,7 +30,11 @@ function toErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-function contactHintLabel(locale: string, paymentMethod: string | null) {
+function contactHintLabel(locale: string, paymentMethod: string | null, unlockHint?: string | null) {
+  if (unlockHint === "BLOCKED_USER") {
+    return locale === "fr" ? "Contact desactive (utilisateur bloque)." : "Contact disabled (blocked user).";
+  }
+
   const isCash = paymentMethod === "CASH";
   const isUnset = paymentMethod === null;
 
@@ -289,7 +293,7 @@ export default function TiakDeliveryCard({
 
       {!delivery.canContact && (
         <p className="mt-2 text-[11px] text-zinc-500">
-          {contactHintLabel(locale, delivery.paymentMethod)}
+          {contactHintLabel(locale, delivery.paymentMethod, delivery.contactUnlockStatusHint)}
         </p>
       )}
 

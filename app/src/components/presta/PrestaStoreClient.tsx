@@ -598,8 +598,23 @@ export default function PrestaStoreClient({
                   <p className="mt-2 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
                 )}
 
-                <button type="button" onClick={() => openBooking({ id: service.id, title: service.title })} className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
-                  Reserver
+                {service.contactUnlockStatusHint === "BLOCKED_USER" && (
+                  <p className="mt-2 text-xs text-rose-300">
+                    {locale === "fr" ? "Interaction bloquee (utilisateur bloque)." : "Interaction blocked (blocked user)."}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => openBooking({ id: service.id, title: service.title })}
+                  disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
+                  className={`mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white ${
+                    service.contactUnlockStatusHint === "BLOCKED_USER"
+                      ? "cursor-not-allowed opacity-50"
+                      : "hover:bg-white/20"
+                  }`}
+                >
+                  {locale === "fr" ? "Reserver" : "Book"}
                 </button>
               </article>
             ))}

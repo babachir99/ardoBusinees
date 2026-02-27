@@ -11,6 +11,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
@@ -47,8 +48,13 @@ function getContactState(
     paymentMethod: PaymentMethod | null;
     paymentStatus: PaymentStatus | null;
   },
-  viewer?: { id?: string | null; role?: string | null }
+  viewer?: { id?: string | null; role?: string | null },
+  blockedByTrust?: boolean
 ) {
+  if (blockedByTrust) {
+    return { contactLocked: true, contactUnlockStatusHint: "BLOCKED_USER", canContact: false };
+  }
+
   const isAdmin = viewer?.role === "ADMIN";
   const isParticipant = Boolean(
     viewer?.id &&
@@ -177,10 +183,17 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const blockedByTrust = Boolean(
+    session?.user?.id &&
+      delivery.courierId &&
+      (session.user.id === delivery.customerId || session.user.id === delivery.courierId) &&
+      (await isEitherBlocked(delivery.customerId, delivery.courierId))
+  );
+
   const contact = getContactState(delivery, {
     id: session?.user?.id,
     role: session?.user?.role,
-  });
+  }, blockedByTrust);
 
   const canSeeFullAddress = includeAddress && (isAdmin || isParticipant);
 

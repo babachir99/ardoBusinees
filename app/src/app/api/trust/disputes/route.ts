@@ -14,6 +14,8 @@ import {
   trustError,
   trustJson,
   validateReasonAndDescription,
+  enforceTrustCreateRateLimit,
+  TRUST_DUPLICATE_WINDOW_MS,
 } from "@/app/api/trust/_shared";
 
 export async function POST(request: NextRequest) {
@@ -29,6 +31,9 @@ export async function POST(request: NextRequest) {
   if (auth.response) return auth.response;
   const session = auth.session!;
 
+  const rateLimited = await enforceTrustCreateRateLimit(request, correlationId, "disputes", session.user.id);
+  if (rateLimited) return rateLimited;
+
   const body = await request.json().catch(() => null);
   const vertical = parseVertical(body?.vertical);
   const validation = validateReasonAndDescription(body?.reason, body?.description);
@@ -38,6 +43,21 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getTrustDb();
+  const duplicateSince = new Date(Date.now() - TRUST_DUPLICATE_WINDOW_MS);
+  const duplicate = await db.trustDispute.findFirst({
+    where: {
+      userId: session.user.id,
+      vertical,
+      orderId,
+      reason: validation.reason,
+      createdAt: { gte: duplicateSince },
+    },
+    select: { id: true },
+  });
+  if (duplicate) {
+    return trustError("DUPLICATE_TRUST_DISPUTE", "A similar dispute was already submitted recently.", 409, correlationId);
+  }
+
   const created = await db.trustDispute.create({
     data: {
       userId: session.user.id,

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getTrustedInternalApiUrl } from "@/lib/request-security";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
@@ -220,6 +221,10 @@ export async function POST(
 
   if (service.providerId === session.user.id) {
     return NextResponse.json({ error: "Cannot book your own service" }, { status: 403 });
+  }
+
+  if (await isEitherBlocked(session.user.id, service.providerId)) {
+    return NextResponse.json({ error: "BLOCKED_USER", message: "Interaction blocked by user safety settings." }, { status: 403 });
   }
 
   const customer = await prisma.user.findUnique({

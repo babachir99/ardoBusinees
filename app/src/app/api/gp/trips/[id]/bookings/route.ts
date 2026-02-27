@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 import { GpBookingStatus, GpTripStatus, UserRole } from "@prisma/client";
 
 const contactUnlockStatuses = new Set<GpBookingStatus>([
@@ -78,13 +79,14 @@ export async function GET(
 
   const isAdmin = session.user.role === UserRole.ADMIN;
   const isOwner = trip.transporterId === session.user.id;
-  const canContact = Boolean(isAdmin || isOwner || canUnlockContact(booking?.status));
+  const blockedInteraction = !isAdmin && !isOwner ? await isEitherBlocked(session.user.id, trip.transporterId) : false;
+  const canContact = Boolean(!blockedInteraction && (isAdmin || isOwner || canUnlockContact(booking?.status)));
 
   return NextResponse.json({
     booking,
     canContact,
     contactLocked: !canContact,
-    contactUnlockStatusHint,
+    contactUnlockStatusHint: blockedInteraction ? "BLOCKED_USER" : contactUnlockStatusHint,
     ...(canContact
       ? {
           contactPhone: trip.contactPhone ?? trip.transporter.phone ?? null,
@@ -144,6 +146,10 @@ export async function POST(
 
   if (trip.transporterId === session.user.id) {
     return NextResponse.json({ error: "Cannot book your own trip" }, { status: 403 });
+  }
+
+  if (await isEitherBlocked(session.user.id, trip.transporterId)) {
+    return NextResponse.json({ error: "BLOCKED_USER", message: "Interaction blocked by user safety settings." }, { status: 403 });
   }
 
   if (requestedKg > trip.availableKg) {

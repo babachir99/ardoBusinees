@@ -20,7 +20,11 @@ function formatDate(value: string) {
   return parsed.toLocaleString();
 }
 
-function contactHintLabel(locale: string, paymentMethod: string | null) {
+function contactHintLabel(locale: string, paymentMethod: string | null, unlockHint?: string | null) {
+  if (unlockHint === "BLOCKED_USER") {
+    return locale === "fr" ? "Contact desactive (utilisateur bloque)." : "Contact disabled (blocked user).";
+  }
+
   const isCash = paymentMethod === "CASH";
   const isUnset = paymentMethod === null;
 
@@ -174,7 +178,7 @@ export default function TiakDeliveryDetails({
               <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Statut" : "Status"}: {delivery.status}</p>
               <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Cree le" : "Created"}: {formatDate(delivery.createdAt)}</p>
               {!delivery.canContact && (
-                <p className="mt-1 text-xs text-zinc-500">{contactHintLabel(locale, delivery.paymentMethod)}</p>
+                <p className="mt-1 text-xs text-zinc-500">{contactHintLabel(locale, delivery.paymentMethod, delivery.contactUnlockStatusHint)}</p>
               )}
 
               {delivery.pickupAddress ? (

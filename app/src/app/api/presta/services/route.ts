@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
@@ -116,42 +117,50 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const payload = services.map((service) => {
-    const policy = evaluateContactPolicy({
-      viewerId: session?.user?.id,
-      viewerRole: session?.user?.role,
-      ownerId: service.providerId,
-      lockedByDefault: rules.contact.lockedByDefault,
-      unlockStatusHint,
-    });
+  const payload = await Promise.all(
+    services.map(async (service) => {
+      const policy = evaluateContactPolicy({
+        viewerId: session?.user?.id,
+        viewerRole: session?.user?.role,
+        ownerId: service.providerId,
+        lockedByDefault: rules.contact.lockedByDefault,
+        unlockStatusHint,
+      });
 
-    return {
-      id: service.id,
-      providerId: service.providerId,
-      storeId: service.storeId,
-      title: service.title,
-      description: service.description,
-      category: service.category,
-      city: service.city,
-      basePriceCents: service.basePriceCents,
-      currency: service.currency,
-      acceptedPaymentMethods: service.acceptedPaymentMethods,
-      isActive: service.isActive,
-      createdAt: service.createdAt,
-      updatedAt: service.updatedAt,
-      provider: {
-        id: service.provider.id,
-        name: service.provider.name,
-        image: service.provider.image,
-      },
-      store: service.store,
-      contactLocked: policy.contactLocked,
-      contactUnlockStatusHint: policy.contactUnlockStatusHint,
-      ...(policy.canRevealContact
-        ? { contactPhone: service.contactPhone ?? service.provider.phone ?? null }
-        : {}),
-    };
-  });
+      const interactionBlocked = Boolean(
+        session?.user?.id &&
+          session.user.id !== service.providerId &&
+          (await isEitherBlocked(session.user.id, service.providerId))
+      );
+
+      return {
+        id: service.id,
+        providerId: service.providerId,
+        storeId: service.storeId,
+        title: service.title,
+        description: service.description,
+        category: service.category,
+        city: service.city,
+        basePriceCents: service.basePriceCents,
+        currency: service.currency,
+        acceptedPaymentMethods: service.acceptedPaymentMethods,
+        isActive: service.isActive,
+        createdAt: service.createdAt,
+        updatedAt: service.updatedAt,
+        provider: {
+          id: service.provider.id,
+          name: service.provider.name,
+          image: service.provider.image,
+        },
+        store: service.store,
+        contactLocked: interactionBlocked ? true : policy.contactLocked,
+        contactUnlockStatusHint: interactionBlocked ? "BLOCKED_USER" : policy.contactUnlockStatusHint,
+        ...(policy.canRevealContact && !interactionBlocked
+          ? { contactPhone: service.contactPhone ?? service.provider.phone ?? null }
+          : {}),
+      };
+    })
+  );
 
   return NextResponse.json(payload);
 }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { Prisma, PrestaProposalStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 function hasPrestaProposalDelegates() {
   const runtimePrisma = prisma as unknown as {
@@ -179,6 +180,10 @@ export async function POST(
 
   if (service.providerId !== session.user.id) {
     return errorResponse(403, "FORBIDDEN", "Only the service owner can create this proposal.");
+  }
+
+  if (await isEitherBlocked(need.customerId, service.providerId)) {
+    return errorResponse(403, "BLOCKED_USER", "Interaction blocked by user safety settings.");
   }
 
   const existing = await prisma.prestaProposal.findFirst({

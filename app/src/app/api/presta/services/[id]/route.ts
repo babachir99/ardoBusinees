@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
+import { isEitherBlocked } from "@/lib/trust-blocks";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
@@ -97,6 +98,12 @@ export async function GET(
     unlockedByStatus = Boolean(unlockedBooking);
   }
 
+  const interactionBlocked = Boolean(
+    session?.user?.id &&
+      session.user.id !== service.providerId &&
+      (await isEitherBlocked(session.user.id, service.providerId))
+  );
+
   const policy = evaluateContactPolicy({
     viewerId: session?.user?.id ?? null,
     viewerRole: session?.user?.role ?? null,
@@ -126,9 +133,9 @@ export async function GET(
       image: service.provider.image,
     },
     store: service.store,
-    contactLocked: policy.contactLocked,
-    contactUnlockStatusHint: policy.contactUnlockStatusHint,
-    ...(policy.canRevealContact
+    contactLocked: interactionBlocked ? true : policy.contactLocked,
+    contactUnlockStatusHint: interactionBlocked ? "BLOCKED_USER" : policy.contactUnlockStatusHint,
+    ...(policy.canRevealContact && !interactionBlocked
       ? { contactPhone: service.contactPhone ?? service.provider.phone ?? null }
       : {}),
   });
@@ -257,3 +264,4 @@ export async function PATCH(
       : {}),
   });
 }
+

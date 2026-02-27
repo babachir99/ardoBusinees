@@ -14,6 +14,8 @@ import {
   trustError,
   trustJson,
   validateReasonAndDescription,
+  enforceTrustCreateRateLimit,
+  TRUST_DUPLICATE_WINDOW_MS,
 } from "@/app/api/trust/_shared";
 
 export async function POST(request: NextRequest) {
@@ -29,6 +31,9 @@ export async function POST(request: NextRequest) {
   if (auth.response) return auth.response;
   const session = auth.session!;
 
+  const rateLimited = await enforceTrustCreateRateLimit(request, correlationId, "reports", session.user.id);
+  if (rateLimited) return rateLimited;
+
   const body = await request.json().catch(() => null);
   const reportedUserId = String(body?.reportedUserId ?? "").trim();
   const validation = validateReasonAndDescription(body?.reason, body?.description);
@@ -43,6 +48,20 @@ export async function POST(request: NextRequest) {
   const reportedUser = await db.user.findUnique({ where: { id: reportedUserId }, select: { id: true, name: true } });
   if (!reportedUser) {
     return trustError("NOT_FOUND", "Reported user not found.", 404, correlationId);
+  }
+
+  const duplicateSince = new Date(Date.now() - TRUST_DUPLICATE_WINDOW_MS);
+  const duplicate = await db.report.findFirst({
+    where: {
+      reporterId: session.user.id,
+      reportedId: reportedUserId,
+      reason: validation.reason,
+      createdAt: { gte: duplicateSince },
+    },
+    select: { id: true },
+  });
+  if (duplicate) {
+    return trustError("DUPLICATE_REPORT", "A similar report was already submitted recently.", 409, correlationId);
   }
 
   const created = await db.report.create({

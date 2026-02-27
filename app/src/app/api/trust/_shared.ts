@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasUserRole } from "@/lib/userRoles";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { checkRateLimitAsync, getRateLimitHeaders, resolveClientIp } from "@/lib/rate-limit";
 
 export const TRUST_VERTICALS = ["SHOP", "PRESTA", "GP", "TIAK", "IMMO", "CARS"] as const;
 export const REPORT_STATUSES = ["PENDING", "UNDER_REVIEW", "RESOLVED", "REJECTED"] as const;
@@ -11,6 +12,30 @@ export const TRUST_DISPUTE_STATUSES_PUBLIC = ["OPEN", "UNDER_REVIEW", "RESOLVED"
 export const TRUST_DISPUTE_STATUS_DB = ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"] as const;
 
 export type TrustPublicDisputeStatus = (typeof TRUST_DISPUTE_STATUSES_PUBLIC)[number];
+
+export const TRUST_DUPLICATE_WINDOW_MS = 60 * 60 * 1000;
+
+export async function enforceTrustCreateRateLimit(
+  request: Request,
+  correlationId: string,
+  scope: "reports" | "disputes",
+  userId: string
+) {
+  const ip = resolveClientIp(request);
+  const [ipRate, userRate] = await Promise.all([
+    checkRateLimitAsync({ key: `trust:${scope}:ip:${ip}`, limit: 15, windowMs: 15 * 60 * 1000 }),
+    checkRateLimitAsync({ key: `trust:${scope}:user:${userId}`, limit: 8, windowMs: 15 * 60 * 1000 }),
+  ]);
+
+  const blocked = !ipRate.allowed ? ipRate : !userRate.allowed ? userRate : null;
+  if (!blocked) return null;
+
+  return trustJson(
+    { ok: false, code: "RATE_LIMITED", message: "Too many requests. Please retry later." },
+    { status: 429, headers: getRateLimitHeaders(blocked) },
+    correlationId
+  );
+}
 
 export function getTrustDb() {
   return prisma as any;

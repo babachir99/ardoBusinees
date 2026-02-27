@@ -94,6 +94,7 @@ export default function GpTripBookingForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [status, setStatus] = useState<BookingStatus | null>(initialStatus ?? null);
   const [canContact, setCanContact] = useState(false);
+  const [contactUnlockStatusHint, setContactUnlockStatusHint] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -142,6 +143,10 @@ export default function GpTripBookingForm({
         if (typeof payload?.canContact === "boolean") {
           setCanContact(payload.canContact);
         }
+
+        if (typeof payload?.contactUnlockStatusHint === "string") {
+          setContactUnlockStatusHint(payload.contactUnlockStatusHint);
+        }
       } catch {
         // Keep silent: booking contact access is optional UI metadata.
       }
@@ -177,6 +182,15 @@ export default function GpTripBookingForm({
       const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
+        if (payload?.error === "BLOCKED_USER") {
+          setContactUnlockStatusHint("BLOCKED_USER");
+          throw new Error(
+            locale === "fr"
+              ? "Interaction bloquee (utilisateur bloque)."
+              : "Interaction blocked (blocked user)."
+          );
+        }
+
         throw new Error(
           payload?.error ||
             (locale === "fr"
@@ -192,6 +206,10 @@ export default function GpTripBookingForm({
 
       if (typeof payload?.canContact === "boolean") {
         setCanContact(payload.canContact);
+      }
+
+      if (typeof payload?.contactUnlockStatusHint === "string") {
+        setContactUnlockStatusHint(payload.contactUnlockStatusHint);
       }
 
       setSuccess(
@@ -300,6 +318,7 @@ export default function GpTripBookingForm({
   );
 
   const statusBadge = status ? statusMeta[status] : null;
+  const blockedByTrust = contactUnlockStatusHint === "BLOCKED_USER";
 
   return (
     <div className="text-xs">
@@ -315,7 +334,10 @@ export default function GpTripBookingForm({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="shrink-0 rounded-full bg-gradient-to-r from-emerald-300 to-emerald-400 px-4 py-1.5 font-semibold text-zinc-950 shadow-[0_8px_22px_rgba(16,185,129,0.25)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+            disabled={blockedByTrust}
+            className={`shrink-0 rounded-full bg-gradient-to-r from-emerald-300 to-emerald-400 px-4 py-1.5 font-semibold text-zinc-950 shadow-[0_8px_22px_rgba(16,185,129,0.25)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 ${
+              blockedByTrust ? "cursor-not-allowed opacity-50" : "hover:brightness-105"
+            }`}
             aria-label={locale === "fr" ? "Reserver ce trajet" : "Book this trip"}
           >
             {locale === "fr" ? "Reserver" : "Book"}
@@ -342,6 +364,11 @@ export default function GpTripBookingForm({
         ) : null}
       </div>
 
+      {blockedByTrust && (
+        <p className="mt-2 text-[11px] text-rose-300">
+          {locale === "fr" ? "Interaction bloquee (utilisateur bloque)." : "Interaction blocked (blocked user)."}
+        </p>
+      )}
       {success && <p className="mt-2 text-[11px] text-emerald-300">{success}</p>}
       {error && <p className="mt-2 text-[11px] text-rose-300">{error}</p>}
 

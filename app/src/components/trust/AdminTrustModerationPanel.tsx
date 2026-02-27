@@ -36,6 +36,10 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportStatusFilter, setReportStatusFilter] = useState<"ALL" | TrustReportItem["status"]>("ALL");
+  const [disputeStatusFilter, setDisputeStatusFilter] = useState<"ALL" | TrustDisputeItem["status"]>("ALL");
+  const [verticalFilter, setVerticalFilter] = useState<"ALL" | TrustDisputeItem["vertical"]>("ALL");
+  const [dateFilter, setDateFilter] = useState<"ALL" | "7D" | "30D">("ALL");
   const reportStatuses = ["PENDING", "UNDER_REVIEW", "RESOLVED", "REJECTED"] as const;
   const disputeStatuses = ["OPEN", "UNDER_REVIEW", "RESOLVED", "REJECTED"] as const;
 
@@ -61,7 +65,32 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
     }
   }
 
-  const counts = useMemo(() => ({ reports: reports.length, disputes: disputes.length }), [reports.length, disputes.length]);
+  const filteredReports = useMemo(() => {
+    const now = Date.now();
+    return reports.filter((item) => {
+      if (reportStatusFilter !== "ALL" && item.status !== reportStatusFilter) return false;
+      if (dateFilter !== "ALL") {
+        const maxAgeMs = dateFilter === "7D" ? 7 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+        if (now - new Date(item.createdAt).getTime() > maxAgeMs) return false;
+      }
+      return true;
+    });
+  }, [reports, reportStatusFilter, dateFilter]);
+
+  const filteredDisputes = useMemo(() => {
+    const now = Date.now();
+    return disputes.filter((item) => {
+      if (disputeStatusFilter !== "ALL" && item.status !== disputeStatusFilter) return false;
+      if (verticalFilter !== "ALL" && item.vertical !== verticalFilter) return false;
+      if (dateFilter !== "ALL") {
+        const maxAgeMs = dateFilter === "7D" ? 7 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+        if (now - new Date(item.createdAt).getTime() > maxAgeMs) return false;
+      }
+      return true;
+    });
+  }, [disputes, disputeStatusFilter, verticalFilter, dateFilter]);
+
+  const counts = useMemo(() => ({ reports: filteredReports.length, disputes: filteredDisputes.length }), [filteredReports.length, filteredDisputes.length]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -85,12 +114,54 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
       {notice ? <p className="mt-3 text-sm text-emerald-300">{notice}</p> : null}
       {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
 
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+        <label className="flex items-center gap-2 text-zinc-300">
+          <span>{isFr ? "Periode" : "Window"}</span>
+          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+            <option value="ALL">{isFr ? "Toutes" : "All"}</option>
+            <option value="7D">7d</option>
+            <option value="30D">30d</option>
+          </select>
+        </label>
+        {tab === "reports" ? (
+          <label className="flex items-center gap-2 text-zinc-300">
+            <span>{isFr ? "Statut" : "Status"}</span>
+            <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+              <option value="ALL">ALL</option>
+              {reportStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 text-zinc-300">
+              <span>{isFr ? "Statut" : "Status"}</span>
+              <select value={disputeStatusFilter} onChange={(e) => setDisputeStatusFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+                <option value="ALL">ALL</option>
+                {disputeStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-zinc-300">
+              <span>Vertical</span>
+              <select value={verticalFilter} onChange={(e) => setVerticalFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+                <option value="ALL">ALL</option>
+                <option value="SHOP">SHOP</option>
+                <option value="PRESTA">PRESTA</option>
+                <option value="GP">GP</option>
+                <option value="TIAK">TIAK</option>
+                <option value="IMMO">IMMO</option>
+                <option value="CARS">CARS</option>
+              </select>
+            </label>
+          </>
+        )}
+      </div>
+
       {tab === "reports" ? (
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-zinc-400"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">Reporter</th><th className="px-2 py-2">Reported</th><th className="px-2 py-2">Reason</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Actions</th></tr></thead>
             <tbody>
-              {reports.map((item) => (
+              {filteredReports.map((item) => (
                 <tr key={item.id} id={`trust-row-${item.id}`} className={`border-t border-white/5 align-top ${focusId === item.id ? "bg-cyan-300/5" : ""}`}>
                   <td className="px-2 py-3 text-zinc-300">{new Date(item.createdAt).toLocaleString(locale)}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.reporter?.name ?? item.reporterId}</td>
@@ -100,7 +171,7 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
                   <td className="px-2 py-3"><div className="flex flex-wrap gap-2">{reportStatuses.map((status) => <button key={status} type="button" onClick={() => patchRecord("reports", item.id, status)} disabled={busyKey === `reports:${item.id}:${status}` || item.status === status} className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-zinc-200 disabled:opacity-40">{status}</button>)}</div></td>
                 </tr>
               ))}
-              {reports.length === 0 ? <tr><td className="px-2 py-6 text-zinc-500" colSpan={6}>{isFr ? "Aucun signalement." : "No reports."}</td></tr> : null}
+              {filteredReports.length === 0 ? <tr><td className="px-2 py-6 text-zinc-500" colSpan={6}>{isFr ? "Aucun signalement." : "No reports."}</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -109,7 +180,7 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-zinc-400"><tr><th className="px-2 py-2">Date</th><th className="px-2 py-2">User</th><th className="px-2 py-2">Vertical</th><th className="px-2 py-2">Ref</th><th className="px-2 py-2">Reason</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Actions</th></tr></thead>
             <tbody>
-              {disputes.map((item) => (
+              {filteredDisputes.map((item) => (
                 <tr key={item.id} id={`trust-row-${item.id}`} className={`border-t border-white/5 align-top ${focusId === item.id ? "bg-cyan-300/5" : ""}`}>
                   <td className="px-2 py-3 text-zinc-300">{new Date(item.createdAt).toLocaleString(locale)}</td>
                   <td className="px-2 py-3 text-zinc-200">{item.user?.name ?? item.userId}</td>
@@ -120,7 +191,7 @@ export default function AdminTrustModerationPanel({ locale, initialReports, init
                   <td className="px-2 py-3"><div className="flex flex-wrap gap-2">{disputeStatuses.map((status) => <button key={status} type="button" onClick={() => patchRecord("disputes", item.id, status)} disabled={busyKey === `disputes:${item.id}:${status}` || item.status === status} className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-zinc-200 disabled:opacity-40">{status}</button>)}</div></td>
                 </tr>
               ))}
-              {disputes.length === 0 ? <tr><td className="px-2 py-6 text-zinc-500" colSpan={7}>{isFr ? "Aucune plainte." : "No disputes."}</td></tr> : null}
+              {filteredDisputes.length === 0 ? <tr><td className="px-2 py-6 text-zinc-500" colSpan={7}>{isFr ? "Aucune plainte." : "No disputes."}</td></tr> : null}
             </tbody>
           </table>
         </div>
