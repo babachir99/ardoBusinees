@@ -67,10 +67,10 @@ type Props = {
   queueItems: OpsQueueItem[];
 };
 
-type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION";
+type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION" | "TRUST";
 
 function normalizeFilter(value: string | null): QueueFilter {
-  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED" || value === "IMMO_MONETIZATION" || value === "AUTO_MONETIZATION" || value === "CARS_MONETIZATION") {
+  if (value === "PAYOUT" || value === "DISPUTE" || value === "PAYMENT_FAILED" || value === "IMMO_MONETIZATION" || value === "AUTO_MONETIZATION" || value === "CARS_MONETIZATION" || value === "TRUST") {
     return value;
   }
   return "ALL";
@@ -92,6 +92,8 @@ const ALERT_THRESHOLDS = {
   DISPUTES_ACTIVE: 3,
   PAYMENTS_FAILED_7D: 5,
   KYC_PENDING: 20,
+  TRUST_REPORTS_PENDING: 5,
+  TRUST_DISPUTES_ACTIVE: 3,
 } as const;
 
 export default function AdminOpsHub({ kpis, queueItems }: Props) {
@@ -122,6 +124,12 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       kycPending:
         typeof kpis.kycPending === "number" &&
         kpis.kycPending >= ALERT_THRESHOLDS.KYC_PENDING,
+      trustReportsPending:
+        typeof kpis.trustReportsPending === "number" &&
+        kpis.trustReportsPending >= ALERT_THRESHOLDS.TRUST_REPORTS_PENDING,
+      trustDisputesActive:
+        typeof kpis.trustDisputesActive === "number" &&
+        kpis.trustDisputesActive >= ALERT_THRESHOLDS.TRUST_DISPUTES_ACTIVE,
     }),
     [kpis]
   );
@@ -160,14 +168,14 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         key: "trustReports",
         label: "Trust Reports (Pending)",
         value: kpis.trustReportsPending,
-        href: "/admin/trust",
+        href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
         warn: typeof kpis.trustReportsPending === "number" && kpis.trustReportsPending > 0,
       },
       {
         key: "trustDisputes",
         label: "Trust Disputes (Open/In review)",
         value: kpis.trustDisputesActive,
-        href: "/admin/trust",
+        href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
         warn: typeof kpis.trustDisputesActive === "number" && kpis.trustDisputesActive > 0,
       },
       {
@@ -203,6 +211,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     { key: "IMMO_MONETIZATION", label: "IMMO monetization" },
     { key: "AUTO_MONETIZATION", label: "AUTO monetization" },
     { key: "CARS_MONETIZATION", label: "CARS monetization" },
+    { key: "TRUST", label: "Trust" },
   ];
 
   const typeLabels: Record<OpsQueueItem["type"], string> = {
@@ -234,6 +243,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     if (activeFilter === "IMMO_MONETIZATION") return queueItems.filter((item) => item.type === "IMMO_MONETIZATION");
     if (activeFilter === "AUTO_MONETIZATION") return queueItems.filter((item) => item.type === "AUTO_MONETIZATION");
     if (activeFilter === "CARS_MONETIZATION") return queueItems.filter((item) => item.type === "CARS_MONETIZATION");
+    if (activeFilter === "TRUST") return queueItems.filter((item) => item.type === "TRUST");
     return queueItems.filter((item) => item.type === "PAYMENT_FAILED");
   }, [activeFilter, queueItems]);
 
@@ -277,6 +287,26 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         message: t("alerts.items.kycPending", { count: kpis.kycPending }),
         href: "/admin/kyc",
         actionLabel: t("alerts.actions.openKyc"),
+      });
+    }
+
+    if (warnFlags.trustReportsPending && typeof kpis.trustReportsPending === "number") {
+      alerts.push({
+        id: "warn-trust-reports",
+        severity: "WARN",
+        message: `Trust reports pending: ${kpis.trustReportsPending}`,
+        href: "/admin?opsFilter=TRUST#ops-queue",
+        actionLabel: t("alerts.actions.openQueue"),
+      });
+    }
+
+    if (warnFlags.trustDisputesActive && typeof kpis.trustDisputesActive === "number") {
+      alerts.push({
+        id: "warn-trust-disputes",
+        severity: "WARN",
+        message: `Trust disputes active: ${kpis.trustDisputesActive}`,
+        href: "/admin?opsFilter=TRUST#ops-queue",
+        actionLabel: t("alerts.actions.openQueue"),
       });
     }
 
