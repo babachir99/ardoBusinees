@@ -591,6 +591,7 @@ export default async function ProductPage({
           sellerRating={product.seller?.rating}
           sellerAvatarUrl={product.seller?.user?.image ?? null}
           sellerProductsCount={sellerProductsCount}
+          sellerUserId={product.seller?.userId ?? undefined}
           sellerPhoneHref={sellerPhoneHref}
           sellerEmailHref={sellerEmailHref}
           sellerWhatsappHref={sellerWhatsappHref}

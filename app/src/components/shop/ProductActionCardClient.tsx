@@ -142,6 +142,17 @@ export default function ProductActionCardClient({
     }
   }, [productId]);
 
+  const toggleExternalContacts = async () => {
+    if (!payload) {
+      const latest = await loadInquiry();
+      if (latest?.blocked) {
+        return;
+      }
+    }
+
+    setShowExternalContacts((value) => !value);
+  };
+
   const openPanel = async (next: "chat" | "offer") => {
     if (!canNegotiate) {
       setError(labels.localOnly);
@@ -166,6 +177,11 @@ export default function ProductActionCardClient({
       void loadInquiry();
     }
   }, [autoOpenedChat, blockedByTrust, canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, openChatDefault, payload]);
+
+  useEffect(() => {
+    if (!isAuthenticated || disabledByOwner || !canNegotiate || payload) return;
+    void loadInquiry();
+  }, [canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, payload]);
 
   const sendMessage = async () => {
     const message = messageDraft.trim();
@@ -296,7 +312,7 @@ export default function ProductActionCardClient({
       {canNegotiate && hasExternalContacts && isAuthenticated && !disabledByOwner && !blockedByTrust && (
         <button
           type="button"
-          onClick={() => setShowExternalContacts((value) => !value)}
+          onClick={() => void toggleExternalContacts()}
           className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-zinc-900/60 px-4 py-2 text-xs font-semibold text-zinc-300 transition hover:border-white/45"
         >
           {showExternalContacts ? labels.hideContacts : labels.moreContacts}

@@ -20,7 +20,7 @@ export default function UserSafetyActions({ userId, locale = "fr" }: { userId: s
         const data = await res.json().catch(() => null);
         if (!cancelled && data?.ok) {
           const items = Array.isArray(data.blocks) ? data.blocks : [];
-          setBlocked(items.some((item: any) => item?.blockedId === userId));
+          setBlocked(items.some((item: { blockedId?: string } | null) => item?.blockedId === userId));
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -32,6 +32,15 @@ export default function UserSafetyActions({ userId, locale = "fr" }: { userId: s
   }, [userId]);
 
   async function toggleBlock() {
+    if (!blocked) {
+      const confirmed = window.confirm(
+        isFr
+          ? "Confirmer le blocage de ce compte ? Vous ne pourrez plus etre contactes entre vous tant que ce compte reste bloque."
+          : "Confirm blocking this account? You will no longer be able to contact each other until unblocked."
+      );
+      if (!confirmed) return;
+    }
+
     setLoading(true);
     setError(null);
     setMessage(null);

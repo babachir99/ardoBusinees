@@ -1,4 +1,5 @@
 ﻿import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
+import UserSafetyActions from "@/components/trust/UserSafetyActions";
 
 type PurchaseInfoPanelProps = {
   locale: string;
@@ -11,6 +12,7 @@ type PurchaseInfoPanelProps = {
   sellerRating?: number | null;
   sellerAvatarUrl?: string | null;
   sellerProductsCount?: number;
+  sellerUserId?: string;
   sellerPhoneHref?: string;
   sellerEmailHref?: string;
   sellerWhatsappHref?: string;
@@ -31,6 +33,7 @@ export default function PurchaseInfoPanel({
   sellerRating,
   sellerAvatarUrl,
   sellerProductsCount,
+  sellerUserId,
   sellerPhoneHref,
   sellerEmailHref,
   sellerWhatsappHref,
@@ -136,6 +139,12 @@ export default function PurchaseInfoPanel({
             ? "Cette zone sert a contacter le vendeur via la messagerie interne et suivre vos offres en securite."
             : "Use this panel to contact the seller through internal chat and track offers safely."}
         </p>
+
+        {isAuthenticated && sellerUserId && !isSellerOwner ? (
+          <div className="mt-3">
+            <UserSafetyActions userId={sellerUserId} locale={locale} />
+          </div>
+        ) : null}
 
         <ProductActionCardClient
           locale={locale}
