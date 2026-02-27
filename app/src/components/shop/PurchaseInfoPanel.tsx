@@ -160,9 +160,13 @@ export default function PurchaseInfoPanel({
                     aria-haspopup="menu"
                     aria-expanded={actionsOpen}
                     onClick={() => setActionsOpen((value) => !value)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-transparent text-sm font-semibold text-zinc-300 transition hover:border-white/35 hover:bg-white/5"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/35 bg-sky-300/10 text-sky-100 shadow-[0_0_0_1px_rgba(125,211,252,0.2)] transition hover:border-sky-200/70 hover:bg-sky-300/20"
                   >
-                    ...
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-current">
+                      <circle cx="12" cy="5" r="1.8" />
+                      <circle cx="12" cy="12" r="1.8" />
+                      <circle cx="12" cy="19" r="1.8" />
+                    </svg>
                   </button>
 
                   {actionsOpen && sellerUserId ? (
@@ -203,10 +207,6 @@ export default function PurchaseInfoPanel({
             ? "Cette zone sert a contacter le vendeur via la messagerie interne et suivre vos offres en securite."
             : "Use this panel to contact the seller through internal chat and track offers safely."}
         </p>
-
-        {canShowSafetyActions && sellerUserId ? (
-          <UserSafetyActions userId={sellerUserId} locale={locale} variant="inline" />
-        ) : null}
 
         <ProductActionCardClient
           locale={locale}
