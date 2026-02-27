@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { KycStatus } from "@prisma/client";
+import { mapKycRoleToUserRoleType, normalizeKycRole } from "@/lib/kyc/requirements";
+import { mapUserRoleTypeToLegacyRole } from "@/lib/userRoles";
 
 const allowedStatus = new Set(["APPROVED", "REJECTED"]);
 
@@ -48,10 +50,32 @@ export async function PATCH(
   });
 
   if (typedStatus === "APPROVED") {
+    const normalizedTargetRole = normalizeKycRole(submission.targetRole);
+    const assignmentRole = mapKycRoleToUserRoleType(normalizedTargetRole);
+
+    if (assignmentRole) {
+      await prisma.userRoleAssignment
+        .upsert({
+          where: {
+            userId_role: {
+              userId: submission.userId,
+              role: assignmentRole,
+            },
+          },
+          update: { status: "ACTIVE" },
+          create: {
+            userId: submission.userId,
+            role: assignmentRole,
+            status: "ACTIVE",
+          },
+        })
+        .catch(() => null);
+    }
+
     await prisma.user.update({
       where: { id: submission.userId },
       data: {
-        role: submission.targetRole,
+        ...(assignmentRole ? { role: mapUserRoleTypeToLegacyRole(assignmentRole) } : {}),
         activityLogs: {
           create: [
             {
@@ -61,6 +85,8 @@ export async function PATCH(
               metadata: {
                 reviewedById: session.user.id,
                 reviewReason,
+                targetRole: submission.targetRole,
+                assignedRole: assignmentRole,
               },
             },
           ],
@@ -77,6 +103,7 @@ export async function PATCH(
         metadata: {
           reviewedById: session.user.id,
           reviewReason,
+          targetRole: submission.targetRole,
         },
       },
     });

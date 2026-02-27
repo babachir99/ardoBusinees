@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { KycStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canAccessAdmin, canPublishImmo, errorResponse } from "@/app/api/immo/listings/_shared";
 import { assertSameOrigin } from "@/lib/request-security";
@@ -49,6 +50,37 @@ export async function POST(
 
   if (!isAdmin && listing.ownerId != session.user.id) {
     return errorResponse(403, "FORBIDDEN", "You can publish only your own listing.");
+  }
+
+  if (!isAdmin && listing.publisher && listing.publisher.type === "AGENCY") {
+    const approvedKyc = await prisma.kycSubmission.findFirst({
+      where: {
+        userId: session.user.id,
+        status: KycStatus.APPROVED,
+        targetRole: { in: ["IMMO_AGENCY"] as const },
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!approvedKyc) {
+      return NextResponse.json(
+        {
+          error: "KYC_REQUIRED",
+          message: "KYC approval is required to publish agency listings.",
+          requiredRole: "IMMO_AGENCY",
+          requiredFields: [
+            "businessRegistrationUrl",
+            "companyName",
+            "companyAddress",
+            "companyRibUrl",
+            "legalRepIdUrl",
+            "legalRepSelfieUrl",
+          ],
+        },
+        { status: 403 }
+      );
+    }
   }
 
   if (!Array.isArray(listing.imageUrls) || listing.imageUrls.length === 0) {

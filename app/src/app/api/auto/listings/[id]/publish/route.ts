@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { KycStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   canAccessAdmin,
@@ -85,6 +86,38 @@ export async function POST(
     );
   }
 
+  if (!isAdmin && listing.publisher && listing.publisher.type === "DEALER") {
+    const approvedKyc = await prisma.kycSubmission.findFirst({
+      where: {
+        userId: session.user.id,
+        status: KycStatus.APPROVED,
+        targetRole: { in: ["CAR_DEALER"] as const },
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!approvedKyc) {
+      return withCorrelationId(
+        NextResponse.json(
+          {
+            error: "KYC_REQUIRED",
+            requiredRole: "CAR_DEALER",
+            requiredFields: [
+              "businessRegistrationUrl",
+              "companyName",
+              "companyAddress",
+              "companyRibUrl",
+              "legalRepIdUrl",
+              "legalRepSelfieUrl",
+            ],
+          },
+          { status: 403 }
+        ),
+        correlationId
+      );
+    }
+  }
 
   if (listing.publisherId && listing.publisher && listing.publisher.type === "DEALER" && listing.publisher.status === "ACTIVE") {
     const publishedCount = await prisma.autoListing.count({

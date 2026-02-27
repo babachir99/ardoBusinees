@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     const approvedKyc = await prisma.kycSubmission.findFirst({
       where: {
         userId: session.user.id,
-        targetRole: KycRole.COURIER,
+        targetRole: { in: [KycRole.COURIER, KycRole.TIAK_COURIER] },
         status: KycStatus.APPROVED,
       },
       select: { id: true },
@@ -154,3 +154,4 @@ export async function POST(request: NextRequest) {
 }
 
 export const PATCH = POST;
+

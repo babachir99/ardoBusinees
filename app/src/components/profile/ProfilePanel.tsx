@@ -35,6 +35,8 @@ const ROLE_LABELS: Record<string, string> = {
   TIAK_COURIER: "Tiak",
   COURIER: "Tiak",
   IMMO_AGENT: "Immo",
+  IMMO_AGENCY: "Immo",
+  CAR_DEALER: "Cars",
 };
 
 const ROLE_SHORTCUTS: Array<{ key: string; href: string; label: string }> = [
@@ -50,6 +52,8 @@ const ROLE_SHORTCUTS: Array<{ key: string; href: string; label: string }> = [
 function normalizeRoleKey(role: string): string {
   if (role === "TRANSPORTER") return "GP_CARRIER";
   if (role === "COURIER") return "TIAK_COURIER";
+  if (role === "IMMO_AGENCY") return "IMMO_AGENT";
+  if (role === "CAR_DEALER") return "SELLER";
   if (role === "CUSTOMER") return "CLIENT";
   return role;
 }
@@ -70,6 +74,46 @@ type Favorite = {
   };
 };
 
+type KycFieldKey =
+  | "phoneVerified"
+  | "addressCity"
+  | "addressCountry"
+  | "docIdUrl"
+  | "driverLicenseUrl"
+  | "selfieUrl"
+  | "proofAddressUrl"
+  | "passportUrl"
+  | "proofTravelUrl"
+  | "businessRegistrationUrl"
+  | "companyName"
+  | "companyAddress"
+  | "companyRibUrl"
+  | "legalRepIdUrl"
+  | "legalRepSelfieUrl"
+  | "professionalLicenseUrl";
+
+type KycRequirement = {
+  roleRequested: string;
+  kycType: "INDIVIDUAL" | "BUSINESS";
+  kycLevel: "BASIC" | "ENHANCED" | "PROFESSIONAL";
+  requiredFields: KycFieldKey[];
+  optionalFields: KycFieldKey[];
+};
+
+const KYC_UPLOAD_FIELDS = new Set<KycFieldKey>([
+  "docIdUrl",
+  "driverLicenseUrl",
+  "selfieUrl",
+  "proofAddressUrl",
+  "passportUrl",
+  "proofTravelUrl",
+  "businessRegistrationUrl",
+  "companyRibUrl",
+  "legalRepIdUrl",
+  "legalRepSelfieUrl",
+  "professionalLicenseUrl",
+]);
+
 export default function ProfilePanel() {
   const t = useTranslations("Profile");
   const locale = useLocale();
@@ -79,11 +123,22 @@ export default function ProfilePanel() {
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [cartAddedIds, setCartAddedIds] = useState<Record<string, boolean>>({});
   const [kyc, setKyc] = useState({
-    targetRole: "TRANSPORTER",
+    targetRole: "SELLER",
     docIdUrl: "",
+    passportUrl: "",
     driverLicenseUrl: "",
+    proofTravelUrl: "",
     proofAddressUrl: "",
     selfieUrl: "",
+    businessRegistrationUrl: "",
+    companyName: "",
+    companyAddress: "",
+    companyRibUrl: "",
+    legalRepIdUrl: "",
+    legalRepSelfieUrl: "",
+    professionalLicenseUrl: "",
+    addressCity: "",
+    addressCountry: "",
     notes: "",
   });
   const [kycStatus, setKycStatus] = useState<string | null>(null);
@@ -96,13 +151,30 @@ export default function ProfilePanel() {
   const [kycSubmission, setKycSubmission] = useState<{
     id?: string;
     status?: string | null;
+    targetRole?: string | null;
+    kycType?: string | null;
+    kycLevel?: string | null;
     docIdUrl?: string | null;
+    passportUrl?: string | null;
     driverLicenseUrl?: string | null;
+    proofTravelUrl?: string | null;
     proofAddressUrl?: string | null;
     selfieUrl?: string | null;
+    businessRegistrationUrl?: string | null;
+    companyName?: string | null;
+    companyAddress?: string | null;
+    companyRibUrl?: string | null;
+    legalRepIdUrl?: string | null;
+    legalRepSelfieUrl?: string | null;
+    professionalLicenseUrl?: string | null;
+    addressCity?: string | null;
+    addressCountry?: string | null;
+    notes?: string | null;
   } | null>(null);
   const [showKycForm, setShowKycForm] = useState(false);
-  const [selectedRole, setSelectedRole] = useState("TRANSPORTER");
+  const [selectedRole, setSelectedRole] = useState("SELLER");
+  const [kycRequirement, setKycRequirement] = useState<KycRequirement | null>(null);
+  const [kycRequirementLoading, setKycRequirementLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const kycRef = useRef<HTMLDivElement | null>(null);
@@ -129,27 +201,65 @@ export default function ProfilePanel() {
         const kycData = (await kycRes.json()) as {
           id?: string;
           status?: string | null;
+          targetRole?: string | null;
+          kycType?: string | null;
+          kycLevel?: string | null;
           docIdUrl?: string | null;
+          passportUrl?: string | null;
           driverLicenseUrl?: string | null;
+          proofTravelUrl?: string | null;
           proofAddressUrl?: string | null;
           selfieUrl?: string | null;
+          businessRegistrationUrl?: string | null;
+          companyName?: string | null;
+          companyAddress?: string | null;
+          companyRibUrl?: string | null;
+          legalRepIdUrl?: string | null;
+          legalRepSelfieUrl?: string | null;
+          professionalLicenseUrl?: string | null;
+          addressCity?: string | null;
+          addressCountry?: string | null;
+          notes?: string | null;
         };
         setKycStatus(kycData.status ?? null);
         setKycApproved(kycData.status === "APPROVED");
         setKycSubmission(kycData);
+        if (kycData.targetRole) {
+          setSelectedRole(kycData.targetRole);
+        }
         setKyc((prev) => ({
           ...prev,
+          targetRole: kycData.targetRole ?? prev.targetRole,
           docIdUrl: kycData.docIdUrl ?? prev.docIdUrl,
+          passportUrl: kycData.passportUrl ?? prev.passportUrl,
           driverLicenseUrl: kycData.driverLicenseUrl ?? prev.driverLicenseUrl,
+          proofTravelUrl: kycData.proofTravelUrl ?? prev.proofTravelUrl,
           proofAddressUrl: kycData.proofAddressUrl ?? prev.proofAddressUrl,
           selfieUrl: kycData.selfieUrl ?? prev.selfieUrl,
+          businessRegistrationUrl: kycData.businessRegistrationUrl ?? prev.businessRegistrationUrl,
+          companyName: kycData.companyName ?? prev.companyName,
+          companyAddress: kycData.companyAddress ?? prev.companyAddress,
+          companyRibUrl: kycData.companyRibUrl ?? prev.companyRibUrl,
+          legalRepIdUrl: kycData.legalRepIdUrl ?? prev.legalRepIdUrl,
+          legalRepSelfieUrl: kycData.legalRepSelfieUrl ?? prev.legalRepSelfieUrl,
+          professionalLicenseUrl: kycData.professionalLicenseUrl ?? prev.professionalLicenseUrl,
+          addressCity: kycData.addressCity ?? prev.addressCity,
+          addressCountry: kycData.addressCountry ?? prev.addressCountry,
+          notes: kycData.notes ?? prev.notes,
         }));
         setKycPreviews((prev) => ({
           ...prev,
           docIdUrl: kycData.docIdUrl ?? prev.docIdUrl,
+          passportUrl: kycData.passportUrl ?? prev.passportUrl,
           driverLicenseUrl: kycData.driverLicenseUrl ?? prev.driverLicenseUrl,
+          proofTravelUrl: kycData.proofTravelUrl ?? prev.proofTravelUrl,
           proofAddressUrl: kycData.proofAddressUrl ?? prev.proofAddressUrl,
           selfieUrl: kycData.selfieUrl ?? prev.selfieUrl,
+          businessRegistrationUrl: kycData.businessRegistrationUrl ?? prev.businessRegistrationUrl,
+          companyRibUrl: kycData.companyRibUrl ?? prev.companyRibUrl,
+          legalRepIdUrl: kycData.legalRepIdUrl ?? prev.legalRepIdUrl,
+          legalRepSelfieUrl: kycData.legalRepSelfieUrl ?? prev.legalRepSelfieUrl,
+          professionalLicenseUrl: kycData.professionalLicenseUrl ?? prev.professionalLicenseUrl,
         }));
         if (kycData.status) {
           setShowKycForm(false);
@@ -172,6 +282,41 @@ export default function ProfilePanel() {
       kycRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [showKycForm]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRequirement = async () => {
+      setKycRequirementLoading(true);
+
+      try {
+        const params = new URLSearchParams({ role: selectedRole });
+        const response = await fetch(`/api/kyc/requirements?${params.toString()}`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) setKycRequirement(null);
+          return;
+        }
+
+        const payload = (await response.json().catch(() => null)) as KycRequirement | null;
+        if (!cancelled) {
+          setKycRequirement(payload);
+        }
+      } catch {
+        if (!cancelled) setKycRequirement(null);
+      } finally {
+        if (!cancelled) setKycRequirementLoading(false);
+      }
+    };
+
+    void loadRequirement();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRole]);
 
   const save = async () => {
     return;
@@ -206,7 +351,9 @@ export default function ProfilePanel() {
     setKycUploadingField(field);
     setError(null);
     try {
-      if (!file.type.startsWith("image/")) {
+      const isImage = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf";
+      if (!isImage && !isPdf) {
         throw new Error(t("kyc.errors.fileType"));
       }
       if (file.size > 2 * 1024 * 1024) {
@@ -224,10 +371,15 @@ export default function ProfilePanel() {
       }
       const json = (await res.json()) as { url: string };
       setKyc((prev) => ({ ...prev, [field]: json.url }));
-      setKycPreviews((prev) => ({
-        ...prev,
-        [field]: URL.createObjectURL(file),
-      }));
+      setKycPreviews((prev) => {
+        const next = { ...prev };
+        if (isImage) {
+          next[field] = URL.createObjectURL(file);
+        } else {
+          delete next[field];
+        }
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.save"));
     } finally {
@@ -278,6 +430,87 @@ export default function ProfilePanel() {
   const activeRoleShortcuts = ROLE_SHORTCUTS.filter((shortcut) =>
     normalizedRoles.includes(normalizeRoleKey(shortcut.key))
   );
+
+  const isFr = locale === "fr";
+  const roleOptions: Array<{ key: string; label: string; description: string }> = [
+    {
+      key: "SELLER",
+      label: isFr ? "Vendeur" : "Seller",
+      description: isFr
+        ? "Compte particulier avec verification basique."
+        : "Individual seller account with basic verification.",
+    },
+    {
+      key: "GP_CARRIER",
+      label: isFr ? "Transporteur GP" : "GP Carrier",
+      description: isFr
+        ? "Transport international (France ? Senegal) avec passeport."
+        : "International transport (France ? Senegal) with passport.",
+    },
+    {
+      key: "TIAK_COURIER",
+      label: isFr ? "Coursier Tiak" : "Tiak Courier",
+      description: isFr
+        ? "Livraison locale avec piece d'identite et permis."
+        : "Local delivery with ID and driver license.",
+    },
+    {
+      key: "IMMO_AGENCY",
+      label: isFr ? "Agence immo" : "Immo Agency",
+      description: isFr
+        ? "Entreprise: RCCM/NINEA ou KBIS/SIRET + RIB entreprise."
+        : "Business: RCCM/NINEA or KBIS/SIRET + company RIB.",
+    },
+    {
+      key: "CAR_DEALER",
+      label: isFr ? "Concessionnaire auto" : "Car Dealer",
+      description: isFr
+        ? "Entreprise automobile avec dossier professionnel complet."
+        : "Automotive business with full professional dossier.",
+    },
+  ];
+
+  const fieldLabels: Record<KycFieldKey, string> = {
+    phoneVerified: isFr ? "Telephone verifie (OTP)" : "Verified phone (OTP)",
+    addressCity: isFr ? "Ville" : "City",
+    addressCountry: isFr ? "Pays" : "Country",
+    docIdUrl: isFr ? "URL piece d'identite" : "ID document URL",
+    driverLicenseUrl: isFr ? "URL permis" : "Driver license URL",
+    selfieUrl: isFr ? "URL selfie" : "Selfie URL",
+    proofAddressUrl: isFr ? "URL justificatif de domicile" : "Proof of address URL",
+    passportUrl: isFr ? "URL passeport" : "Passport URL",
+    proofTravelUrl: isFr ? "URL justificatif voyage (optionnel au publish)" : "Travel proof URL (optional at trip publish)",
+    businessRegistrationUrl: isFr
+      ? "URL immatriculation entreprise (FR: KBIS/SIRET, SN: RCCM/NINEA)"
+      : "Business registration URL (FR: KBIS/SIRET, SN: RCCM/NINEA)",
+    companyName: isFr ? "Nom de l'entreprise" : "Company name",
+    companyAddress: isFr ? "Adresse entreprise" : "Company address",
+    companyRibUrl: isFr ? "URL RIB entreprise" : "Company RIB URL",
+    legalRepIdUrl: isFr ? "URL piece representant legal" : "Legal representative ID URL",
+    legalRepSelfieUrl: isFr ? "URL selfie representant legal" : "Legal representative selfie URL",
+    professionalLicenseUrl: isFr ? "URL licence/carte pro (optionnel)" : "Professional license/card URL (optional)",
+  };
+
+  const requiredFields = kycRequirement?.requiredFields ?? [];
+  const optionalFields = kycRequirement?.optionalFields ?? [];
+
+  const isFieldFilled = (field: KycFieldKey) => {
+    if (field === "phoneVerified") {
+      return Boolean(profile.phone?.trim());
+    }
+    return Boolean((kyc as Record<string, string>)[field]?.trim());
+  };
+
+  const visibleKycFields = Array.from(
+    new Set([...requiredFields, ...optionalFields].filter((field) => field !== "phoneVerified"))
+  );
+
+  const missingRequiredFields = requiredFields.filter((field) => !isFieldFilled(field));
+
+  const canSubmitKyc =
+    !kycLoading &&
+    requiredFields.length > 0 &&
+    missingRequiredFields.length === 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -578,12 +811,8 @@ export default function ProfilePanel() {
       <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
         <h2 className="text-xl font-semibold">{t("roles.title")}</h2>
         <p className="mt-2 text-sm text-zinc-300">{t("roles.subtitle")}</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[
-            { key: "SELLER", label: t("roles.seller") },
-            { key: "COURIER", label: t("roles.courier") },
-            { key: "TRANSPORTER", label: t("roles.transporter") },
-          ].map((role) => (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {roleOptions.map((role) => (
             <button
               key={role.key}
               type="button"
@@ -611,7 +840,7 @@ export default function ProfilePanel() {
                       />
                     </svg>
                   )}
-                  {role.key === "COURIER" && (
+                  {role.key === "TIAK_COURIER" && (
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -628,7 +857,7 @@ export default function ProfilePanel() {
                       <circle cx="17" cy="18" r="2" />
                     </svg>
                   )}
-                  {role.key === "TRANSPORTER" && (
+                  {role.key === "GP_CARRIER" && (
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -643,12 +872,22 @@ export default function ProfilePanel() {
                       />
                     </svg>
                   )}
+                  {(role.key === "IMMO_AGENCY" || role.key === "CAR_DEALER") && (
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className="h-5 w-5"
+                    >
+                      <path d="M4 20V8l8-4 8 4v12" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M9 20v-5h6v5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
                 </span>
                 <p className="text-sm font-semibold">{role.label}</p>
               </div>
-              <p className="mt-2 text-xs text-zinc-400">
-                {t(`roles.${role.key.toLowerCase()}Desc`)}
-              </p>
+              <p className="mt-2 text-xs text-zinc-400">{role.description}</p>
             </button>
           ))}
         </div>
@@ -698,63 +937,106 @@ export default function ProfilePanel() {
             <div className="mt-4 grid gap-3">
               <p className="text-xs text-zinc-500">{t("kyc.note")}</p>
               <div className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white">
-                {t("kyc.selectedRole")}:{" "}
-                <span className="font-semibold">
-                  {t(`kyc.roles.${kyc.targetRole.toLowerCase()}`)}
-                </span>
+                <p>
+                  {t("kyc.selectedRole")}: <span className="font-semibold">{selectedRole}</span>
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {isFr ? "Type" : "Type"}: {kycRequirement?.kycType ?? "-"} ? {isFr ? "Niveau" : "Level"}: {kycRequirement?.kycLevel ?? "-"}
+                </p>
               </div>
-              {[
-                { key: "docIdUrl", label: t("kyc.fields.docId") },
-                { key: "driverLicenseUrl", label: t("kyc.fields.driver") },
-                { key: "proofAddressUrl", label: t("kyc.fields.proof") },
-                { key: "selfieUrl", label: t("kyc.fields.selfie") },
-              ].map((field) => (
-                <div key={field.key} className="grid gap-2">
-                  <input
-                    className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-                    placeholder={field.label}
-                    value={(kyc as Record<string, string>)[field.key]}
-                    onChange={(e) =>
-                      setKyc((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                  />
-                  {kycPreviews[field.key] && (
-                    <div className="overflow-hidden rounded-2xl border border-white/10">
-                      <img
-                        src={kycPreviews[field.key]}
-                        alt="Preview"
-                        className="h-28 w-full object-cover"
-                      />
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 px-4 py-2 text-[11px] text-zinc-300">
-                      {kycUploadingField === field.key
-                        ? t("kyc.uploading")
-                        : t("kyc.upload")}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          uploadField(field.key as keyof typeof kyc, file);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                    {(kyc as Record<string, string>)[field.key] && (
-                      <button
-                        type="button"
-                        onClick={() => clearField(field.key as keyof typeof kyc)}
-                        className="rounded-xl border border-white/15 px-4 py-2 text-[11px] text-white"
-                      >
-                        {t("kyc.remove")}
-                      </button>
-                    )}
-                  </div>
+
+              {kycRequirementLoading ? (
+                <p className="text-xs text-zinc-500">{isFr ? "Chargement des exigences..." : "Loading requirements..."}</p>
+              ) : null}
+
+              {requiredFields.length > 0 ? (
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
+                  <p className="text-xs font-semibold text-amber-100">
+                    {isFr ? "Documents requis pour ce role" : "Required documents for this role"}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-amber-50">
+                    {requiredFields.map((field) => (
+                      <li key={`required-${field}`}>{fieldLabels[field]}</li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
+              ) : null}
+
+              {optionalFields.length > 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-zinc-950/50 px-4 py-3">
+                  <p className="text-xs font-semibold text-zinc-200">
+                    {isFr ? "Documents optionnels" : "Optional documents"}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-zinc-400">
+                    {optionalFields.map((field) => (
+                      <li key={`optional-${field}`}>{fieldLabels[field]}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {missingRequiredFields.includes("phoneVerified") ? (
+                <p className="text-xs text-rose-300">
+                  {isFr
+                    ? "Telephone verifie requis: ajoute/valide ton numero sur ton profil."
+                    : "Verified phone required: add/verify your phone number on your profile."}
+                </p>
+              ) : null}
+
+              {visibleKycFields.map((field) => {
+                const isUploadField = KYC_UPLOAD_FIELDS.has(field);
+                const value = (kyc as Record<string, string>)[field] ?? "";
+                const isRequired = requiredFields.includes(field);
+
+                return (
+                  <div key={field} className="grid gap-2">
+                    <input
+                      className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+                      placeholder={`${fieldLabels[field]}${isRequired ? " *" : ""}`}
+                      value={value}
+                      onChange={(e) =>
+                        setKyc((prev) => ({ ...prev, [field]: e.target.value }))
+                      }
+                    />
+                    {kycPreviews[field] ? (
+                      <div className="overflow-hidden rounded-2xl border border-white/10">
+                        <img
+                          src={kycPreviews[field]}
+                          alt="Preview"
+                          className="h-28 w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+                    {isUploadField ? (
+                      <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 px-4 py-2 text-[11px] text-zinc-300">
+                          {kycUploadingField === field ? t("kyc.uploading") : t("kyc.upload")}
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              uploadField(field as keyof typeof kyc, file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {value ? (
+                          <button
+                            type="button"
+                            onClick={() => clearField(field as keyof typeof kyc)}
+                            className="rounded-xl border border-white/15 px-4 py-2 text-[11px] text-white"
+                          >
+                            {t("kyc.remove")}
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+
               <textarea
                 className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
                 placeholder={t("kyc.fields.notes")}
@@ -795,4 +1077,5 @@ export default function ProfilePanel() {
     </div>
   );
 }
+
 

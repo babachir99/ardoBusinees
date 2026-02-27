@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { GpBookingStatus, GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { GpBookingStatus, GpTripStatus, KycStatus, PaymentMethod, UserRole } from "@prisma/client";
 import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
@@ -303,6 +303,29 @@ export async function POST(request: NextRequest) {
 
   if (!isAdmin && !transporterCanPublish) {
     return NextResponse.json({ error: "Invalid transporter profile" }, { status: 403 });
+  }
+
+  if (!isAdmin) {
+    const approvedKyc = await prisma.kycSubmission.findFirst({
+      where: {
+        userId: transporterId,
+        status: KycStatus.APPROVED,
+        targetRole: { in: ["GP_CARRIER", "TRANSPORTER"] as const },
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!approvedKyc) {
+      return NextResponse.json(
+        {
+          error: "KYC_REQUIRED",
+          requiredRole: "GP_CARRIER",
+          requiredFields: ["passportUrl", "selfieUrl", "phoneVerified"],
+        },
+        { status: 403 }
+      );
+    }
   }
 
   const originCity = normalizeString(body.originCity);

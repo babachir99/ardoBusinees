@@ -113,6 +113,21 @@ enum KycRole {
   SELLER
   TRANSPORTER
   COURIER
+  GP_CARRIER
+  TIAK_COURIER
+  IMMO_AGENCY
+  CAR_DEALER
+}
+
+enum KycType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum KycLevel {
+  BASIC
+  ENHANCED
+  PROFESSIONAL
 }
 
 enum GpTripStatus {
@@ -1823,20 +1838,33 @@ model Favorite {
 }
 
 model KycSubmission {
-  id               String    @id @default(cuid())
-  userId           String
-  targetRole       KycRole
-  status           KycStatus @default(PENDING)
-  reviewedById     String?
-  reviewedAt       DateTime?
-  reviewReason     String?
-  docIdUrl         String?
-  driverLicenseUrl String?
-  proofAddressUrl  String?
-  selfieUrl        String?
-  notes            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                      String    @id @default(cuid())
+  userId                  String
+  targetRole              KycRole
+  kycType                 KycType   @default(INDIVIDUAL)
+  kycLevel                KycLevel  @default(BASIC)
+  status                  KycStatus @default(PENDING)
+  reviewedById            String?
+  reviewedAt              DateTime?
+  reviewReason            String?
+  docIdUrl                String?
+  passportUrl             String?
+  driverLicenseUrl        String?
+  proofTravelUrl          String?
+  proofAddressUrl         String?
+  selfieUrl               String?
+  businessRegistrationUrl String?
+  companyName             String?
+  companyAddress          String?
+  companyRibUrl           String?
+  legalRepIdUrl           String?
+  legalRepSelfieUrl       String?
+  professionalLicenseUrl  String?
+  addressCity             String?
+  addressCountry          String?
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   user       User  @relation("KycSubmissionUser", fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy User? @relation("KycReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
