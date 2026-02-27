@@ -19,27 +19,43 @@ export default function UserSafetyActions({
   const isFr = locale === "fr";
   const [ready, setReady] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [eligible, setEligible] = useState(true);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportCooldownUntil, setReportCooldownUntil] = useState<number>(0);
 
+  const interactionHint = isFr
+    ? "Disponible apres un premier echange."
+    : "Available after first interaction.";
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/trust/blocks?take=200", { cache: "no-store" });
-        if (res.status === 401) return;
-        const data = await res.json().catch(() => null);
-        if (!cancelled && data?.ok) {
-          const items = Array.isArray(data.blocks) ? data.blocks : [];
-          setBlocked(items.some((item: { blockedId?: string } | null) => item?.blockedId === userId));
+        const [blocksResponse, eligibilityResponse] = await Promise.all([
+          fetch("/api/trust/blocks?take=200", { cache: "no-store" }),
+          fetch(`/api/trust/eligibility?targetUserId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
+        ]);
+
+        if (blocksResponse.status !== 401) {
+          const blocksData = await blocksResponse.json().catch(() => null);
+          if (!cancelled && blocksData?.ok) {
+            const items = Array.isArray(blocksData.blocks) ? blocksData.blocks : [];
+            setBlocked(items.some((item: { blockedId?: string } | null) => item?.blockedId === userId));
+          }
+        }
+
+        const eligibilityData = await eligibilityResponse.json().catch(() => null);
+        if (!cancelled && eligibilityData?.ok) {
+          setEligible(Boolean(eligibilityData.eligible));
         }
       } finally {
         if (!cancelled) setReady(true);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -51,9 +67,14 @@ export default function UserSafetyActions({
     return () => window.clearTimeout(timeout);
   }, [reportCooldownUntil]);
 
-  const reportDisabled = reportLoading || reportCooldownUntil > Date.now();
+  const reportDisabled = !eligible || reportLoading || reportCooldownUntil > Date.now();
 
   async function toggleBlock() {
+    if (!eligible) {
+      setMessage(interactionHint);
+      return;
+    }
+
     if (!blocked) {
       const confirmed = window.confirm(
         isFr
@@ -86,7 +107,10 @@ export default function UserSafetyActions({
   }
 
   async function submitQuickReport() {
-    if (reportDisabled) return;
+    if (reportDisabled) {
+      if (!eligible) setMessage(interactionHint);
+      return;
+    }
 
     setReportLoading(true);
     setError(null);
@@ -131,53 +155,61 @@ export default function UserSafetyActions({
   if (variant === "menu") {
     return (
       <div className="grid gap-1" role="none">
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => void toggleBlock()}
-          disabled={loading}
-          className={`w-full rounded-lg px-3 py-2 text-left text-xs font-semibold transition ${
-            blocked
-              ? "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
-              : "bg-rose-400/20 text-rose-200 hover:bg-rose-400/30"
-          } disabled:opacity-60`}
-        >
-          {loading
-            ? isFr
-              ? "Traitement..."
-              : "Processing..."
-            : blocked
-            ? isFr
-              ? "Debloquer"
-              : "Unblock"
-            : isFr
-            ? "Bloquer"
-            : "Block"}
-        </button>
+        {eligible ? (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void toggleBlock()}
+              disabled={loading}
+              className={`w-full rounded-lg px-3 py-2 text-left text-xs font-semibold transition ${
+                blocked
+                  ? "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
+                  : "bg-rose-400/20 text-rose-200 hover:bg-rose-400/30"
+              } disabled:opacity-60`}
+            >
+              {loading
+                ? isFr
+                  ? "Traitement..."
+                  : "Processing..."
+                : blocked
+                ? isFr
+                  ? "Debloquer"
+                  : "Unblock"
+                : isFr
+                ? "Bloquer"
+                : "Block"}
+            </button>
 
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => void submitQuickReport()}
-          disabled={reportDisabled}
-          className="w-full rounded-lg border border-white/15 px-3 py-2 text-left text-xs font-semibold text-zinc-200 transition hover:border-white/30 hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {reportLoading
-            ? isFr
-              ? "Signalement..."
-              : "Reporting..."
-            : isFr
-            ? "Signaler ce compte"
-            : "Report this account"}
-        </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void submitQuickReport()}
+              disabled={reportDisabled}
+              className="w-full rounded-lg border border-white/15 px-3 py-2 text-left text-xs font-semibold text-zinc-200 transition hover:border-white/30 hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reportLoading
+                ? isFr
+                  ? "Signalement..."
+                  : "Reporting..."
+                : isFr
+                ? "Signaler ce compte"
+                : "Report this account"}
+            </button>
 
-        <Link
-          href={`/trust/report?reportedUserId=${encodeURIComponent(userId)}`}
-          role="menuitem"
-          className="rounded-lg px-3 py-2 text-left text-[11px] text-zinc-300 transition hover:bg-zinc-800/70 hover:text-white"
-        >
-          {isFr ? "Ouvrir le formulaire complet" : "Open full report form"}
-        </Link>
+            <Link
+              href={`/trust/report?reportedUserId=${encodeURIComponent(userId)}`}
+              role="menuitem"
+              className="rounded-lg px-3 py-2 text-left text-[11px] text-zinc-300 transition hover:bg-zinc-800/70 hover:text-white"
+            >
+              {isFr ? "Ouvrir le formulaire complet" : "Open full report form"}
+            </Link>
+          </>
+        ) : (
+          <p className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] text-amber-200">
+            {interactionHint}
+          </p>
+        )}
 
         <Link
           href="/trust/security"
@@ -195,27 +227,33 @@ export default function UserSafetyActions({
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={() => void submitQuickReport()}
-        disabled={reportDisabled}
-        className="inline-flex w-fit rounded-full border border-white/20 bg-transparent px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {reportLoading
-          ? isFr
-            ? "Signalement..."
-            : "Reporting..."
-          : isFr
-          ? "Signaler ce compte"
-          : "Report this account"}
-      </button>
+      {eligible ? (
+        <>
+          <button
+            type="button"
+            onClick={() => void submitQuickReport()}
+            disabled={reportDisabled}
+            className="inline-flex w-fit rounded-full border border-white/20 bg-transparent px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {reportLoading
+              ? isFr
+                ? "Signalement..."
+                : "Reporting..."
+              : isFr
+              ? "Signaler ce compte"
+              : "Report this account"}
+          </button>
 
-      <Link
-        href={`/trust/report?reportedUserId=${encodeURIComponent(userId)}`}
-        className="text-[11px] text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
-      >
-        {isFr ? "Ouvrir le formulaire complet" : "Open full report form"}
-      </Link>
+          <Link
+            href={`/trust/report?reportedUserId=${encodeURIComponent(userId)}`}
+            className="text-[11px] text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+          >
+            {isFr ? "Ouvrir le formulaire complet" : "Open full report form"}
+          </Link>
+        </>
+      ) : (
+        <p className="text-xs text-amber-200">{interactionHint}</p>
+      )}
 
       {message ? <p className="basis-full text-xs text-emerald-300">{message}</p> : null}
       {error ? <p className="basis-full text-xs text-rose-300">{error}</p> : null}

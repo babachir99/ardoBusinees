@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { assertSameOrigin } from "@/lib/request-security";
+import { canTrustAction } from "@/lib/trust-eligibility";
 import {
   AuditReason,
   getCorrelationId,
@@ -71,6 +72,11 @@ export async function POST(request: NextRequest) {
   const blockedUser = await db.user.findUnique({ where: { id: blockedUserId }, select: { id: true, name: true } });
   if (!blockedUser) {
     return trustError("NOT_FOUND", "User not found.", 404, correlationId);
+  }
+
+  const eligible = await canTrustAction(db, session.user.id, blockedUserId);
+  if (!eligible) {
+    return trustError("NO_INTERACTION", "Trust action requires at least one prior interaction.", 403, correlationId);
   }
 
   const existing = await db.userBlock.findUnique({
