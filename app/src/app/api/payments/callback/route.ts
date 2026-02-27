@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma/client";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -435,6 +436,10 @@ export async function POST(request: NextRequest) {
       currency: result.updatedPayment.currency,
     },
   });
+
+  if (result.updatedPayment.status === "PAID" && result.finalOrder.paymentStatus === "PAID") {
+    await NotificationService.queueOrderPaidEmail(result.updatedPayment.orderId).catch(() => null);
+  }
 
   return respond(
     NextResponse.json({

@@ -12,7 +12,8 @@
     "postinstall": "prisma generate",
     "fix:product-slugs": "node scripts/fix-product-slugs.js",
     "qa:smoke": "node scripts/qa-smoke.mjs",
-    "qa:auth": "node scripts/qa-auth-routes.mjs"
+    "qa:auth": "node scripts/qa-auth-routes.mjs",
+    "qa:notifications": "node scripts/qa-notifications.mjs"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PaymentLedgerStatus, type OrderStatus, type PaymentStatus } from "@prisma/client";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 const allowedStatuses = new Set([
   "PENDING",
@@ -298,6 +299,18 @@ export async function POST(
       },
     },
   });
+
+  if (["FULFILLING", "SHIPPED", "DELIVERED"].includes(typedStatus)) {
+    await NotificationService.queueDeliveryUpdateEmail({
+      orderId: order.id,
+      trackingStep: typedStatus,
+      link: `/orders/${order.id}`,
+    }).catch(() => null);
+  }
+
+  if (resultingPaymentStatus === "PAID") {
+    await NotificationService.queueOrderPaidEmail(order.id).catch(() => null);
+  }
 
   return NextResponse.json(event, { status: 201 });
 }

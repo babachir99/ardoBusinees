@@ -155,3 +155,23 @@ Run smoke:
 ```powershell
 bash scripts/smoke/trust_smoke.sh
 ```
+
+
+## Notification System (V0.1)
+
+- Outbox model: emails are queued in `EmailOutbox` and dispatched asynchronously by `POST /api/cron/notifications`.
+- Idempotence: each notification uses a unique `dedupeKey` (example: `order_paid:<orderId>`).
+- Providers: `EMAIL_PROVIDER=console` (dev) or `EMAIL_PROVIDER=resend` with `RESEND_API_KEY` + `RESEND_FROM_EMAIL`.
+- Cron auth: send `x-cron-secret: <CRON_SECRET>` (or `Authorization: Bearer <CRON_SECRET>`).
+- Marketing unsubscribe: links use signed tokens via `/api/unsubscribe?token=...`.
+- Current hooks: order paid, delivery status updates, price-drop alerts (favorites), payment reminders, weekly deals digest.
+
+Example cron trigger:
+
+```bash
+curl -X POST "http://localhost:3000/api/cron/notifications" \
+  -H "Content-Type: application/json" \
+  -H "x-cron-secret: <CRON_SECRET>" \
+  --data '{"limit":50}'
+```
+

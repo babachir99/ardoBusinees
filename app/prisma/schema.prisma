@@ -247,6 +247,28 @@ enum Vertical {
   CARS
 }
 
+enum NotificationKind {
+  TRANSACTIONAL
+  MARKETING
+}
+
+enum EmailOutboxStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum NotificationVertical {
+  GENERIC
+  SHOP
+  PRESTA
+  GP
+  TIAK
+  IMMO
+  CARS
+}
+
 enum ImmoListingType {
   SALE
   RENT
@@ -511,6 +533,8 @@ model User {
   trustDisputesAssigned      TrustDispute[]          @relation("TrustDisputeAssignedAdmin")
   blocksInitiated            UserBlock[]             @relation("UserBlocksInitiated")
   blocksReceived             UserBlock[]             @relation("UserBlocksReceived")
+  notificationPreference      NotificationPreference?
+  emailOutboxEntries         EmailOutbox[]
 }
 
 model UserAddress {
@@ -1597,6 +1621,67 @@ model UserBlock {
   @@unique([blockerId, blockedId])
   @@index([blockerId, createdAt])
   @@index([blockedId, createdAt])
+}
+
+model NotificationPreference {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  transactionalEmailEnabled Boolean  @default(true)
+  marketingEmailEnabled     Boolean  @default(false)
+  priceDropEmailEnabled     Boolean  @default(false)
+  dealsEmailEnabled         Boolean  @default(false)
+  messageAutoEnabled        Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailOutbox {
+  id                String           @id @default(cuid())
+  toEmail           String
+  userId            String?
+  kind              NotificationKind
+  templateKey       String
+  payloadJson       Json
+  dedupeKey         String           @unique
+  status            EmailOutboxStatus @default(PENDING)
+  providerMessageId String?
+  lastError         String?
+  scheduledAt       DateTime         @default(now())
+  sentAt            DateTime?
+  attempts          Int              @default(0)
+  lockedAt          DateTime?
+  lockId            String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@index([userId, status, createdAt])
+}
+
+model MessageTemplate {
+  id             String               @id @default(cuid())
+  key            String               @unique
+  vertical       NotificationVertical @default(GENERIC)
+  subjectDefault String
+  bodyDefault    String
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+}
+
+model MessageAutoRule {
+  id          String               @id @default(cuid())
+  eventKey    String               @unique
+  vertical    NotificationVertical @default(GENERIC)
+  enabled     Boolean              @default(true)
+  templateKey String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([vertical, enabled, createdAt])
 }
 
 model Dispute {

@@ -8,6 +8,7 @@ import {
   deleteProductSafely,
   PRODUCT_DELETE_CONFLICT_MESSAGE,
 } from "@/lib/product-delete";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -108,7 +109,7 @@ export async function PATCH(
 
   const existing = await prisma.product.findUnique({
     where: { id: id },
-    select: { id: true, sellerId: true },
+    select: { id: true, sellerId: true, priceCents: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -242,6 +243,14 @@ export async function PATCH(
     where: { id: id },
     data,
   });
+
+  if (typeof data.priceCents === "number" && Number.isFinite(data.priceCents) && data.priceCents < existing.priceCents) {
+    await NotificationService.queuePriceDropEmails({
+      productId: existing.id,
+      oldPriceCents: existing.priceCents,
+      newPriceCents: data.priceCents,
+    }).catch(() => null);
+  }
 
   return NextResponse.json(product);
 }

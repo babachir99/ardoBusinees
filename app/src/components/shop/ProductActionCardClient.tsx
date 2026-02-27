@@ -27,6 +27,7 @@ type InquiryPayload = {
   blockedMessage?: string | null;
   isSellerOwner: boolean;
   meId: string;
+  productTitle?: string | null;
   messages: InquiryMessage[];
   offers: InquiryOffer[];
 };
@@ -73,6 +74,7 @@ export default function ProductActionCardClient({
 
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [contactTemplateLoaded, setContactTemplateLoaded] = useState(false);
 
   const [offerAmount, setOfferAmount] = useState("");
   const [offerQuantity, setOfferQuantity] = useState(1);
@@ -182,6 +184,55 @@ export default function ProductActionCardClient({
     if (!isAuthenticated || disabledByOwner || !canNegotiate || payload) return;
     void loadInquiry();
   }, [canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, payload]);
+
+
+  useEffect(() => {
+    setContactTemplateLoaded(false);
+  }, [productId]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (panel !== "chat") return;
+    if (!canNegotiate || disabledByOwner || blockedByTrust) return;
+    if (contactTemplateLoaded) return;
+    if (messageDraft.trim().length > 0) return;
+
+    const params = new URLSearchParams({ vertical: "SHOP" });
+    const productTitle = payload?.productTitle;
+    if (typeof productTitle === "string" && productTitle.trim().length > 0) {
+      params.set("productTitle", productTitle);
+    }
+
+    let isCancelled = false;
+    setContactTemplateLoaded(true);
+
+    void fetch(`/api/messages/templates?${params.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json().catch(() => null)) as
+          | { template?: { body?: string | null } }
+          | null;
+        return data?.template?.body?.trim() || null;
+      })
+      .then((body) => {
+        if (isCancelled || !body) return;
+        setMessageDraft((current) => (current.trim().length > 0 ? current : body));
+      })
+      .catch(() => null);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    blockedByTrust,
+    canNegotiate,
+    contactTemplateLoaded,
+    disabledByOwner,
+    isAuthenticated,
+    messageDraft,
+    panel,
+    payload?.productTitle,
+  ]);
 
   const sendMessage = async () => {
     const message = messageDraft.trim();

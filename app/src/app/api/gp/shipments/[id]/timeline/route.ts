@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 const orderedStatuses = ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED", "DELIVERED"] as const;
 
@@ -404,6 +405,24 @@ export async function POST(
       reason: AuditReason.SUCCESS,
       metadata: { shipmentId: result.shipment.id, status: result.event.status },
     });
+
+    const recipientIds = Array.from(
+      new Set([loaded.shipment.senderId, loaded.shipment.receiverId].filter((value): value is string => Boolean(value)))
+    );
+    for (const recipientId of recipientIds) {
+      await NotificationService.queueEmail({
+        userId: recipientId,
+        kind: "TRANSACTIONAL",
+        templateKey: "delivery_update",
+        payload: {
+          orderId: loaded.shipment.code,
+          trackingStep: result.event.status,
+          eta: "",
+          link: `/gp/shipments/${loaded.shipment.id}`,
+        },
+        dedupeKey: `delivery_update:gp:${loaded.shipment.id}:${result.event.status}:${recipientId}`,
+      }).catch(() => null);
+    }
 
     return respond(NextResponse.json(result, { status: 201 }));
   } catch (error) {

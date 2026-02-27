@@ -132,6 +132,21 @@ export const authOptions: NextAuthOptions = {
         })
         .catch(() => null);
 
+      await prisma.notificationPreference
+        .upsert({
+          where: { userId: user.id },
+          update: {},
+          create: {
+            userId: user.id,
+            transactionalEmailEnabled: true,
+            marketingEmailEnabled: false,
+            priceDropEmailEnabled: false,
+            dealsEmailEnabled: false,
+            messageAutoEnabled: true,
+          },
+        })
+        .catch(() => null);
+
       await prisma.activityLog.create({
         data: {
           userId: user.id,

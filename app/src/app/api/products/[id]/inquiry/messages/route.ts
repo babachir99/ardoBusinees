@@ -8,6 +8,7 @@ import {
   getMessagePolicyViolation,
 } from "@/lib/messagePolicy";
 import { isEitherBlocked } from "@/lib/trust-blocks";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 export async function POST(
   request: NextRequest,
@@ -61,6 +62,7 @@ export async function POST(
     where: { id },
     select: {
       id: true,
+      title: true,
       type: true,
       sellerId: true,
       seller: { select: { userId: true } },
@@ -132,16 +134,25 @@ export async function POST(
       },
     });
 
-    return created;
+    return {
+      inquiryId: inquiry.id,
+      message: created,
+    };
   });
+
+  await NotificationService.queueContactAckEmail({
+    userId: session.user.id,
+    contextLabel: product.title || product.id,
+    dedupeKey: `contact_ack:inquiry:${result.inquiryId}:user:${session.user.id}`,
+  }).catch(() => null);
 
   return NextResponse.json(
     {
-      id: result.id,
-      body: result.body,
-      createdAt: result.createdAt,
-      senderId: result.senderId,
-      sender: result.sender,
+      id: result.message.id,
+      body: result.message.body,
+      createdAt: result.message.createdAt,
+      senderId: result.message.senderId,
+      sender: result.message.sender,
     },
     { status: 201 }
   );

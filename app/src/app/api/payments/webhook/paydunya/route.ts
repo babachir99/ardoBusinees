@@ -9,6 +9,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { assertAllowedHost } from "@/lib/request-security";
+import { NotificationService } from "@/lib/notifications/NotificationService";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -763,6 +764,7 @@ export async function POST(request: NextRequest) {
 
       return {
         ledgerId: currentLedger.id,
+        orderId: currentLedger.orderId,
         requestedWebhookStatus: webhookStatus,
         ledgerStatus: effectiveLedgerStatus,
         contextType: currentLedger.contextType,
@@ -800,6 +802,10 @@ export async function POST(request: NextRequest) {
         carPurchaseStatus: transition.carPurchaseStatus,
       },
     });
+
+    if (transition.ledgerStatus === "CONFIRMED" && transition.orderId) {
+      await NotificationService.queueOrderPaidEmail(transition.orderId).catch(() => null);
+    }
 
     if (transition.contextType === "IMMO_MONETIZATION") {
       auditLog({
