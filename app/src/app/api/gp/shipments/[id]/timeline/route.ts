@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { NotificationService } from "@/lib/notifications/NotificationService";
+import { normalizeDeliveryStep } from "@/lib/notifications/delivery-step";
 
 const orderedStatuses = ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED", "DELIVERED"] as const;
 
@@ -409,6 +410,8 @@ export async function POST(
     const recipientIds = Array.from(
       new Set([loaded.shipment.senderId, loaded.shipment.receiverId].filter((value): value is string => Boolean(value)))
     );
+    const normalizedStep = normalizeDeliveryStep("GP", result.event.status);
+
     for (const recipientId of recipientIds) {
       await NotificationService.queueEmail({
         userId: recipientId,
@@ -416,11 +419,11 @@ export async function POST(
         templateKey: "delivery_update",
         payload: {
           orderId: loaded.shipment.code,
-          trackingStep: result.event.status,
+          trackingStep: normalizedStep,
           eta: "",
           link: `/gp/shipments/${loaded.shipment.id}`,
         },
-        dedupeKey: `delivery_update:gp:${loaded.shipment.id}:${result.event.status}:${recipientId}`,
+        dedupeKey: `delivery_update:gp:${loaded.shipment.id}:${normalizedStep}:${recipientId}`,
       }).catch(() => null);
     }
 

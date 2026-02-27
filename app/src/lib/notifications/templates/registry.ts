@@ -118,6 +118,14 @@ const TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
   ),
 };
 
+
+const TEMPLATE_KEYS = new Set(Object.keys(TEMPLATE_BUILDERS));
+
+export function isKnownNotificationTemplateKey(templateKey: string): boolean {
+  const normalized = String(templateKey ?? "").trim().toLowerCase();
+  return normalized.length > 0 && TEMPLATE_KEYS.has(normalized);
+}
+
 export function renderNotificationTemplate(
   templateKey: string,
   payload: NotificationTemplatePayload

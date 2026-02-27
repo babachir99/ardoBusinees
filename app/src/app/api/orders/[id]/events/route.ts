@@ -303,6 +303,7 @@ export async function POST(
   if (["FULFILLING", "SHIPPED", "DELIVERED"].includes(typedStatus)) {
     await NotificationService.queueDeliveryUpdateEmail({
       orderId: order.id,
+      vertical: "SHOP",
       trackingStep: typedStatus,
       link: `/orders/${order.id}`,
     }).catch(() => null);

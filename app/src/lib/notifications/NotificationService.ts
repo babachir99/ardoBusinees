@@ -9,14 +9,19 @@ import {
 import { ConsoleProvider } from "@/lib/notifications/providers/ConsoleProvider";
 import { ResendProvider } from "@/lib/notifications/providers/ResendProvider";
 import {
+  isKnownNotificationTemplateKey,
   renderNotificationTemplate,
   type NotificationTemplatePayload,
   type NotificationTemplateRender,
 } from "@/lib/notifications/templates/registry";
 import { buildUnsubscribeUrl, type UnsubscribeScope } from "@/lib/notifications/unsubscribe";
+import { normalizeDeliveryStep } from "@/lib/notifications/delivery-step";
 
 const LOCK_TIMEOUT_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 8;
+const ATTEMPTS_HARD_CAP = 8;
+const MAX_SCHEDULE_AHEAD_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_PAYLOAD_BYTES = 64 * 1024;
 
 type QueueEmailInput = {
   userId?: string | null;
@@ -65,8 +70,16 @@ function getProvider(): EmailProvider {
   return cachedProvider;
 }
 
-function normalizePayload(payload: NotificationTemplatePayload): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue;
+function serializePayload(payload: NotificationTemplatePayload): string | null {
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return null;
+  }
+}
+
+function normalizePayload(serializedPayload: string): Prisma.InputJsonValue {
+  return JSON.parse(serializedPayload) as Prisma.InputJsonValue;
 }
 
 function isP2002(error: unknown) {
@@ -268,6 +281,24 @@ async function processOutboxRow(params: {
 }): Promise<"sent" | "failed" | "skipped"> {
   const { row, lockId, now, provider } = params;
 
+  if (row.attempts >= ATTEMPTS_HARD_CAP) {
+    await prisma.emailOutbox.updateMany({
+      where: {
+        id: row.id,
+        lockId,
+      },
+      data: {
+        status: EmailOutboxStatus.FAILED,
+        lastError: "ATTEMPTS_CAP_REACHED",
+        lockId: null,
+        lockedAt: null,
+        updatedAt: now,
+      },
+    });
+
+    return "failed";
+  }
+
   let preference: NotificationPreference | null = null;
   if (row.userId) {
     const user = await prisma.user.findUnique({
@@ -355,20 +386,44 @@ async function queueEmail(input: QueueEmailInput): Promise<QueueEmailResult> {
     return { queued: false, skipped: true, reason: "MISSING_DEDUPE_KEY" };
   }
 
+  const normalizedTemplateKey = input.templateKey.trim().toLowerCase();
+  if (!isKnownNotificationTemplateKey(normalizedTemplateKey)) {
+    return { queued: false, skipped: true, reason: "UNKNOWN_TEMPLATE_KEY" };
+  }
+
+  const scheduledAt = input.scheduledAt ?? new Date();
+  const scheduledAtMs = scheduledAt.getTime();
+  if (!Number.isFinite(scheduledAtMs)) {
+    return { queued: false, skipped: true, reason: "INVALID_SCHEDULE_AT" };
+  }
+
+  if (scheduledAtMs > Date.now() + MAX_SCHEDULE_AHEAD_MS) {
+    return { queued: false, skipped: true, reason: "SCHEDULE_TOO_FAR" };
+  }
+
   const recipient = await resolveRecipient(input);
   if (!recipient?.toEmail) {
     return { queued: false, skipped: true, reason: "NO_RECIPIENT" };
   }
 
-  if (!isAllowedByPreference({ kind: input.kind, templateKey: input.templateKey, preference: recipient.preference })) {
+  if (!isAllowedByPreference({ kind: input.kind, templateKey: normalizedTemplateKey, preference: recipient.preference })) {
     return { queued: false, skipped: true, reason: "PREFERENCE_DISABLED" };
   }
 
   const payload: NotificationTemplatePayload = { ...(input.payload ?? {}) };
 
   if (input.kind === "MARKETING" && input.userId) {
-    const scope = getMarketingScope(input.templateKey);
+    const scope = getMarketingScope(normalizedTemplateKey);
     payload.unsubscribeUrl = buildUnsubscribeUrl(input.userId, scope);
+  }
+
+  const serializedPayload = serializePayload(payload);
+  if (!serializedPayload) {
+    return { queued: false, skipped: true, reason: "INVALID_PAYLOAD" };
+  }
+
+  if (Buffer.byteLength(serializedPayload, "utf8") > MAX_PAYLOAD_BYTES) {
+    return { queued: false, skipped: true, reason: "PAYLOAD_TOO_LARGE" };
   }
 
   try {
@@ -377,11 +432,11 @@ async function queueEmail(input: QueueEmailInput): Promise<QueueEmailResult> {
         toEmail: recipient.toEmail,
         userId: input.userId ?? null,
         kind: input.kind,
-        templateKey: input.templateKey,
-        payloadJson: normalizePayload(payload),
+        templateKey: normalizedTemplateKey,
+        payloadJson: normalizePayload(serializedPayload),
         dedupeKey,
         status: EmailOutboxStatus.PENDING,
-        scheduledAt: input.scheduledAt ?? new Date(),
+        scheduledAt,
       },
       select: { id: true },
     });
@@ -466,6 +521,7 @@ async function queueOrderPaidEmail(orderId: string) {
 async function queueDeliveryUpdateEmail(params: {
   orderId: string;
   trackingStep: string;
+  vertical?: "SHOP" | "GP" | "TIAK";
   eta?: string | null;
   link?: string | null;
 }) {
@@ -483,6 +539,7 @@ async function queueDeliveryUpdateEmail(params: {
   }
 
   const link = params.link || resolveOrderLink(order.id);
+  const normalizedStep = normalizeDeliveryStep(params.vertical ?? "SHOP", params.trackingStep);
 
   return queueEmail({
     userId: order.userId,
@@ -491,11 +548,11 @@ async function queueDeliveryUpdateEmail(params: {
     templateKey: "delivery_update",
     payload: {
       orderId: order.id,
-      trackingStep: params.trackingStep,
+      trackingStep: normalizedStep,
       eta: params.eta ?? "",
       link,
     },
-    dedupeKey: `delivery_update:${order.id}:${params.trackingStep}`,
+    dedupeKey: `delivery_update:${order.id}:${normalizedStep}`,
   });
 }
 
