@@ -29,9 +29,9 @@ export default function CountryPhoneField({
 
   return (
     <div
-      className={`grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,180px)_110px_minmax(0,1fr)] ${className}`.trim()}
+      className={`grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,180px)_66px_minmax(0,1fr)] ${className}`.trim()}
     >
-      <label className="space-y-1">
+      <label className="min-w-0 space-y-1">
         <span className="text-xs text-zinc-400">{isFr ? "Pays" : "Country"}{required ? " *" : ""}</span>
         <select
           value={value.country}
@@ -44,7 +44,7 @@ export default function CountryPhoneField({
               phoneNational: value.phoneNational,
             });
           }}
-          className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+          className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
         >
           {COUNTRIES.map((country) => (
             <option key={country.code} value={country.code}>
@@ -54,17 +54,17 @@ export default function CountryPhoneField({
         </select>
       </label>
 
-      <label className="space-y-1">
+      <label className="min-w-0 space-y-1">
         <span className="text-xs text-zinc-400">{isFr ? "Indicatif" : "Dial"}</span>
         <input
           value={value.dialCode}
           readOnly
           disabled={disabled}
-          className="h-10 rounded-lg border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-300"
+          className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-300"
         />
       </label>
 
-      <label className="space-y-1 sm:col-span-2 lg:col-span-1">
+      <label className="min-w-0 space-y-1">
         <span className="text-xs text-zinc-400">{isFr ? "Numero" : "Phone"}{required ? " *" : ""}</span>
         <input
           value={value.phoneNational}
@@ -78,9 +78,10 @@ export default function CountryPhoneField({
               phoneNational,
             });
           }}
-          className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+          className="h-10 w-full min-w-0 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
         />
       </label>
     </div>
   );
 }
+
