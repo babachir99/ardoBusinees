@@ -46,8 +46,11 @@ export async function GET(request: NextRequest) {
       addressCity: true,
       addressCountry: true,
       notes: true,
+      reviewedAt: true,
+      reviewReason: true,
     },
   });
 
   return NextResponse.json(submission ?? { status: null, targetRole: requestedRole ?? null });
 }
+

@@ -170,6 +170,8 @@ export default function ProfilePanel() {
     addressCity?: string | null;
     addressCountry?: string | null;
     notes?: string | null;
+    reviewedAt?: string | null;
+    reviewReason?: string | null;
   } | null>(null);
   const [showKycForm, setShowKycForm] = useState(false);
   const [selectedRole, setSelectedRole] = useState("SELLER");
@@ -220,6 +222,8 @@ export default function ProfilePanel() {
           addressCity?: string | null;
           addressCountry?: string | null;
           notes?: string | null;
+          reviewedAt?: string | null;
+          reviewReason?: string | null;
         };
         setKycStatus(kycData.status ?? null);
         setKycApproved(kycData.status === "APPROVED");
@@ -929,6 +933,13 @@ export default function ProfilePanel() {
             </span>
           )}
 
+          {kycStatus === "REJECTED" && kycSubmission?.reviewReason ? (
+            <div className="mt-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-xs text-rose-100">
+              <p className="font-semibold">{isFr ? "Motif de refus" : "Rejection reason"}</p>
+              <p className="mt-1 text-rose-50/90">{kycSubmission.reviewReason}</p>
+            </div>
+          ) : null}
+
           {kycApproved ? (
             <div className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-xs text-emerald-100">
               {t("kyc.approvedNote")}
@@ -1072,6 +1083,8 @@ export default function ProfilePanel() {
     </div>
   );
 }
+
+
 
 
 
