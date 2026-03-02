@@ -69,13 +69,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const rawDocIdUrl = normalizeOptionalString((body as { docIdUrl?: unknown }).docIdUrl);
+  const rawPassportUrl = normalizeOptionalString((body as { passportUrl?: unknown }).passportUrl);
+  const acceptsPassportAsIdentity = roleRequested === "SELLER" || roleRequested === "COURIER" || roleRequested === "TIAK_COURIER";
+
   const data = {
     userId: session.user.id,
     targetRole: roleRequested,
     kycType: requirement.kycType,
     kycLevel: requirement.kycLevel,
-    docIdUrl: normalizeOptionalString((body as { docIdUrl?: unknown }).docIdUrl),
-    passportUrl: normalizeOptionalString((body as { passportUrl?: unknown }).passportUrl),
+    docIdUrl: rawDocIdUrl || (acceptsPassportAsIdentity ? rawPassportUrl : null),
+    passportUrl: rawPassportUrl,
     driverLicenseUrl: normalizeOptionalString((body as { driverLicenseUrl?: unknown }).driverLicenseUrl),
     proofTravelUrl: normalizeOptionalString((body as { proofTravelUrl?: unknown }).proofTravelUrl),
     proofAddressUrl: normalizeOptionalString((body as { proofAddressUrl?: unknown }).proofAddressUrl),

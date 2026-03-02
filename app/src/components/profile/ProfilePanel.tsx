@@ -498,11 +498,11 @@ export default function ProfilePanel() {
     phoneVerified: isFr ? "Numero de telephone renseigne" : "Phone number on profile",
     addressCity: isFr ? "Ville" : "City",
     addressCountry: isFr ? "Pays" : "Country",
-    docIdUrl: isFr ? "URL piece d'identite (CNI)" : "ID card document URL",
+    docIdUrl: isFr ? "URL piece d'identite (CNI ou passeport)" : "Identity document URL (ID card or passport)",
     driverLicenseUrl: isFr ? "URL permis" : "Driver license URL",
     selfieUrl: isFr ? "URL selfie" : "Selfie URL",
     proofAddressUrl: isFr ? "URL justificatif de domicile" : "Proof of address URL",
-    passportUrl: isFr ? "URL passeport (accepte pour vendeur/coursier)" : "Passport URL (accepted for seller/courier)",
+    passportUrl: isFr ? "URL passeport" : "Passport URL",
     proofTravelUrl: isFr ? "URL justificatif voyage (optionnel au publish)" : "Travel proof URL (optional at trip publish)",
     businessRegistrationUrl: isFr
       ? "URL immatriculation entreprise (FR: KBIS/SIRET, SN: RCCM/NINEA)"

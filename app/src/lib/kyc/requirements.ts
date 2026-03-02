@@ -47,7 +47,7 @@ const REQUIREMENTS_BY_ROLE: Record<KycRole, Omit<KycRequirement, "roleRequested"
     kycType: "INDIVIDUAL",
     kycLevel: "BASIC",
     requiredFields: ["phoneVerified", "addressCity", "addressCountry", "docIdUrl"],
-    optionalFields: ["passportUrl", "proofAddressUrl"],
+    optionalFields: ["proofAddressUrl"],
   },
   TRANSPORTER: {
     kycType: "INDIVIDUAL",
@@ -65,13 +65,13 @@ const REQUIREMENTS_BY_ROLE: Record<KycRole, Omit<KycRequirement, "roleRequested"
     kycType: "INDIVIDUAL",
     kycLevel: "ENHANCED",
     requiredFields: ["docIdUrl", "driverLicenseUrl", "selfieUrl", "phoneVerified"],
-    optionalFields: ["passportUrl", "proofAddressUrl"],
+    optionalFields: ["proofAddressUrl"],
   },
   TIAK_COURIER: {
     kycType: "INDIVIDUAL",
     kycLevel: "ENHANCED",
     requiredFields: ["docIdUrl", "driverLicenseUrl", "selfieUrl", "phoneVerified"],
-    optionalFields: ["passportUrl", "proofAddressUrl"],
+    optionalFields: ["proofAddressUrl"],
   },
   IMMO_AGENCY: {
     kycType: "BUSINESS",
