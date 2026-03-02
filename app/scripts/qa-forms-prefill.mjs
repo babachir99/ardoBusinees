@@ -84,6 +84,9 @@ async function main() {
     path.join(root, "src", "components", "profile", "ProfilePanel.tsx"),
     path.join(root, "src", "components", "gp", "GpTripPublisher.tsx"),
     path.join(root, "src", "components", "cart", "CheckoutForm.tsx"),
+    path.join(root, "src", "components", "profile", "ProfileEditForm.tsx"),
+    path.join(root, "src", "components", "presta", "PrestaStoreClient.tsx"),
+    path.join(root, "src", "components", "auth", "SignupForm.tsx"),
   ];
 
   for (const filePath of filesToCheck) {

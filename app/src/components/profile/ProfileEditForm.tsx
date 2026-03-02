@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import CountryPhoneField from "@/components/forms/CountryPhoneField";
+import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
+import { getDialCode } from "@/lib/locale/country";
+
+type GeoPayload = {
+  geoCountry?: string | null;
+};
 
 type Profile = {
   id: string;
@@ -15,8 +22,18 @@ type Profile = {
 
 export default function ProfileEditForm() {
   const t = useTranslations("ProfileEdit");
+  const locale = useLocale();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", image: "" });
+  const initialPhoneDefaults = buildFormDefaults({
+    sessionUser: null,
+    geoCountry: null,
+  });
+  const [contactPhone, setContactPhone] = useState({
+    country: initialPhoneDefaults.country,
+    dialCode: initialPhoneDefaults.dialCode || getDialCode(initialPhoneDefaults.country),
+    phoneNational: initialPhoneDefaults.phoneNational,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,15 +45,33 @@ export default function ProfileEditForm() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/profile");
-      if (!res.ok) {
+      const [profileRes, geoRes] = await Promise.all([
+        fetch("/api/profile"),
+        fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null),
+      ]);
+
+      if (!profileRes.ok) {
         throw new Error(t("errors.load"));
       }
-      const data = (await res.json()) as Profile;
+
+      const data = (await profileRes.json()) as Profile;
+      const geoData = geoRes?.ok
+        ? ((await geoRes.json().catch(() => null)) as GeoPayload | null)
+        : null;
+      const defaults = buildFormDefaults({
+        sessionUser: { phone: data.phone ?? null },
+        geoCountry: geoData?.geoCountry ?? null,
+      });
+
       setProfile(data);
+      setContactPhone({
+        country: defaults.country,
+        dialCode: defaults.dialCode || getDialCode(defaults.country),
+        phoneNational: defaults.phoneNational,
+      });
       setForm({
         name: data.name ?? "",
-        phone: data.phone ?? "",
+        phone: defaults.fullPhoneE164 || data.phone || "",
         image: (data as Profile & { image?: string | null }).image ?? "",
       });
       const initialImage = (data as Profile & { image?: string | null }).image ?? "";
@@ -54,15 +89,36 @@ export default function ProfileEditForm() {
     load();
   }, []);
 
+  const handlePhoneFieldChange = (next: {
+    country: string;
+    dialCode: string;
+    phoneNational: string;
+  }) => {
+    setContactPhone(next);
+    const normalized = normalizePhoneInput(next);
+    setForm((prev) => ({
+      ...prev,
+      phone: normalized.validBasic ? normalized.e164 : next.phoneNational.trim(),
+    }));
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
     setSuccess(false);
     try {
+      const normalizedPhone = normalizePhoneInput(contactPhone);
+      const finalPhone = normalizedPhone.validBasic
+        ? normalizedPhone.e164
+        : form.phone.trim();
+
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          phone: finalPhone,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -166,11 +222,10 @@ export default function ProfileEditForm() {
           value={form.name}
           onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
         />
-        <input
-          className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-          placeholder={t("fields.phone")}
-          value={form.phone}
-          onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+        <CountryPhoneField
+          value={contactPhone}
+          locale={locale}
+          onChange={handlePhoneFieldChange}
         />
       </div>
 

@@ -1,15 +1,32 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
+import CountryPhoneField from "@/components/forms/CountryPhoneField";
+import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
+import { getDialCode } from "@/lib/locale/country";
+
+type GeoPayload = {
+  geoCountry?: string | null;
+};
 
 export default function SignupForm() {
   const t = useTranslations("Auth");
+  const locale = useLocale();
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const initialPhoneDefaults = buildFormDefaults({
+    sessionUser: null,
+    geoCountry: null,
+  });
+  const [contactPhone, setContactPhone] = useState({
+    country: initialPhoneDefaults.country,
+    dialCode: initialPhoneDefaults.dialCode || getDialCode(initialPhoneDefaults.country),
+    phoneNational: initialPhoneDefaults.phoneNational,
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -19,15 +36,68 @@ export default function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [verifyToken, setVerifyToken] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadGeoDefaults = async () => {
+      const response = await fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null);
+      const geo = response?.ok
+        ? ((await response.json().catch(() => null)) as GeoPayload | null)
+        : null;
+
+      const defaults = buildFormDefaults({
+        sessionUser: null,
+        geoCountry: geo?.geoCountry ?? null,
+      });
+
+      if (cancelled) return;
+
+      setContactPhone({
+        country: defaults.country,
+        dialCode: defaults.dialCode || getDialCode(defaults.country),
+        phoneNational: defaults.phoneNational,
+      });
+      setPhone((prev) => prev || defaults.fullPhoneE164 || "");
+    };
+
+    void loadGeoDefaults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handlePhoneFieldChange = (next: {
+    country: string;
+    dialCode: string;
+    phoneNational: string;
+  }) => {
+    setContactPhone(next);
+    const normalized = normalizePhoneInput(next);
+    setPhone(normalized.validBasic ? normalized.e164 : next.phoneNational.trim());
+  };
+
+
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setLoading(true);
     try {
+      const normalizedPhone = normalizePhoneInput(contactPhone);
+      const finalPhone = normalizedPhone.validBasic
+        ? normalizedPhone.e164
+        : phone.trim();
+
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, email, password, image: imageUrl || undefined }),
+        body: JSON.stringify({
+          name,
+          phone: finalPhone || undefined,
+          email,
+          password,
+          image: imageUrl || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -110,11 +180,10 @@ export default function SignupForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <input
-          className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-          placeholder={t("fields.phone")}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+        <CountryPhoneField
+          value={contactPhone}
+          locale={locale}
+          onChange={handlePhoneFieldChange}
         />
         <input
           className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"

@@ -7,6 +7,9 @@ import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
+import CountryPhoneField from "@/components/forms/CountryPhoneField";
+import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
+import { getDialCode } from "@/lib/locale/country";
 
 type PrestaService = {
   id: string;
@@ -59,6 +62,14 @@ type Props = {
   currentUserRole?: string | null;
 };
 
+type ProfilePayload = {
+  phone?: string | null;
+};
+
+type GeoPayload = {
+  geoCountry?: string | null;
+};
+
 const paymentMethods = ["WAVE", "ORANGE_MONEY", "CARD", "CASH"] as const;
 
 function formatAmount(value: number | null, currency: string) {
@@ -106,6 +117,15 @@ export default function PrestaStoreClient({
   const [formPrice, setFormPrice] = useState("");
   const [formCurrency, setFormCurrency] = useState("XOF");
   const [formContactPhone, setFormContactPhone] = useState("");
+  const initialPhoneDefaults = buildFormDefaults({
+    sessionUser: null,
+    geoCountry: null,
+  });
+  const [serviceContactPhone, setServiceContactPhone] = useState({
+    country: initialPhoneDefaults.country,
+    dialCode: initialPhoneDefaults.dialCode || getDialCode(initialPhoneDefaults.country),
+    phoneNational: initialPhoneDefaults.phoneNational,
+  });
   const [formMethods, setFormMethods] = useState<string[]>(["CASH"]);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -201,6 +221,47 @@ export default function PrestaStoreClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadContactDefaults = async () => {
+      const [profileRes, geoRes] = await Promise.all([
+        fetch("/api/profile", { cache: "no-store" }).catch(() => null),
+        fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null),
+      ]);
+
+      const profile = profileRes?.ok
+        ? ((await profileRes.json().catch(() => null)) as ProfilePayload | null)
+        : null;
+      const geo = geoRes?.ok
+        ? ((await geoRes.json().catch(() => null)) as GeoPayload | null)
+        : null;
+
+      const defaults = buildFormDefaults({
+        sessionUser: { phone: profile?.phone ?? null },
+        geoCountry: geo?.geoCountry ?? null,
+      });
+
+      if (cancelled) return;
+
+      setServiceContactPhone((prev) => ({
+        country: defaults.country,
+        dialCode: defaults.dialCode || getDialCode(defaults.country),
+        phoneNational: prev.phoneNational || defaults.phoneNational,
+      }));
+
+      if (defaults.fullPhoneE164) {
+        setFormContactPhone((current) => current || defaults.fullPhoneE164 || "");
+      }
+    };
+
+    void loadContactDefaults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function goToLogin() {
     const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
     window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
@@ -214,6 +275,16 @@ export default function PrestaStoreClient({
       }
       return [...current, method];
     });
+  }
+
+  function handleServiceContactPhoneChange(next: {
+    country: string;
+    dialCode: string;
+    phoneNational: string;
+  }) {
+    setServiceContactPhone(next);
+    const normalized = normalizePhoneInput(next);
+    setFormContactPhone(normalized.validBasic ? normalized.e164 : next.phoneNational.trim());
   }
 
   async function handleCreateService(event: FormEvent<HTMLFormElement>) {
@@ -234,6 +305,11 @@ export default function PrestaStoreClient({
 
     setSubmittingService(true);
     try {
+      const normalizedContact = normalizePhoneInput(serviceContactPhone);
+      const finalContactPhone = normalizedContact.validBasic
+        ? normalizedContact.e164
+        : formContactPhone.trim();
+
       const response = await fetch("/api/presta/services", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -243,7 +319,7 @@ export default function PrestaStoreClient({
           basePriceCents: Math.trunc(parsedPrice),
           currency: formCurrency,
           acceptedPaymentMethods: formMethods,
-          contactPhone: formContactPhone || undefined,
+          contactPhone: finalContactPhone || undefined,
         }),
       });
 
@@ -259,6 +335,7 @@ export default function PrestaStoreClient({
       setFormPrice("");
       setFormCurrency("XOF");
       setFormContactPhone("");
+      setServiceContactPhone((prev) => ({ ...prev, phoneNational: "" }));
       setFormMethods(["CASH"]);
       setFormSuccess("Service cree");
       await loadServices();
@@ -458,10 +535,14 @@ export default function PrestaStoreClient({
                 <option value="USD">USD</option>
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Contact (optionnel)
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={formContactPhone} onChange={(event) => setFormContactPhone(event.target.value)} />
-            </label>
+            <div className="flex flex-col gap-1 text-xs text-zinc-300">
+              <span>Contact (optionnel)</span>
+              <CountryPhoneField
+                value={serviceContactPhone}
+                locale={locale}
+                onChange={handleServiceContactPhoneChange}
+              />
+            </div>
             <div className="md:col-span-2 flex flex-wrap gap-2">
               {paymentMethods.map((method) => (
                 <label key={method} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-200">
@@ -834,4 +915,6 @@ export default function PrestaStoreClient({
     </div>
   );
 }
+
+
 
