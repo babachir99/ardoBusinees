@@ -1323,7 +1323,8 @@
     "password": {
       "title": "Change password",
       "subtitle": "Update your account password.",
-      "forgot": "Forgot password?",
+      "open": "Change my password",
+      "close": "Close",
       "save": "Update password",
       "saving": "Updating...",
       "success": "Password updated successfully.",

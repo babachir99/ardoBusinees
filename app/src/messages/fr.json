@@ -1329,7 +1329,8 @@
     "password": {
       "title": "Modifier le mot de passe",
       "subtitle": "Mets a jour le mot de passe du compte.",
-      "forgot": "Mot de passe oublie ?",
+      "open": "Modifier mon mot de passe",
+      "close": "Fermer",
       "save": "Mettre a jour le mot de passe",
       "saving": "Mise a jour...",
       "success": "Mot de passe mis a jour.",
