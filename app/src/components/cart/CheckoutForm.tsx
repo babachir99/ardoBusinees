@@ -6,6 +6,9 @@ import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
 import { useLocale } from "next-intl";
 import Link from "next/link";
+import CountryPhoneField from "@/components/forms/CountryPhoneField";
+import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
+import { getDialCode } from "@/lib/locale/country";
 
 type CheckoutState = "idle" | "loading" | "success" | "error";
 
@@ -28,6 +31,10 @@ type CheckoutOrdersResponse = {
   orders?: Array<{ id: string }>;
 };
 
+type GeoPayload = {
+  geoCountry?: string | null;
+};
+
 export default function CheckoutForm() {
   const t = useTranslations("Checkout");
   const locale = useLocale();
@@ -45,6 +52,15 @@ export default function CheckoutForm() {
     phone: "",
     address: "",
     city: "",
+  });
+  const initialPhoneDefaults = buildFormDefaults({
+    sessionUser: null,
+    geoCountry: null,
+  });
+  const [contactPhone, setContactPhone] = useState({
+    country: initialPhoneDefaults.country,
+    dialCode: initialPhoneDefaults.dialCode || getDialCode(initialPhoneDefaults.country),
+    phoneNational: initialPhoneDefaults.phoneNational,
   });
   const [contactLocked, setContactLocked] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -70,28 +86,44 @@ export default function CheckoutForm() {
     let cancelled = false;
 
     const load = async () => {
-      const [profileRes, addressesRes] = await Promise.all([
+      const [profileRes, addressesRes, geoRes] = await Promise.all([
         fetch("/api/profile", { cache: "no-store" }).catch(() => null),
         fetch("/api/addresses", { cache: "no-store" }).catch(() => null),
+        fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null),
       ]);
 
-      if (!cancelled && profileRes?.ok) {
-        const profile = (await profileRes.json()) as ProfilePayload | null;
-        if (profile) {
-          const nextName = String(profile.name ?? "").trim();
-          const nextEmail = String(profile.email ?? "").trim();
-          const nextPhone = String(profile.phone ?? "").trim();
+      const profile = profileRes?.ok
+        ? ((await profileRes.json().catch(() => null)) as ProfilePayload | null)
+        : null;
+      const geo = geoRes?.ok
+        ? ((await geoRes.json().catch(() => null)) as GeoPayload | null)
+        : null;
 
-          setForm((prev) => ({
-            ...prev,
-            name: prev.name || nextName,
-            email: prev.email || nextEmail,
-            phone: prev.phone || nextPhone,
-          }));
+      const defaults = buildFormDefaults({
+        sessionUser: { phone: profile?.phone ?? null },
+        geoCountry: geo?.geoCountry ?? null,
+      });
 
-          if (nextName && nextEmail && nextPhone) {
-            setContactLocked(true);
-          }
+      if (!cancelled) {
+        const nextName = String(profile?.name ?? "").trim();
+        const nextEmail = String(profile?.email ?? "").trim();
+        const nextPhone = String(profile?.phone ?? "").trim();
+
+        setContactPhone({
+          country: defaults.country,
+          dialCode: defaults.dialCode,
+          phoneNational: defaults.phoneNational,
+        });
+
+        setForm((prev) => ({
+          ...prev,
+          name: prev.name || nextName,
+          email: prev.email || nextEmail,
+          phone: prev.phone || defaults.fullPhoneE164 || nextPhone,
+        }));
+
+        if (nextName && nextEmail && (defaults.fullPhoneE164 || nextPhone)) {
+          setContactLocked(true);
         }
       }
 
@@ -112,6 +144,19 @@ export default function CheckoutForm() {
 
   const handleChange = (field: keyof typeof form) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePhoneFieldChange = (next: {
+    country: string;
+    dialCode: string;
+    phoneNational: string;
+  }) => {
+    setContactPhone(next);
+    const normalized = normalizePhoneInput(next);
+    setForm((prev) => ({
+      ...prev,
+      phone: normalized.validBasic ? normalized.e164 : next.phoneNational.trim(),
+    }));
   };
 
   const applyAddress = (id: string) => {
@@ -194,10 +239,15 @@ export default function CheckoutForm() {
     setState("loading");
 
     try {
+      const normalizedPhone = normalizePhoneInput(contactPhone);
+      const finalPhone = normalizedPhone.validBasic
+        ? normalizedPhone.e164
+        : form.phone.trim();
+
       const payload = {
         email: form.email,
         name: form.name || undefined,
-        phone: form.phone || undefined,
+        phone: finalPhone || undefined,
         shippingAddress: form.address || undefined,
         shippingCity: form.city || undefined,
         feesCents,
@@ -332,11 +382,11 @@ export default function CheckoutForm() {
                 value={form.email}
                 onChange={(e) => handleChange("email")(e.target.value)}
               />
-              <input
-                className="rounded-xl border border-white/10 bg-zinc-900/70 px-4 py-3 text-sm text-white outline-none"
-                placeholder={t("form.phone")}
-                value={form.phone}
-                onChange={(e) => handleChange("phone")(e.target.value)}
+              <CountryPhoneField
+                value={contactPhone}
+                locale={locale}
+                required
+                onChange={handlePhoneFieldChange}
               />
             </div>
           )}

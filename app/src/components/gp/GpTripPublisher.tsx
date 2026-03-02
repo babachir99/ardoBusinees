@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { isEligibleForGP } from "@/lib/orchestratorEligibility";
+import CountryPhoneField from "@/components/forms/CountryPhoneField";
+import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
+import { getDialCode } from "@/lib/locale/country";
 
 type PaymentMethod = "WAVE" | "ORANGE_MONEY" | "CARD" | "CASH";
 type TripCurrency = "XOF" | "EUR" | "USD";
@@ -32,6 +35,10 @@ type FormState = {
   contactPhone: string;
   notes: string;
   acceptedPaymentMethods: PaymentMethod[];
+};
+
+type GeoPayload = {
+  geoCountry?: string | null;
 };
 
 type OrchestratorIntent = {
@@ -108,6 +115,18 @@ export default function GpTripPublisher({
   const [form, setForm] = useState<FormState>(() =>
     initialState(defaultContactPhone, defaultPaymentMethods)
   );
+  const [contactPhone, setContactPhone] = useState(() => {
+    const defaults = buildFormDefaults({
+      sessionUser: { phone: defaultContactPhone ?? null },
+      geoCountry: null,
+    });
+
+    return {
+      country: defaults.country,
+      dialCode: defaults.dialCode || getDialCode(defaults.country),
+      phoneNational: defaults.phoneNational,
+    };
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -174,6 +193,42 @@ export default function GpTripPublisher({
     [locale]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadGeoDefaults = async () => {
+      const response = await fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null);
+      const geo = response?.ok
+        ? ((await response.json().catch(() => null)) as GeoPayload | null)
+        : null;
+
+      const defaults = buildFormDefaults({
+        sessionUser: { phone: defaultContactPhone ?? null },
+        geoCountry: geo?.geoCountry ?? null,
+      });
+
+      if (cancelled) return;
+
+      setContactPhone((prev) => ({
+        country: defaults.country,
+        dialCode: defaults.dialCode || getDialCode(defaults.country),
+        phoneNational: prev.phoneNational || defaults.phoneNational,
+      }));
+
+      if (defaults.fullPhoneE164) {
+        setForm((prev) =>
+          !prev.contactPhone ? { ...prev, contactPhone: defaults.fullPhoneE164 ?? prev.contactPhone } : prev
+        );
+      }
+    };
+
+    void loadGeoDefaults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultContactPhone]);
+
   function objectTypeLabel(value: OrchestratorIntent["objectType"]) {
     if (locale === "fr") {
       if (value === "SMALL_PARCEL") return "Petit colis";
@@ -191,6 +246,16 @@ export default function GpTripPublisher({
 
   const updateField = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleContactPhoneChange = (next: {
+    country: string;
+    dialCode: string;
+    phoneNational: string;
+  }) => {
+    setContactPhone(next);
+    const normalized = normalizePhoneInput(next);
+    updateField("contactPhone", normalized.validBasic ? normalized.e164 : next.phoneNational.trim());
   };
 
   const togglePayment = (method: PaymentMethod) => {
@@ -248,6 +313,11 @@ export default function GpTripPublisher({
     setSubmitting(true);
 
     try {
+      const normalizedContactPhone = normalizePhoneInput(contactPhone);
+      const finalContactPhone = normalizedContactPhone.validBasic
+        ? normalizedContactPhone.e164
+        : form.contactPhone.trim();
+
       const response = await fetch("/api/gp/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -257,7 +327,7 @@ export default function GpTripPublisher({
           availableKg: Number(form.availableKg),
           maxPackages: form.maxPackages ? Number(form.maxPackages) : undefined,
           notes: form.notes || undefined,
-          contactPhone: form.contactPhone || undefined,
+          contactPhone: finalContactPhone || undefined,
           departureDate: form.departureDate,
           arrivalDate: form.arrivalDate || undefined,
           deliveryStartAt: form.deliveryStartAt || undefined,
@@ -273,7 +343,19 @@ export default function GpTripPublisher({
 
       const tripId = typeof body?.id === "string" ? body.id : null;
       setCreatedTripId(tripId);
-      setForm(initialState(defaultContactPhone, defaultPaymentMethods));
+      const resetDefaults = buildFormDefaults({
+        sessionUser: { phone: defaultContactPhone ?? null },
+        geoCountry: contactPhone.country,
+      });
+      setForm((prev) => ({
+        ...initialState(defaultContactPhone, defaultPaymentMethods),
+        contactPhone: resetDefaults.fullPhoneE164 ?? prev.contactPhone,
+      }));
+      setContactPhone((prev) => ({
+        country: resetDefaults.country,
+        dialCode: resetDefaults.dialCode || getDialCode(resetDefaults.country),
+        phoneNational: resetDefaults.phoneNational || prev.phoneNational,
+      }));
       setSuccess(t.success);
       router.refresh();
       if (!(intentSummary && intentSummary.status === "OPEN" && tripId)) {
@@ -609,14 +691,14 @@ export default function GpTripPublisher({
       <section className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">{t.groupContact}</h3>
         <div className="grid gap-3 md:grid-cols-3">
-          <label className="space-y-1.5 md:col-span-1">
+          <div className="space-y-1.5 md:col-span-1">
             <span className="text-xs text-zinc-400">{locale === "fr" ? "Telephone contact" : "Contact phone"}</span>
-            <input
-              value={form.contactPhone}
-              onChange={(event) => updateField("contactPhone", event.target.value)}
-              className={inputClass}
+            <CountryPhoneField
+              value={contactPhone}
+              locale={locale}
+              onChange={handleContactPhoneChange}
             />
-          </label>
+          </div>
           <label className="space-y-1.5 md:col-span-1">
             <span className="text-xs text-zinc-400">{locale === "fr" ? "Debut livraison" : "Delivery start"}</span>
             <input

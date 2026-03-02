@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { useCart } from "@/components/cart/CartProvider";
+import { buildFormDefaults } from "@/lib/forms/prefill";
+import { COUNTRIES } from "@/lib/locale/country";
 
 type Profile = {
   id: string;
@@ -21,6 +23,10 @@ type Activity = {
   id: string;
   action: string;
   createdAt: string;
+};
+
+type GeoPayload = {
+  geoCountry?: string | null;
 };
 
 
@@ -185,15 +191,24 @@ export default function ProfilePanel() {
     setLoading(true);
     setError(null);
     try {
-      const [profileRes, favoritesRes] = await Promise.all([
+      const [profileRes, favoritesRes, geoRes] = await Promise.all([
         fetch("/api/profile"),
         fetch("/api/favorites"),
+        fetch("/api/meta/geo", { cache: "no-store" }).catch(() => null),
       ]);
       if (!profileRes.ok) {
         throw new Error(t("errors.load"));
       }
       const profileData = (await profileRes.json()) as Profile;
       setProfile(profileData);
+
+      const geoData = geoRes?.ok
+        ? ((await geoRes.json().catch(() => null)) as GeoPayload | null)
+        : null;
+      const formDefaults = buildFormDefaults({
+        sessionUser: { phone: profileData.phone ?? null },
+        geoCountry: geoData?.geoCountry ?? null,
+      });
       if (favoritesRes.ok) {
         const favoriteData = (await favoritesRes.json()) as Favorite[];
         setFavorites(favoriteData);
@@ -248,7 +263,7 @@ export default function ProfilePanel() {
           legalRepSelfieUrl: kycData.legalRepSelfieUrl ?? prev.legalRepSelfieUrl,
           professionalLicenseUrl: kycData.professionalLicenseUrl ?? prev.professionalLicenseUrl,
           addressCity: kycData.addressCity ?? prev.addressCity,
-          addressCountry: kycData.addressCountry ?? prev.addressCountry,
+          addressCountry: (kycData.addressCountry ?? prev.addressCountry) || formDefaults.country,
           notes: kycData.notes ?? prev.notes,
         }));
         setKycPreviews((prev) => ({
@@ -269,6 +284,11 @@ export default function ProfilePanel() {
           setShowKycForm(false);
         }
       }
+
+      setKyc((prev) => ({
+        ...prev,
+        addressCountry: prev.addressCountry || formDefaults.country,
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : t("errors.load"));
     } finally {
@@ -1001,14 +1021,30 @@ export default function ProfilePanel() {
 
                 return (
                   <div key={field} className="grid gap-2">
-                    <input
-                      className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-                      placeholder={`${fieldLabels[field]}${isRequired ? " *" : ""}`}
-                      value={value}
-                      onChange={(e) =>
-                        setKyc((prev) => ({ ...prev, [field]: e.target.value }))
-                      }
-                    />
+                    {field === "addressCountry" ? (
+                      <select
+                        className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+                        value={value}
+                        onChange={(e) =>
+                          setKyc((prev) => ({ ...prev, [field]: e.target.value }))
+                        }
+                      >
+                        {COUNTRIES.map((country) => (
+                          <option key={country.code} value={country.code}>
+                            {country.flag ? `${country.flag} ` : ""}{country.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+                        placeholder={`${fieldLabels[field]}${isRequired ? " *" : ""}`}
+                        value={value}
+                        onChange={(e) =>
+                          setKyc((prev) => ({ ...prev, [field]: e.target.value }))
+                        }
+                      />
+                    )}
                     {kycPreviews[field] ? (
                       <div className="overflow-hidden rounded-2xl border border-white/10">
                         <img
@@ -1083,6 +1119,8 @@ export default function ProfilePanel() {
     </div>
   );
 }
+
+
 
 
 
