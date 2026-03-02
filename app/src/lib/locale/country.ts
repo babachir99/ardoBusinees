@@ -84,3 +84,27 @@ export function getCountryName(country: string | null | undefined): string {
   if (!normalized) return "";
   return COUNTRY_MAP.get(normalized)?.name ?? normalized;
 }
+
+
+function toFlagEmoji(value: string): string {
+  const code = String(value).trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+
+  return code
+    .split("")
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join("");
+}
+
+export function getCountryFlag(country: string | null | undefined): string {
+  const normalized = normalizeCountry(country);
+  if (!normalized) return "";
+
+  const configured = COUNTRY_MAP.get(normalized)?.flag;
+  if (configured) {
+    const configuredEmoji = toFlagEmoji(configured);
+    return configuredEmoji || configured;
+  }
+
+  return toFlagEmoji(normalized);
+}

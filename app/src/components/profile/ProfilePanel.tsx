@@ -6,7 +6,7 @@ import { Link } from "@/i18n/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import { useCart } from "@/components/cart/CartProvider";
 import { buildFormDefaults } from "@/lib/forms/prefill";
-import { COUNTRIES } from "@/lib/locale/country";
+import { COUNTRIES, getCountryFlag } from "@/lib/locale/country";
 
 type Profile = {
   id: string;
@@ -1031,7 +1031,7 @@ export default function ProfilePanel() {
                       >
                         {COUNTRIES.map((country) => (
                           <option key={country.code} value={country.code}>
-                            {country.flag ? `${country.flag} ` : ""}{country.name}
+                            {`${getCountryFlag(country.code)} ${country.name}`.trim()}
                           </option>
                         ))}
                       </select>

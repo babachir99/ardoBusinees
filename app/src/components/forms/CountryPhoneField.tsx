@@ -1,6 +1,6 @@
 "use client";
 
-import { COUNTRIES, getDialCode } from "@/lib/locale/country";
+import { COUNTRIES, getCountryFlag, getDialCode } from "@/lib/locale/country";
 
 type CountryPhoneValue = {
   country: string;
@@ -46,7 +46,7 @@ export default function CountryPhoneField({
         >
           {COUNTRIES.map((country) => (
             <option key={country.code} value={country.code}>
-              {country.flag ? `${country.flag} ` : ""}{country.name}
+              {`${getCountryFlag(country.code)} ${country.name}`.trim()}
             </option>
           ))}
         </select>
