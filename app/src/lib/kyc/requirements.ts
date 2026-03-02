@@ -46,8 +46,8 @@ const REQUIREMENTS_BY_ROLE: Record<KycRole, Omit<KycRequirement, "roleRequested"
   SELLER: {
     kycType: "INDIVIDUAL",
     kycLevel: "BASIC",
-    requiredFields: ["phoneVerified", "addressCity", "addressCountry"],
-    optionalFields: ["proofAddressUrl"],
+    requiredFields: ["phoneVerified", "addressCity", "addressCountry", "docIdUrl"],
+    optionalFields: ["passportUrl", "proofAddressUrl"],
   },
   TRANSPORTER: {
     kycType: "INDIVIDUAL",
@@ -65,13 +65,13 @@ const REQUIREMENTS_BY_ROLE: Record<KycRole, Omit<KycRequirement, "roleRequested"
     kycType: "INDIVIDUAL",
     kycLevel: "ENHANCED",
     requiredFields: ["docIdUrl", "driverLicenseUrl", "selfieUrl", "phoneVerified"],
-    optionalFields: ["proofAddressUrl"],
+    optionalFields: ["passportUrl", "proofAddressUrl"],
   },
   TIAK_COURIER: {
     kycType: "INDIVIDUAL",
     kycLevel: "ENHANCED",
     requiredFields: ["docIdUrl", "driverLicenseUrl", "selfieUrl", "phoneVerified"],
-    optionalFields: ["proofAddressUrl"],
+    optionalFields: ["passportUrl", "proofAddressUrl"],
   },
   IMMO_AGENCY: {
     kycType: "BUSINESS",
@@ -120,6 +120,10 @@ export function getKycRequirements(roleRequested: string | null | undefined): Ky
   };
 }
 
+function roleAcceptsPassportAsIdentity(role: KycRole): boolean {
+  return role === "SELLER" || role === "COURIER" || role === "TIAK_COURIER";
+}
+
 function fieldValue(payload: Record<string, unknown>, key: KycFieldKey): string {
   const raw = payload[key];
   return typeof raw === "string" ? raw.trim() : "";
@@ -137,12 +141,24 @@ export function validateKycPayload(
 
   const missingFields: KycFieldKey[] = [];
 
+  const normalizedRole = normalizeKycRole(roleRequested);
+  const passportAsIdentity = normalizedRole ? roleAcceptsPassportAsIdentity(normalizedRole) : false;
+
   for (const field of requirement.requiredFields) {
     if (field === "phoneVerified") {
       const hasPhone = Boolean(String(context.phone ?? "").trim());
       const verified = context.phoneVerified ?? hasPhone;
       if (!verified) {
         missingFields.push(field);
+      }
+      continue;
+    }
+
+    if (field === "docIdUrl" && passportAsIdentity) {
+      const hasDocId = Boolean(fieldValue(payload, "docIdUrl"));
+      const hasPassport = Boolean(fieldValue(payload, "passportUrl"));
+      if (!hasDocId && !hasPassport) {
+        missingFields.push("docIdUrl");
       }
       continue;
     }

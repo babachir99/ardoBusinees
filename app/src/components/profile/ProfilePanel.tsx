@@ -461,8 +461,8 @@ export default function ProfilePanel() {
       key: "SELLER",
       label: isFr ? "Vendeur" : "Seller",
       description: isFr
-        ? "Compte particulier avec verification basique."
-        : "Individual seller account with basic verification.",
+        ? "Compte particulier avec verification basique + piece d'identite (CNI ou passeport)."
+        : "Individual seller account with basic verification + identity document (ID card or passport).",
     },
     {
       key: "GP_CARRIER",
@@ -475,8 +475,8 @@ export default function ProfilePanel() {
       key: "TIAK_COURIER",
       label: isFr ? "Coursier Tiak" : "Tiak Courier",
       description: isFr
-        ? "Livraison locale avec piece d'identite et permis."
-        : "Local delivery with ID and driver license.",
+        ? "Livraison locale avec CNI ou passeport, plus permis."
+        : "Local delivery with ID card or passport, plus driver license.",
     },
     {
       key: "IMMO_AGENCY",
@@ -498,11 +498,11 @@ export default function ProfilePanel() {
     phoneVerified: isFr ? "Numero de telephone renseigne" : "Phone number on profile",
     addressCity: isFr ? "Ville" : "City",
     addressCountry: isFr ? "Pays" : "Country",
-    docIdUrl: isFr ? "URL piece d'identite" : "ID document URL",
+    docIdUrl: isFr ? "URL piece d'identite (CNI)" : "ID card document URL",
     driverLicenseUrl: isFr ? "URL permis" : "Driver license URL",
     selfieUrl: isFr ? "URL selfie" : "Selfie URL",
     proofAddressUrl: isFr ? "URL justificatif de domicile" : "Proof of address URL",
-    passportUrl: isFr ? "URL passeport" : "Passport URL",
+    passportUrl: isFr ? "URL passeport (accepte pour vendeur/coursier)" : "Passport URL (accepted for seller/courier)",
     proofTravelUrl: isFr ? "URL justificatif voyage (optionnel au publish)" : "Travel proof URL (optional at trip publish)",
     businessRegistrationUrl: isFr
       ? "URL immatriculation entreprise (FR: KBIS/SIRET, SN: RCCM/NINEA)"
@@ -510,7 +510,7 @@ export default function ProfilePanel() {
     companyName: isFr ? "Nom de l'entreprise" : "Company name",
     companyAddress: isFr ? "Adresse entreprise" : "Company address",
     companyRibUrl: isFr ? "URL RIB entreprise" : "Company RIB URL",
-    legalRepIdUrl: isFr ? "URL piece representant legal" : "Legal representative ID URL",
+    legalRepIdUrl: isFr ? "URL piece d'identite representant legal" : "Legal representative ID card URL",
     legalRepSelfieUrl: isFr ? "URL selfie representant legal" : "Legal representative selfie URL",
     professionalLicenseUrl: isFr ? "URL licence/carte pro (optionnel)" : "Professional license/card URL (optional)",
   };
