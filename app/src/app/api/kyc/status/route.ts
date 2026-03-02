@@ -1,17 +1,29 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeKycRole } from "@/lib/kyc/requirements";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const roleParam = searchParams.get("role");
+  const requestedRole = normalizeKycRole(roleParam);
+
+  if (roleParam && !requestedRole) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+
   const submission = await prisma.kycSubmission.findFirst({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
+    where: {
+      userId: session.user.id,
+      ...(requestedRole ? { targetRole: requestedRole } : {}),
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,
       targetRole: true,
@@ -37,5 +49,5 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(submission ?? { status: null });
+  return NextResponse.json(submission ?? { status: null, targetRole: requestedRole ?? null });
 }

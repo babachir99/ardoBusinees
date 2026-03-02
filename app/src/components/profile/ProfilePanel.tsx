@@ -471,7 +471,7 @@ export default function ProfilePanel() {
   ];
 
   const fieldLabels: Record<KycFieldKey, string> = {
-    phoneVerified: isFr ? "Telephone verifie (OTP)" : "Verified phone (OTP)",
+    phoneVerified: isFr ? "Numero de telephone renseigne" : "Phone number on profile",
     addressCity: isFr ? "Ville" : "City",
     addressCountry: isFr ? "Pays" : "Country",
     docIdUrl: isFr ? "URL piece d'identite" : "ID document URL",
@@ -978,8 +978,8 @@ export default function ProfilePanel() {
               {missingRequiredFields.includes("phoneVerified") ? (
                 <p className="text-xs text-rose-300">
                   {isFr
-                    ? "Telephone verifie requis: ajoute/valide ton numero sur ton profil."
-                    : "Verified phone required: add/verify your phone number on your profile."}
+                    ? "Numero de telephone requis: ajoute ton numero sur ton profil."
+                    : "Phone number required: add your phone number on your profile."}
                 </p>
               ) : null}
 
@@ -1052,12 +1052,7 @@ export default function ProfilePanel() {
             <button
               type="button"
               onClick={submitKyc}
-              disabled={
-                kycLoading ||
-                !kyc.docIdUrl ||
-                !kyc.proofAddressUrl ||
-                !kyc.selfieUrl
-              }
+              disabled={!canSubmitKyc}
               className="mt-6 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
             >
               {kycLoading ? t("kyc.loading") : t("kyc.submit")}
@@ -1077,5 +1072,6 @@ export default function ProfilePanel() {
     </div>
   );
 }
+
 
 

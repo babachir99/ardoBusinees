@@ -46,10 +46,15 @@ export async function POST(request: NextRequest) {
     select: { phone: true },
   });
 
+  const phoneVerified = Boolean(String(user?.phone ?? "").trim());
+
   const { missingFields } = validateKycPayload(
     roleRequested,
     body as Record<string, unknown>,
-    { phone: user?.phone ?? null }
+    {
+      phone: user?.phone ?? null,
+      phoneVerified,
+    }
   );
 
   if (missingFields.length > 0) {
@@ -136,3 +141,4 @@ export async function POST(request: NextRequest) {
     { status: 201 }
   );
 }
+

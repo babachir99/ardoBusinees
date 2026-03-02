@@ -28,6 +28,7 @@ export type KycRequirement = {
 
 type ValidateContext = {
   phone?: string | null;
+  phoneVerified?: boolean;
 };
 
 const ROLE_ALIASES: Record<string, KycRole> = {
@@ -138,7 +139,9 @@ export function validateKycPayload(
 
   for (const field of requirement.requiredFields) {
     if (field === "phoneVerified") {
-      if (!String(context.phone ?? "").trim()) {
+      const hasPhone = Boolean(String(context.phone ?? "").trim());
+      const verified = context.phoneVerified ?? hasPhone;
+      if (!verified) {
         missingFields.push(field);
       }
       continue;
@@ -163,3 +166,4 @@ export function mapKycRoleToUserRoleType(roleRequested: string | null | undefine
   if (normalized === "SELLER") return "SELLER";
   return null;
 }
+
