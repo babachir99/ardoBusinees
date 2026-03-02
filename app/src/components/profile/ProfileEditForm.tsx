@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import CountryPhoneField from "@/components/forms/CountryPhoneField";
 import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
 import { getDialCode } from "@/lib/locale/country";
@@ -40,6 +41,14 @@ export default function ProfileEditForm() {
   const [success, setSuccess] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -100,6 +109,61 @@ export default function ProfileEditForm() {
       ...prev,
       phone: normalized.validBasic ? normalized.e164 : next.phoneNational.trim(),
     }));
+  };
+
+  const changePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setPasswordError(t("password.errors.required"));
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError(t("password.errors.minLength"));
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError(t("password.errors.mismatch"));
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const code = String(data?.error ?? "");
+        if (code === "INVALID_CURRENT_PASSWORD") {
+          setPasswordError(t("password.errors.invalidCurrent"));
+        } else if (code === "PASSWORD_TOO_SHORT") {
+          setPasswordError(t("password.errors.minLength"));
+        } else if (code === "PASSWORD_CHANGE_NOT_AVAILABLE") {
+          setPasswordError(t("password.errors.unavailable"));
+        } else {
+          setPasswordError(t("password.errors.change"));
+        }
+        return;
+      }
+
+      setPasswordSuccess(true);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch {
+      setPasswordError(t("password.errors.change"));
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const save = async () => {
@@ -227,6 +291,58 @@ export default function ProfileEditForm() {
           locale={locale}
           onChange={handlePhoneFieldChange}
         />
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-white">{t("password.title")}</p>
+          <Link href="/forgot" className="text-xs text-cyan-300 underline underline-offset-4">
+            {t("password.forgot")}
+          </Link>
+        </div>
+        <p className="mt-1 text-xs text-zinc-400">{t("password.subtitle")}</p>
+
+        <div className="mt-4 grid gap-3">
+          <input
+            type="password"
+            className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+            placeholder={t("password.fields.current")}
+            value={passwordForm.currentPassword}
+            onChange={(e) =>
+              setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))
+            }
+          />
+          <input
+            type="password"
+            className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+            placeholder={t("password.fields.new")}
+            value={passwordForm.newPassword}
+            onChange={(e) =>
+              setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))
+            }
+          />
+          <input
+            type="password"
+            className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
+            placeholder={t("password.fields.confirm")}
+            value={passwordForm.confirmPassword}
+            onChange={(e) =>
+              setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))
+            }
+          />
+        </div>
+
+        {passwordError ? <p className="mt-3 text-sm text-rose-300">{passwordError}</p> : null}
+        {passwordSuccess ? <p className="mt-3 text-sm text-emerald-300">{t("password.success")}</p> : null}
+
+        <button
+          type="button"
+          onClick={changePassword}
+          disabled={changingPassword}
+          className="mt-4 rounded-full border border-white/20 px-5 py-2 text-xs font-semibold text-white transition hover:border-white/40 disabled:opacity-60"
+        >
+          {changingPassword ? t("password.saving") : t("password.save")}
+        </button>
       </div>
 
       {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}

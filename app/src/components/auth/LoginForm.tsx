@@ -73,8 +73,11 @@ export default function LoginForm() {
           {t("login.google")}
         </button>
       </div>
-      <div className="mt-4 text-center text-xs text-zinc-400">
-        <Link href="/forgot" className="underline">
+      <div className="mt-4">
+        <Link
+          href="/forgot"
+          className="inline-flex w-full items-center justify-center rounded-full border border-white/20 px-6 py-3 text-xs font-semibold text-white transition hover:border-white/40"
+        >
           {t("login.forgot")}
         </Link>
       </div>

@@ -1320,6 +1320,27 @@
     "saving": "Saving...",
     "loading": "Loading profile...",
     "success": "Profile updated.",
+    "password": {
+      "title": "Change password",
+      "subtitle": "Update your account password.",
+      "forgot": "Forgot password?",
+      "save": "Update password",
+      "saving": "Updating...",
+      "success": "Password updated successfully.",
+      "fields": {
+        "current": "Current password",
+        "new": "New password",
+        "confirm": "Confirm new password"
+      },
+      "errors": {
+        "required": "Please fill all password fields.",
+        "minLength": "Password must contain at least 8 characters.",
+        "mismatch": "Password confirmation does not match.",
+        "invalidCurrent": "Current password is incorrect.",
+        "unavailable": "Password change is unavailable for this account.",
+        "change": "Unable to update password."
+      }
+    },
     "errors": {
       "load": "Unable to load profile.",
       "save": "Unable to save profile.",
