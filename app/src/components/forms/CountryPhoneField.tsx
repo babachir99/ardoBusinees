@@ -28,7 +28,9 @@ export default function CountryPhoneField({
   const isFr = locale === "fr";
 
   return (
-    <div className={`grid gap-2 md:grid-cols-[minmax(0,180px)_110px_minmax(0,1fr)] ${className}`.trim()}>
+    <div
+      className={`grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,180px)_110px_minmax(0,1fr)] ${className}`.trim()}
+    >
       <label className="space-y-1">
         <span className="text-xs text-zinc-400">{isFr ? "Pays" : "Country"}{required ? " *" : ""}</span>
         <select
@@ -62,7 +64,7 @@ export default function CountryPhoneField({
         />
       </label>
 
-      <label className="space-y-1">
+      <label className="space-y-1 sm:col-span-2 lg:col-span-1">
         <span className="text-xs text-zinc-400">{isFr ? "Numero" : "Phone"}{required ? " *" : ""}</span>
         <input
           value={value.phoneNational}
