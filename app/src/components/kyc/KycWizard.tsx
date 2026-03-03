@@ -188,7 +188,17 @@ export default function KycWizard({
               onClick={() => setShowHelp(true)}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-zinc-950/70 text-zinc-200 transition hover:border-white/40"
             >
-              ?
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-4 w-4"
+              >
+                <circle cx="10" cy="10" r="8" />
+                <path d="M10 8.2v4" strokeLinecap="round" />
+                <circle cx="10" cy="6" r=".75" fill="currentColor" stroke="none" />
+              </svg>
             </button>
           </div>
         </div>
@@ -266,7 +276,13 @@ export default function KycWizard({
                             : "border-zinc-600/70 text-zinc-500"
                         }`}
                       >
-                        {filled ? "v" : "o"}
+                        {filled ? (
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-2.5 w-2.5">
+                            <path d="m4 10 4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full border border-current" />
+                        )}
                       </span>
                       <span>{fieldLabels[field] ?? field}</span>
                     </li>

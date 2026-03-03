@@ -65,7 +65,16 @@ export default function KycFlowPanel({
                 onClick={onClose}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-zinc-950/80 text-zinc-200 transition hover:border-white/35"
               >
-                <span aria-hidden="true">?</span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4"
+                >
+                  <path d="M5 5l10 10M15 5 5 15" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
           </div>
