@@ -115,6 +115,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [courierSpaceOpen, setCourierSpaceOpen] = useState(false);
   const [earningsOpen, setEarningsOpen] = useState(false);
   const [openNewMission, setOpenNewMission] = useState(false);
+  const [openDeliveriesView, setOpenDeliveriesView] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [myDeliveriesView, setMyDeliveriesView] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
 
   const [myProfile, setMyProfile] = useState<TiakCourierProfile | null>(null);
@@ -137,6 +138,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [tiakNotificationsLoading, setTiakNotificationsLoading] = useState(false);
   const [tiakNotificationsError, setTiakNotificationsError] = useState<string | null>(null);
   const [tiakNotificationsReadAt, setTiakNotificationsReadAt] = useState<string | null>(null);
+  const [notificationsPanelOpen, setNotificationsPanelOpen] = useState(false);
 
   const storageKey = getStoreKey(currentUserId);
   const notificationsReadKey = currentUserId ? `tiak-notifications-read:${currentUserId}` : null;
@@ -534,6 +536,18 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
   const trackedDeliveriesToShow = myDeliveriesView === "ARCHIVED" ? archivedTrackedDeliveries : activeTrackedDeliveries;
 
+  const activeOpenDeliveries = useMemo(
+    () => openDeliveries.filter((entry) => !archivedStatuses.has(entry.status)),
+    [archivedStatuses, openDeliveries]
+  );
+
+  const archivedOpenDeliveries = useMemo(
+    () => openDeliveries.filter((entry) => archivedStatuses.has(entry.status)),
+    [archivedStatuses, openDeliveries]
+  );
+
+  const openDeliveriesToShow = openDeliveriesView === "ARCHIVED" ? archivedOpenDeliveries : activeOpenDeliveries;
+
   const unreadTiakNotificationsCount = useMemo(() => {
     if (!isLoggedIn) return 0;
     if (!tiakNotificationsReadAt) return tiakNotifications.length;
@@ -635,12 +649,15 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     }
   }, [openDeliveries, selectedDelivery?.id, selectedDelivery?.updatedAt, trackedDeliveries]);
 
+  const hasBlockingPanelOpen = openNewMission || notificationsPanelOpen;
+
   useEffect(() => {
-    if (!openNewMission) return;
+    if (!hasBlockingPanelOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenNewMission(false);
+        setNotificationsPanelOpen(false);
       }
     };
 
@@ -651,7 +668,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
       document.body.classList.remove("overflow-hidden");
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [openNewMission]);
+  }, [hasBlockingPanelOpen]);
 
   return (
     <div className="space-y-6">
@@ -690,10 +707,11 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               <button
                 type="button"
                 onClick={() => {
-                  document
-                    .getElementById("tiak-notifications")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  markTiakNotificationsRead();
+                  const nextOpen = !notificationsPanelOpen;
+                  setNotificationsPanelOpen(nextOpen);
+                  if (nextOpen) {
+                    markTiakNotificationsRead();
+                  }
                 }}
                 className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-zinc-950/60 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
               >
@@ -780,115 +798,49 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               locale={locale}
               title={locale === "fr" ? "Demandes ouvertes" : "Open requests"}
               subtitle={
-                locale === "fr"
-                  ? "File operationnelle: ouvre une ligne pour traiter preuves, statut et assignation."
-                  : "Operational queue: open a row to process proof, status and assignment."
+                openDeliveriesView === "ARCHIVED"
+                  ? locale === "fr"
+                    ? "Archive des demandes traitees."
+                    : "Archive of processed requests."
+                  : locale === "fr"
+                    ? "File d'attente: ouvre une ligne pour traiter preuves, statut et assignation."
+                    : "Operational queue: open a row to process proof, status and assignment."
               }
-              deliveries={openDeliveries}
-              emptyLabel={locale === "fr" ? "Aucune demande ouverte." : "No open requests."}
+              headerActions={
+                <div className="inline-flex items-center rounded-full border border-white/10 bg-zinc-950/70 p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setOpenDeliveriesView("ACTIVE")}
+                    className={`rounded-full px-3 py-1 font-medium transition ${openDeliveriesView === "ACTIVE" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                  >
+                    {locale === "fr" ? "En cours" : "Active"} ({activeOpenDeliveries.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenDeliveriesView("ARCHIVED")}
+                    className={`rounded-full px-3 py-1 font-medium transition ${openDeliveriesView === "ARCHIVED" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                  >
+                    {locale === "fr" ? "Archivees" : "Archived"} ({archivedOpenDeliveries.length})
+                  </button>
+                </div>
+              }
+              deliveries={openDeliveriesToShow}
+              emptyLabel={
+                openDeliveriesView === "ARCHIVED"
+                  ? locale === "fr"
+                    ? "Aucune demande archivee."
+                    : "No archived requests."
+                  : locale === "fr"
+                    ? "Aucune demande ouverte."
+                    : "No open requests."
+              }
               actionLabel={locale === "fr" ? "Traiter" : "Process"}
               onOpenDelivery={openDeliveryPanel}
             />
           </section>
 
-          {isLoggedIn ? (
-            <section id="tiak-notifications" className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_24px_rgba(0,0,0,0.25)]">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">
-                    {locale === "fr" ? "Notifications TIAK" : "TIAK notifications"}
-                  </h3>
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {locale === "fr"
-                      ? "Suivi interne des assignations et statuts de livraison."
-                      : "Internal feed for assignments and delivery status updates."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {unreadTiakNotificationsCount > 0 ? (
-                    <span className="inline-flex items-center rounded-full border border-rose-300/35 bg-rose-300/10 px-2 py-0.5 text-[11px] font-medium text-rose-100">
-                      {locale === "fr" ? "Non lues" : "Unread"}: {unreadTiakNotificationsCount}
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void refreshTiakNotifications()}
-                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
-                  >
-                    {locale === "fr" ? "Rafraichir" : "Refresh"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={markTiakNotificationsRead}
-                    className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/60"
-                  >
-                    {locale === "fr" ? "Marquer lu" : "Mark read"}
-                  </button>
-                </div>
-              </div>
-
-              {tiakNotificationsLoading ? (
-                <p className="text-xs text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>
-              ) : null}
-
-              {tiakNotificationsError ? (
-                <p className="text-xs text-rose-300">{tiakNotificationsError}</p>
-              ) : null}
-
-              {!tiakNotificationsLoading && !tiakNotificationsError ? (
-                <div className="space-y-2">
-                  {latestTiakNotifications.length === 0 ? (
-                    <p className="text-xs text-zinc-500">
-                      {locale === "fr" ? "Aucune notification TIAK." : "No TIAK notifications."}
-                    </p>
-                  ) : (
-                    latestTiakNotifications.map((entry) => {
-                      const isUnread =
-                        !tiakNotificationsReadAt ||
-                        new Date(entry.createdAt).getTime() > new Date(tiakNotificationsReadAt).getTime();
-
-                      return (
-                        <div
-                          key={entry.id}
-                          className={`rounded-xl border px-3 py-2 text-xs transition ${isUnread ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-white/10 bg-zinc-950/60 text-zinc-200"}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium">{formatTiakActivityAction(entry.action, locale)}</p>
-                            {entry.entityId ? (
-                              <span className="text-[10px] text-zinc-400">#{entry.entityId.slice(0, 8)}</span>
-                            ) : null}
-                          </div>
-                          <p className="mt-1 text-[11px] text-zinc-400">
-                            {new Date(entry.createdAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}
-                          </p>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
           {isLoggedIn && (
             <section id="tiak-my-deliveries" className="space-y-3">
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-zinc-950/70 p-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setMyDeliveriesView("ACTIVE")}
-                  className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ACTIVE" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
-                >
-                  {locale === "fr" ? "En cours" : "Active"} ({activeTrackedDeliveries.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMyDeliveriesView("ARCHIVED")}
-                  className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ARCHIVED" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
-                >
-                  {locale === "fr" ? "Archivees" : "Archived"} ({archivedTrackedDeliveries.length})
-                </button>
-              </div>
-
               <TiakDeliveryQueue
                 locale={locale}
                 title={
@@ -908,6 +860,24 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                     : locale === "fr"
                       ? "Historique compact avec ouverture des actions dans le panneau details."
                       : "Compact history with actions opened in the details panel."
+                }
+                headerActions={
+                  <div className="inline-flex items-center rounded-full border border-white/10 bg-zinc-950/70 p-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setMyDeliveriesView("ACTIVE")}
+                      className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ACTIVE" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                    >
+                      {locale === "fr" ? "En cours" : "Active"} ({activeTrackedDeliveries.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMyDeliveriesView("ARCHIVED")}
+                      className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ARCHIVED" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                    >
+                      {locale === "fr" ? "Archivees" : "Archived"} ({archivedTrackedDeliveries.length})
+                    </button>
+                  </div>
                 }
                 deliveries={trackedDeliveriesToShow}
                 emptyLabel={
@@ -1384,6 +1354,118 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
           </div>
         </div>
       </div>
+
+      {isLoggedIn ? (
+      <div
+        className={`fixed inset-0 z-[55] ${notificationsPanelOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        aria-hidden={!notificationsPanelOpen}
+      >
+        <div
+          className={`absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity duration-200 ease-out motion-reduce:transition-none ${notificationsPanelOpen ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setNotificationsPanelOpen(false)}
+        />
+
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={locale === "fr" ? "Notifications TIAK" : "TIAK notifications"}
+          className={`absolute inset-x-0 bottom-0 max-h-[90vh] rounded-t-3xl border border-white/10 bg-zinc-950/95 shadow-[0_-20px_50px_rgba(0,0,0,0.45)] transition-all duration-300 ease-out motion-reduce:transition-none lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[460px] lg:max-w-[92vw] lg:max-h-none lg:rounded-none lg:border-l lg:border-t-0 ${notificationsPanelOpen ? "translate-y-0 opacity-100 lg:translate-x-0" : "translate-y-full opacity-0 lg:translate-x-full"}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">
+                {locale === "fr" ? "Notifications TIAK" : "TIAK notifications"}
+              </h3>
+              <p className="mt-1 text-xs text-zinc-400">
+                {locale === "fr"
+                  ? "Suivi interne des assignations et statuts de livraison."
+                  : "Internal feed for assignments and delivery status updates."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotificationsPanelOpen(false)}
+              className="rounded-full border border-white/15 p-2 text-zinc-300 transition hover:border-white/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+              aria-label={locale === "fr" ? "Fermer" : "Close"}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="h-[calc(90vh-84px)] overflow-y-auto p-4 lg:h-[calc(100%-84px)]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {unreadTiakNotificationsCount > 0 ? (
+                  <span className="inline-flex items-center rounded-full border border-rose-300/35 bg-rose-300/10 px-2 py-0.5 text-[11px] font-medium text-rose-100">
+                    {locale === "fr" ? "Non lues" : "Unread"}: {unreadTiakNotificationsCount}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void refreshTiakNotifications()}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                >
+                  {locale === "fr" ? "Rafraichir" : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={markTiakNotificationsRead}
+                  className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/60"
+                >
+                  {locale === "fr" ? "Marquer lu" : "Mark read"}
+                </button>
+              </div>
+            </div>
+
+            {tiakNotificationsLoading ? (
+              <p className="text-xs text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>
+            ) : null}
+
+            {tiakNotificationsError ? (
+              <p className="text-xs text-rose-300">{tiakNotificationsError}</p>
+            ) : null}
+
+            {!tiakNotificationsLoading && !tiakNotificationsError ? (
+              <div className="space-y-2">
+                {latestTiakNotifications.length === 0 ? (
+                  <p className="text-xs text-zinc-500">
+                    {locale === "fr" ? "Aucune notification TIAK." : "No TIAK notifications."}
+                  </p>
+                ) : (
+                  latestTiakNotifications.map((entry) => {
+                    const isUnread =
+                      !tiakNotificationsReadAt ||
+                      new Date(entry.createdAt).getTime() > new Date(tiakNotificationsReadAt).getTime();
+
+                    return (
+                      <div
+                        key={entry.id}
+                        className={`rounded-xl border px-3 py-2 text-xs transition ${isUnread ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-white/10 bg-zinc-950/60 text-zinc-200"}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{formatTiakActivityAction(entry.action, locale)}</p>
+                          {entry.entityId ? (
+                            <span className="text-[10px] text-zinc-400">#{entry.entityId.slice(0, 8)}</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {new Date(entry.createdAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      ) : null}
 
       <UserProfileDrawer
         open={Boolean(selectedCourierProfile)}
