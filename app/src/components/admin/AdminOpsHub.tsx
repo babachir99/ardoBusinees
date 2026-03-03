@@ -362,6 +362,8 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
     INITIATED: t("statuses.INITIATED"),
   };
 
+  const queueGridCols = "grid grid-cols-[160px_1fr_110px_70px_110px_130px_160px] items-center gap-6";
+
   const filteredQueue = useMemo(() => {
     if (activeFilter === "ALL") return queueItems;
     if (activeFilter === "PAYOUT") return queueItems.filter((item) => item.type === "PAYOUT");
@@ -776,70 +778,80 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
           </div>
         </div>
 
-        <div className="hidden md:grid md:grid-cols-[120px_minmax(0,1.4fr)_110px_90px_130px_90px_auto] border-b border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-          <span>{t("queue.columns.type")}</span>
-          <span>{t("queue.columns.ref")}</span>
-          <span>{isFr ? "Priorite" : "Priority"}</span>
-          <span>{t("queue.columns.age")}</span>
-          <span>{t("queue.columns.amount")}</span>
-          <span>{t("queue.columns.status")}</span>
-          <span className="text-right">{t("queue.columns.action")}</span>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[1000px]">
+            <div className={`${queueGridCols} border-b border-white/10 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400`}>
+              <span>{t("queue.columns.type")}</span>
+              <span>{t("queue.columns.ref")}</span>
+              <span>{isFr ? "Priorite" : "Priority"}</span>
+              <span>{t("queue.columns.age")}</span>
+              <span>{t("queue.columns.amount")}</span>
+              <span>{t("queue.columns.status")}</span>
+              <span className="text-right">{t("queue.columns.action")}</span>
+            </div>
 
-        <div className="divide-y divide-white/5">
-          {queueSortedByAge.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-zinc-400">{t("queue.empty")}</div>
-          ) : (
-            queueSortedByAge.map((item) => {
-              const currentStatus = statusOverrides[item.id] ?? item.status;
-              const action = item.action;
-              const actionBusy = pendingRelease[item.id] === true;
-              const priority = getQueuePriority(item);
+            <div className="divide-y divide-white/5">
+              {queueSortedByAge.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-zinc-400">{t("queue.empty")}</div>
+              ) : (
+                queueSortedByAge.map((item) => {
+                  const currentStatus = statusOverrides[item.id] ?? item.status;
+                  const action = item.action;
+                  const actionBusy = pendingRelease[item.id] === true;
+                  const priority = getQueuePriority(item);
+                  const isUrgent = priority === "URGENT";
 
-              return (
-                <div
-                  key={`${item.type}-${item.id}`}
-                  className="grid gap-2 px-4 py-3 transition-colors hover:bg-white/[0.02] md:grid-cols-[120px_minmax(0,1.4fr)_110px_90px_130px_90px_auto] md:items-center"
-                >
-                  <span className="text-xs font-semibold text-sky-200">{typeLabels[item.type]}</span>
-                  <span className="text-xs text-zinc-300">{item.refLabel}</span>
-                  <span className="inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold text-zinc-100 border-white/15 bg-zinc-950/60">
-                    {priority}
-                  </span>
-                  <span className="text-xs text-zinc-500">{item.ageLabel}</span>
-                  <span className="text-xs text-emerald-200">{item.amountLabel ?? "-"}</span>
-                  <span className="text-xs text-zinc-200">{statusLabels[currentStatus] ?? currentStatus}</span>
-                  <div className="flex items-center justify-end gap-2">
-                    {priority === "URGENT" ? (
-                      <span className="rounded-full border border-rose-300/45 bg-rose-400/15 px-2 py-0.5 text-[10px] font-semibold text-rose-100">
-                        URGENT
-                      </span>
-                    ) : null}
-                    {action.kind === "release" ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleRelease(item)}
-                        disabled={actionBusy || currentStatus === "PAID"}
-                        className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {currentStatus === "PAID" ? t("actions.released") : actionBusy ? "..." : action.label}
-                      </button>
-                    ) : (
-                      <Link
-                        href={action.href}
-                        className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
-                      >
-                        {action.label}
-                      </Link>
-                    )}
-                  </div>
-                  {errorByItem[item.id] ? (
-                    <p className="md:col-span-7 text-xs text-rose-300">{errorByItem[item.id]}</p>
-                  ) : null}
-                </div>
-              );
-            })
-          )}
+                  return (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      className={`${queueGridCols} px-6 py-4 border-b border-white/10 transition ${isUrgent ? "border-l-4 border-l-red-500 bg-red-500/5 hover:bg-red-500/10" : "hover:bg-white/[0.02]"} last:border-b-0`}
+                    >
+                      <span className="text-sm font-medium text-sky-200">{typeLabels[item.type]}</span>
+                      <span className="min-w-0 truncate text-sm text-zinc-200" title={item.refLabel}>{item.refLabel}</span>
+                      <div className="flex justify-start">
+                        <span
+                          className={isUrgent
+                            ? "inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400"
+                            : "inline-flex items-center rounded-full border border-white/15 bg-zinc-950/60 px-2 py-0.5 text-[10px] font-semibold text-zinc-100"}
+                        >
+                          {priority}
+                        </span>
+                      </div>
+                      <span className="text-sm tabular-nums text-zinc-300">{item.ageLabel}</span>
+                      <span className="text-sm tabular-nums text-emerald-200">{item.amountLabel ?? "-"}</span>
+                      <div>
+                        <span className="inline-flex items-center rounded-full border border-white/15 bg-zinc-950/60 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-100">
+                          {statusLabels[currentStatus] ?? currentStatus}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-end gap-3">
+                        {action.kind === "release" ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRelease(item)}
+                            disabled={actionBusy || currentStatus === "PAID"}
+                            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {currentStatus === "PAID" ? t("actions.released") : actionBusy ? "..." : action.label}
+                          </button>
+                        ) : (
+                          <Link
+                            href={action.href}
+                            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
+                          >
+                            {action.label}
+                          </Link>
+                        )}
+                      </div>
+                      {errorByItem[item.id] ? (
+                        <p className="col-span-7 text-xs text-rose-300">{errorByItem[item.id]}</p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1041,11 +1053,9 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
         </div>
       </section>
 
-      {insights ? (
+      {insights && insightsOpen ? (
         <div
-          className={`fixed inset-0 z-40 transition-opacity duration-200 motion-reduce:transition-none ${
-            insightsOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
+          className="fixed inset-0 z-40 opacity-100 transition-opacity duration-200 motion-reduce:transition-none"
           onClick={() => setInsightsOpen(false)}
           aria-hidden={!insightsOpen}
         >
@@ -1054,9 +1064,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
             role="dialog"
             aria-modal="true"
             aria-label={isFr ? "Insights admin" : "Admin insights"}
-            className={`absolute right-0 top-0 flex h-full w-[92vw] max-w-[480px] flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 p-4 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none lg:w-[480px] ${
-              insightsOpen ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"
-            }`}
+            className="absolute right-0 top-0 flex h-full w-[92vw] max-w-[480px] flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 p-4 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none lg:w-[480px] translate-x-0"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
