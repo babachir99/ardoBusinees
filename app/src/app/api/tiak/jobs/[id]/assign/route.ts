@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { queueTiakAssignedNotification } from "@/lib/tiak/notifications";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -258,6 +259,11 @@ export async function PATCH(
         courierId: courier.courierId,
       },
     });
+
+    await queueTiakAssignedNotification({
+      deliveryId: job.id,
+      courierId: courier.courierId,
+    }).catch(() => null);
 
     return respond(
       NextResponse.json({

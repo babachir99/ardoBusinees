@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
 const contactUnlockStatuses = ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED"] as const;
+const courierVisibleStatuses = ["ASSIGNED", "ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED"] as const;
 
 function hasTiakDelegates() {
   const runtimePrisma = prisma as unknown as {
@@ -160,8 +161,18 @@ export async function GET(request: NextRequest) {
     ? session.user.role === "ADMIN"
       ? { status: "REQUESTED" as const }
       : {
-          status: "REQUESTED" as const,
-          OR: [{ courierId: null }, { courierId: session.user.id }],
+          OR: [
+            {
+              status: "REQUESTED" as const,
+              courierId: null,
+            },
+            {
+              courierId: session.user.id,
+              status: {
+                in: [...courierVisibleStatuses],
+              },
+            },
+          ],
         }
     : {
         status: "REQUESTED" as const,
@@ -391,4 +402,3 @@ export async function POST(request: NextRequest) {
     { status: 201 }
   );
 }
-

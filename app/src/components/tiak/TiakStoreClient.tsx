@@ -5,7 +5,6 @@ import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
 import TiakDeliveryDetailsPanel from "@/components/tiak/TiakDeliveryDetailsPanel";
-import PublicUserCard from "@/components/trust/PublicUserCard";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
 
@@ -73,6 +72,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [courierSearch, setCourierSearch] = useState("");
   const [couriersAvailableOnly, setCouriersAvailableOnly] = useState(true);
   const [couriersVisibleCount, setCouriersVisibleCount] = useState(6);
+  const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
 
   const [selectedDelivery, setSelectedDelivery] = useState<TiakDelivery | null>(null);
   const [courierSpaceOpen, setCourierSpaceOpen] = useState(false);
@@ -440,6 +440,11 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   );
 
   const hasMoreCouriers = filteredCouriers.length > couriersVisibleCount;
+  const availableCourierCount = useMemo(
+    () => couriers.filter((profile) => profile.isActive).length,
+    [couriers]
+  );
+  const isFilterActive = courierSearch.trim().length > 0 || !couriersAvailableOnly;
 
   const inProgressCount = useMemo(
     () =>
@@ -602,15 +607,22 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
         <aside className="space-y-4 lg:col-span-5 lg:sticky lg:top-24 lg:self-start">
           <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-white">
-                  {locale === "fr" ? "Trouver un livreur" : "Find a courier"}
-                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-semibold text-white">
+                    {locale === "fr" ? "Trouver un livreur" : "Find a courier"}
+                  </h3>
+                  <span className="inline-flex items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 px-2 py-0.5 text-[11px] font-medium text-emerald-100">
+                    {locale === "fr"
+                      ? `${availableCourierCount} disponibles`
+                      : `${availableCourierCount} available`}
+                  </span>
+                </div>
                 <p className="mt-1 text-xs text-zinc-400">
                   {locale === "fr"
-                    ? "Matching rapide par ville/zone, puis ouverture du profil."
-                    : "Fast matching by city/area, then profile review."}
+                    ? "Matching rapide par ville/zone puis action immediate."
+                    : "Fast matching by city/area then immediate action."}
                 </p>
               </div>
               <button
@@ -622,17 +634,30 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               </button>
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input
-                value={courierSearch}
-                onChange={(event) => {
-                  setCourierSearch(event.target.value);
-                  setCouriersVisibleCount(6);
-                }}
-                placeholder={locale === "fr" ? "Ville, zone, vehicule..." : "City, area, vehicle..."}
-                className="h-10 rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
-              />
-              <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/50 px-3 text-xs text-zinc-300">
+            <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto] md:items-center">
+              <div className="relative">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  value={courierSearch}
+                  onChange={(event) => {
+                    setCourierSearch(event.target.value);
+                    setCouriersVisibleCount(6);
+                  }}
+                  placeholder={locale === "fr" ? "Rechercher: ville, zone, vehicule..." : "Search: city, area, vehicle..."}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-zinc-950/70 pl-9 pr-3 text-sm text-white outline-none transition focus:border-emerald-300/60 focus:ring-2 focus:ring-emerald-300/30"
+                />
+              </div>
+              <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/50 px-3 text-xs text-zinc-300">
                 <input
                   type="checkbox"
                   checked={couriersAvailableOnly}
@@ -640,44 +665,174 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                 />
                 {locale === "fr" ? "Disponible uniquement" : "Available only"}
               </label>
+              {isFilterActive ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCourierSearch("");
+                    setCouriersAvailableOnly(true);
+                    setCouriersVisibleCount(6);
+                  }}
+                  className="h-10 rounded-xl border border-white/20 px-3 text-xs font-semibold text-zinc-200 transition hover:border-white/45"
+                >
+                  {locale === "fr" ? "Reset" : "Reset"}
+                </button>
+              ) : (
+                <div className="hidden h-10 md:block" />
+              )}
             </div>
 
             {couriersLoading && <p className="mt-3 text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
             {couriersError && <p className="mt-3 text-sm text-rose-300">{couriersError}</p>}
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {visibleCouriers.map((profile) => (
-                <PublicUserCard
-                  key={profile.id}
-                  locale={locale}
-                  userId={profile.courierId}
-                  viewerUserId={currentUserId}
-                  name={profile.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
-                  avatarUrl={profile.courier.image}
-                  roleLabel={locale === "fr" ? "Coursier" : "Courier"}
-                  reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
-                  updatedAt={profile.updatedAt}
-                  details={[
-                    {
-                      label: locale === "fr" ? "Vehicule" : "Vehicle",
-                      value: profile.vehicleType ?? "-",
-                    },
-                    {
-                      label: locale === "fr" ? "Villes" : "Cities",
-                      value: profile.cities.length ? profile.cities.join(", ") : "-",
-                    },
-                    {
-                      label: locale === "fr" ? "Zones" : "Areas",
-                      value: profile.areas.length ? profile.areas.join(", ") : "-",
-                    },
-                  ]}
-                  onViewProfile={() => setSelectedCourierProfile(profile)}
-                  viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
-                />
-              ))}
+            <div className="mt-2 text-[11px] text-zinc-500">
+              {locale === "fr"
+                ? `${filteredCouriers.length} profils affiches`
+                : `${filteredCouriers.length} profiles shown`}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+              {visibleCouriers.map((profile) => {
+                const isSelected = selectedCourierId === profile.id;
+                const cityChips = profile.cities.slice(0, 2);
+                const areaChips = profile.areas.slice(0, 2);
+                const extraCities = Math.max(0, profile.cities.length - cityChips.length);
+                const extraAreas = Math.max(0, profile.areas.length - areaChips.length);
+
+                return (
+                  <article
+                    key={profile.id}
+                    className={`group flex h-full flex-col rounded-xl border p-3 transition-all duration-200 ease-out motion-reduce:transition-none ${
+                      isSelected
+                        ? "border-emerald-300/55 bg-emerald-300/10 ring-2 ring-emerald-300/60"
+                        : "border-white/10 bg-zinc-900/65 hover:-translate-y-0.5 hover:border-emerald-300/30 hover:shadow-[0_10px_20px_rgba(0,0,0,0.25)] motion-reduce:hover:translate-y-0"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {profile.courier.image ? (
+                          <img
+                            src={profile.courier.image}
+                            alt={profile.courier.name ?? "Courier"}
+                            className="h-10 w-10 rounded-full border border-white/15 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-zinc-800 text-sm font-semibold text-zinc-200">
+                            {(profile.courier.name ?? "C").slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-zinc-100">
+                            {profile.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <span className="inline-flex rounded-full border border-white/15 bg-zinc-950/70 px-2 py-0.5 text-[10px] text-zinc-200">
+                              {locale === "fr" ? "Coursier" : "Courier"}
+                            </span>
+                            <span className="inline-flex rounded-full border border-cyan-300/35 bg-cyan-300/10 px-2 py-0.5 text-[10px] text-cyan-100 transition-colors group-hover:border-cyan-300/55">
+                              {locale === "fr" ? "Fiabilite" : "Reliability"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCourierProfile(profile)}
+                        className="rounded-full border border-white/15 p-1.5 text-zinc-300 transition hover:border-white/40 hover:text-white"
+                        aria-label={locale === "fr" ? "Plus d'actions" : "More actions"}
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+                          <circle cx="5" cy="12" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="19" cy="12" r="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="mt-3 space-y-2 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-zinc-500">{locale === "fr" ? "Vehicule" : "Vehicle"}</span>
+                        <span className="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-emerald-100">
+                          {profile.vehicleType ?? (locale === "fr" ? "Non renseigne" : "Not set")}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-zinc-500">{locale === "fr" ? "Villes" : "Cities"}</span>
+                        {cityChips.length > 0 ? cityChips.map((city) => (
+                          <span key={`${profile.id}-city-${city}`} className="inline-flex rounded-full border border-white/15 bg-zinc-950/70 px-2 py-0.5 text-zinc-200">
+                            {city}
+                          </span>
+                        )) : (
+                          <span className="text-zinc-400">-</span>
+                        )}
+                        {extraCities > 0 ? (
+                          <span className="inline-flex rounded-full border border-white/10 bg-zinc-900 px-2 py-0.5 text-zinc-400">+{extraCities}</span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-zinc-500">{locale === "fr" ? "Zones" : "Areas"}</span>
+                        {areaChips.length > 0 ? areaChips.map((area) => (
+                          <span key={`${profile.id}-area-${area}`} className="inline-flex rounded-full border border-white/15 bg-zinc-950/70 px-2 py-0.5 text-zinc-200">
+                            {area}
+                          </span>
+                        )) : (
+                          <span className="text-zinc-400">-</span>
+                        )}
+                        {extraAreas > 0 ? (
+                          <span className="inline-flex rounded-full border border-white/10 bg-zinc-900 px-2 py-0.5 text-zinc-400">+{extraAreas}</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      {isSelected ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-2 py-1 text-[11px] font-medium text-emerald-100">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3" aria-hidden="true">
+                            <path d="m5 13 4 4L19 7" />
+                          </svg>
+                          {locale === "fr" ? "Selectionne" : "Selected"}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-zinc-500">&nbsp;</span>
+                      )}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedCourierId(profile.id);
+                        }}
+                        className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:brightness-105"
+                      >
+                        {isSelected
+                          ? locale === "fr"
+                            ? "Assigner"
+                            : "Assign"
+                          : locale === "fr"
+                            ? "Selectionner"
+                            : "Select"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedCourierProfile(profile);
+                        }}
+                        className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                      >
+                        {locale === "fr" ? "Voir profil" : "View profile"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
 
               {!couriersLoading && filteredCouriers.length === 0 && (
-                <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
+                <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 sm:col-span-2 lg:col-span-1 2xl:col-span-2">
                   {locale === "fr" ? "Aucun coursier disponible avec ces filtres." : "No couriers with current filters."}
                 </div>
               )}
@@ -701,13 +856,23 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               <button
                 type="button"
                 onClick={() => setCourierSpaceOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={courierSpaceOpen}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950/45 px-3 py-2 text-left transition hover:border-white/20"
               >
                 <div>
                   <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Espace livreur" : "Courier space"}</h3>
                   <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Profil, zones et disponibilite" : "Profile, zones and availability"}</p>
                 </div>
-                <span className="text-xs text-zinc-400">{courierSpaceOpen ? "-" : "+"}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none ${courierSpaceOpen ? "rotate-180" : "rotate-0"}`}
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
 
               {courierSpaceOpen ? (
@@ -767,7 +932,8 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               <button
                 type="button"
                 onClick={() => setEarningsOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={earningsOpen}
+                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950/45 px-3 py-2 text-left transition hover:border-white/20"
               >
                 <div>
                   <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h3>
@@ -775,7 +941,16 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                     {locale === "fr" ? "Resume net + paiements" : "Net summary + payouts"}
                   </p>
                 </div>
-                <span className="text-xs text-zinc-400">{earningsOpen ? "-" : "+"}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none ${earningsOpen ? "rotate-180" : "rotate-0"}`}
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
 
               {earningsOpen ? (

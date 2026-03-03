@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { queueTiakAcceptedNotification } from "@/lib/tiak/notifications";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -51,6 +52,7 @@ export async function POST(
       select: {
         id: true,
         status: true,
+        customerId: true,
         courierId: true,
         assignExpiresAt: true,
       },
@@ -131,9 +133,10 @@ export async function POST(
           id: job.id,
           status: "ASSIGNED",
           courierId: expectedCourierId,
-          assignExpiresAt: { gt: now },
+          OR: [{ assignExpiresAt: { gt: now } }, { assignExpiresAt: null }],
         },
         data: {
+          status: "ACCEPTED",
           assignExpiresAt: null,
         },
       });
@@ -186,6 +189,12 @@ export async function POST(
       outcome: "SUCCESS",
       reason: AuditReason.SUCCESS,
     });
+
+    await queueTiakAcceptedNotification({
+      deliveryId: job.id,
+      customerId: job.customerId,
+      courierId: expectedCourierId,
+    }).catch(() => null);
 
     return respond(
       NextResponse.json({

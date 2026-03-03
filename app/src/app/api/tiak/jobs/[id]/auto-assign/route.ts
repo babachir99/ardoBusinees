@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { scoreCouriersForDelivery } from "@/lib/tiak/matching";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { queueTiakAssignedNotification } from "@/lib/tiak/notifications";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -212,6 +213,11 @@ export async function POST(
       reason: AuditReason.SUCCESS,
       metadata: { courierId: winner.courierId },
     });
+
+    await queueTiakAssignedNotification({
+      deliveryId: job.id,
+      courierId: winner.courierId,
+    }).catch(() => null);
 
     return respond(
       NextResponse.json({
