@@ -93,6 +93,21 @@ function normalizeFilter(value: string | null): QueueFilter {
 }
 
 
+function ageLabelToMinutes(ageLabel: string): number {
+  const value = Number.parseInt(ageLabel, 10);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  if (ageLabel.endsWith("j")) return value * 24 * 60;
+  if (ageLabel.endsWith("h")) return value * 60;
+  return value;
+}
+
+function getQueuePriority(item: OpsQueueItem): "URGENT" | "HIGH" | "NORMAL" {
+  const ageMinutes = ageLabelToMinutes(item.ageLabel);
+  if (ageMinutes >= 48 * 60) return "URGENT";
+  if (item.type === "DISPUTE" || item.type === "TRUST" || item.type === "PAYMENT_FAILED") return "HIGH";
+  return "NORMAL";
+}
+
 type AlertSeverity = "WARN" | "CRITICAL";
 
 type OpsAlert = {
@@ -207,6 +222,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: t("cards.payoutsReady"),
         value: kpis.payoutsReady,
         href: { pathname: "/admin", query: { opsFilter: "PAYOUT" } },
+        filter: "PAYOUT" as QueueFilter,
         warn: warnFlags.payoutsReady,
       },
       {
@@ -214,6 +230,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: t("cards.disputesActive"),
         value: kpis.disputesActive,
         href: { pathname: "/admin", query: { opsFilter: "DISPUTE" } },
+        filter: "DISPUTE" as QueueFilter,
         warn: warnFlags.disputesActive,
       },
       {
@@ -221,6 +238,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: t("cards.paymentsFailed7d"),
         value: kpis.paymentsFailed7d,
         href: { pathname: "/admin", query: { opsFilter: "PAYMENT_FAILED" } },
+        filter: "PAYMENT_FAILED" as QueueFilter,
         warn: warnFlags.paymentsFailed7d,
       },
       {
@@ -228,6 +246,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: t("cards.kycPending"),
         value: kpis.kycPending,
         href: "/admin/kyc",
+        filter: null,
         warn: warnFlags.kycPending,
       },
       {
@@ -235,6 +254,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: uiText.trustReportsPending,
         value: kpis.trustReportsPending,
         href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
+        filter: "TRUST" as QueueFilter,
         warn: typeof kpis.trustReportsPending === "number" && kpis.trustReportsPending > 0,
       },
       {
@@ -242,6 +262,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: uiText.trustDisputesActive,
         value: kpis.trustDisputesActive,
         href: { pathname: "/admin", query: { opsFilter: "TRUST" } },
+        filter: "TRUST" as QueueFilter,
         warn: typeof kpis.trustDisputesActive === "number" && kpis.trustDisputesActive > 0,
       },
       {
@@ -249,6 +270,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: uiText.immoMonetization,
         value: kpis.immoMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "IMMO_MONETIZATION" } },
+        filter: "IMMO_MONETIZATION" as QueueFilter,
         warn: typeof kpis.immoMonetizationIssues === "number" && kpis.immoMonetizationIssues > 0,
       },
       {
@@ -256,6 +278,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: uiText.autoMonetization,
         value: kpis.autoMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "AUTO_MONETIZATION" } },
+        filter: "AUTO_MONETIZATION" as QueueFilter,
         warn: typeof kpis.autoMonetizationIssues === "number" && kpis.autoMonetizationIssues > 0,
       },
       {
@@ -263,6 +286,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
         label: uiText.carsMonetization,
         value: kpis.carsMonetizationIssues,
         href: { pathname: "/admin", query: { opsFilter: "CARS_MONETIZATION" } },
+        filter: "CARS_MONETIZATION" as QueueFilter,
         warn: typeof kpis.carsMonetizationIssues === "number" && kpis.carsMonetizationIssues > 0,
       },
     ].filter((card) => card.key !== "kyc" || typeof card.value === "number"),
@@ -578,155 +602,124 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
     orderPaidButLedgerNotConfirmed: reconData?.orderPaidButLedgerNotConfirmed.length ?? 0,
   };
 
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(() => Date.now());
+  const [clockTick, setClockTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const queueSortedByAge = useMemo(() => {
+    return [...filteredQueue].sort(
+      (a, b) => ageLabelToMinutes(b.ageLabel) - ageLabelToMinutes(a.ageLabel)
+    );
+  }, [filteredQueue]);
+
+  const lastUpdatedLabel = useMemo(() => {
+    const minutes = Math.max(0, Math.floor((clockTick - lastUpdatedAt) / 60000));
+    if (minutes === 0) return isFr ? "A l'instant" : "Just now";
+    if (minutes === 1) return isFr ? "Il y a 1 min" : "1m ago";
+    return isFr ? `Il y a ${minutes} min` : `${minutes}m ago`;
+  }, [clockTick, isFr, lastUpdatedAt]);
+
+  const scrollToQueue = () => {
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      document.getElementById("ops-queue")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
+  const applyFilter = (filter: QueueFilter) => {
+    const query = filter === "ALL" ? {} : { opsFilter: filter };
+    router.push({ pathname: "/admin", query }, { scroll: false });
+    scrollToQueue();
+  };
+
+  const handleRefresh = () => {
+    setLastUpdatedAt(Date.now());
+    router.refresh();
+  };
+
+  const handleExportQueue = () => {
+    if (typeof window === "undefined") return;
+
+    const header = ["type", "reference", "priority", "status", "amount", "age"];
+    const lines = queueSortedByAge.map((item) => {
+      const status = statusOverrides[item.id] ?? item.status;
+      const priority = getQueuePriority(item);
+      const values = [
+        typeLabels[item.type],
+        item.refLabel,
+        priority,
+        statusLabels[status] ?? status,
+        item.amountLabel ?? "-",
+        item.ageLabel,
+      ];
+      return values.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",");
+    });
+
+    const csv = [header.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ops-queue-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
-    <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-white">{t("title")}</h2>
-          <p className="mt-1 text-sm text-zinc-300">{t("subtitle")}</p>
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
-        {cards.map((card) => (
-          <Link
-            key={card.key}
-            href={card.href}
-            className={`rounded-2xl border bg-zinc-950/50 p-4 transition hover:border-white/30 ${
-              card.warn ? "border-amber-300/40" : "border-white/10"
-            }`}
-          >
-            <p className="flex items-center gap-2 text-xs text-zinc-400">
-              <span>{card.label}</span>
-              {card.warn ? (
-                <span className="rounded-full border border-amber-300/50 bg-amber-300/15 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
-                  {t("alerts.labels.warn")}
-                </span>
-              ) : null}
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">{typeof card.value === "number" ? card.value : "-"}</p>
-          </Link>
-        ))}
-      </div>
-
-      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-white">{t("alerts.title")}</h3>
-        </div>
-
-        {!reconData ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <p className="text-xs text-zinc-400">{t("alerts.runReconciliationHint")}</p>
+    <section className="space-y-6">
+      <header className="sticky top-16 z-20 rounded-2xl border border-white/10 bg-zinc-900/85 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Ops Hub</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Ops Hub</h2>
+            <p className="mt-1 text-sm text-zinc-300">{isFr ? "Supervision globale" : "Global supervision"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/50"
+            >
+              {isFr ? "Rafraichir" : "Refresh"}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportQueue}
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/50"
+            >
+              {isFr ? "Exporter" : "Export"}
+            </button>
             <button
               type="button"
               onClick={() => void handleRunReconciliation()}
               disabled={reconLoading}
-              className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {reconLoading ? t("reconciliation.running") : t("alerts.actions.runReconciliation")}
+              {reconLoading ? t("reconciliation.running") : `${t("reconciliation.title")} (dry-run)`}
             </button>
           </div>
-        ) : null}
-
-        {activeAlerts.length === 0 ? (
-          <p className="mt-3 text-xs text-zinc-400">{t("alerts.none")}</p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {activeAlerts.map((alert) => (
-              <div key={alert.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                      alert.severity === "CRITICAL"
-                        ? "border-rose-300/50 bg-rose-300/15 text-rose-100"
-                        : "border-amber-300/50 bg-amber-300/15 text-amber-100"
-                    }`}
-                  >
-                    {alert.severity}
-                  </span>
-                  <p className="text-xs text-zinc-200">{alert.message}</p>
-                </div>
-                {alert.href && alert.actionLabel ? (
-                  <Link
-                    href={alert.href}
-                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
-                  >
-                    {alert.actionLabel}
-                  </Link>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div id="ops-notifications-health" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-white">{uiText.notificationsHealthTitle}</h3>
-            <p className="mt-1 text-xs text-zinc-400">{uiText.notificationsHealthSubtitle}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleLoadNotificationsHealth()}
-            disabled={notificationsHealthLoading}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {notificationsHealthLoading ? uiText.notificationsRefreshing : notificationsHealth ? uiText.notificationsRefresh : uiText.notificationsLoad}
-          </button>
         </div>
+        <p className="mt-3 text-[11px] text-zinc-500">{isFr ? "Derniere mise a jour" : "Last updated"}: {lastUpdatedLabel}</p>
+      </header>
 
-        {notificationsHealthError ? (
-          <p className="mt-3 text-xs text-rose-300">{notificationsHealthError}</p>
-        ) : null}
-
-        {notificationsHealth ? (
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
-              <p className="text-zinc-500">{uiText.pendingLabel}</p>
-              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.counts.PENDING}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
-              <p className="text-zinc-500">{uiText.failed24hLabel}</p>
-              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.failedLast24h}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
-              <p className="text-zinc-500">{uiText.sent24hLabel}</p>
-              <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.sentLast24h}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-3 text-xs text-zinc-300">
-              <p className="text-zinc-500">{uiText.oldestPendingAgeLabel}</p>
-              <p className="mt-1 text-sm font-semibold text-white">
-                {typeof notificationsHealth.oldestPendingAgeSeconds === "number"
-                  ? `${Math.floor(notificationsHealth.oldestPendingAgeSeconds / 60)}m`
-                  : "-"}
-              </p>
+      <section id="ops-queue" className="rounded-2xl border border-white/10 bg-zinc-900/55 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+        <div className="border-b border-white/10 px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-white">{t("queue.title")}</h3>
+              <p className="mt-1 text-xs text-zinc-400">{isFr ? "Priorise les actions critiques avant le reste du backlog." : "Prioritize critical actions before backlog work."}</p>
             </div>
           </div>
-        ) : (
-          <p className="mt-3 text-xs text-zinc-400">{uiText.loadNotificationHealthHint}</p>
-        )}
-
-        {notificationsHealth && notificationsHealth.topTemplateFailures.length > 0 ? (
-          <div className="mt-3 rounded-xl border border-white/10 bg-zinc-900/50 p-3">
-            <p className="text-xs font-semibold text-white">{uiText.topTemplateFailuresTitle}</p>
-            <div className="mt-2 space-y-1 text-xs text-zinc-300">
-              {notificationsHealth.topTemplateFailures.slice(0, 5).map((entry) => (
-                <p key={entry.templateKey}>{entry.templateKey} - {entry.count}</p>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div id="ops-queue" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40">
-        <div className="border-b border-white/10 px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">{t("queue.title")}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {filterTabs.map((tab) => (
-              <Link
+              <button
                 key={tab.key}
-                href={{ pathname: "/admin", query: tab.key === "ALL" ? {} : { opsFilter: tab.key } }}
+                type="button"
+                onClick={() => applyFilter(tab.key)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   activeFilter === tab.key
                     ? "border-sky-300/60 bg-sky-300/20 text-sky-100"
@@ -734,37 +727,50 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
                 }`}
               >
                 {tab.label}
-              </Link>
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="hidden md:grid md:grid-cols-[100px_minmax(0,1fr)_120px_140px_80px_auto] border-b border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+        <div className="hidden md:grid md:grid-cols-[120px_minmax(0,1.4fr)_110px_90px_130px_90px_auto] border-b border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
           <span>{t("queue.columns.type")}</span>
           <span>{t("queue.columns.ref")}</span>
-          <span>{t("queue.columns.status")}</span>
-          <span>{t("queue.columns.amount")}</span>
+          <span>{isFr ? "Priorite" : "Priority"}</span>
           <span>{t("queue.columns.age")}</span>
+          <span>{t("queue.columns.amount")}</span>
+          <span>{t("queue.columns.status")}</span>
           <span className="text-right">{t("queue.columns.action")}</span>
         </div>
 
         <div className="divide-y divide-white/5">
-          {filteredQueue.length === 0 ? (
+          {queueSortedByAge.length === 0 ? (
             <div className="px-4 py-6 text-sm text-zinc-400">{t("queue.empty")}</div>
           ) : (
-            filteredQueue.map((item) => {
+            queueSortedByAge.map((item) => {
               const currentStatus = statusOverrides[item.id] ?? item.status;
               const action = item.action;
               const actionBusy = pendingRelease[item.id] === true;
+              const priority = getQueuePriority(item);
 
               return (
-                <div key={`${item.type}-${item.id}`} className="grid gap-2 px-4 py-3 md:grid-cols-[100px_minmax(0,1fr)_120px_140px_80px_auto] md:items-center">
+                <div
+                  key={`${item.type}-${item.id}`}
+                  className="grid gap-2 px-4 py-3 transition-colors hover:bg-white/[0.02] md:grid-cols-[120px_minmax(0,1.4fr)_110px_90px_130px_90px_auto] md:items-center"
+                >
                   <span className="text-xs font-semibold text-sky-200">{typeLabels[item.type]}</span>
                   <span className="text-xs text-zinc-300">{item.refLabel}</span>
-                  <span className="text-xs text-zinc-200">{statusLabels[currentStatus] ?? currentStatus}</span>
-                  <span className="text-xs text-emerald-200">{item.amountLabel ?? "-"}</span>
+                  <span className="inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold text-zinc-100 border-white/15 bg-zinc-950/60">
+                    {priority}
+                  </span>
                   <span className="text-xs text-zinc-500">{item.ageLabel}</span>
+                  <span className="text-xs text-emerald-200">{item.amountLabel ?? "-"}</span>
+                  <span className="text-xs text-zinc-200">{statusLabels[currentStatus] ?? currentStatus}</span>
                   <div className="flex items-center justify-end gap-2">
+                    {priority === "URGENT" ? (
+                      <span className="rounded-full border border-rose-300/45 bg-rose-400/15 px-2 py-0.5 text-[10px] font-semibold text-rose-100">
+                        URGENT
+                      </span>
+                    ) : null}
                     {action.kind === "release" ? (
                       <button
                         type="button"
@@ -784,80 +790,212 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
                     )}
                   </div>
                   {errorByItem[item.id] ? (
-                    <p className="md:col-span-6 text-xs text-rose-300">{errorByItem[item.id]}</p>
+                    <p className="md:col-span-7 text-xs text-rose-300">{errorByItem[item.id]}</p>
                   ) : null}
                 </div>
               );
             })
           )}
         </div>
-      </div>
+      </section>
 
-      <div id="ops-reconciliation" className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-white">{t("reconciliation.title")}</h3>
-          <button
-            type="button"
-            onClick={() => void handleRunReconciliation()}
-            disabled={reconLoading}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {reconLoading ? t("reconciliation.running") : t("reconciliation.run")}
-          </button>
+      <section id="ops-snapshot" className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-white">{isFr ? "Ops Snapshot" : "Ops Snapshot"}</h3>
+            <p className="mt-1 text-xs text-zinc-400">{isFr ? "Vue rapide des filets de securite operationnels." : "Quick view of operational safeguards."}</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map((card) => (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => {
+                if (card.filter) {
+                  applyFilter(card.filter);
+                  return;
+                }
+                router.push(card.href as string);
+              }}
+              className={`rounded-2xl border bg-zinc-950/60 p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/40 ${
+                card.warn ? "border-amber-300/45" : "border-white/10"
+              }`}
+            >
+              <p className="flex items-center gap-2 text-xs text-zinc-400">
+                <span>{card.label}</span>
+                {card.warn ? (
+                  <span className="rounded-full border border-amber-300/50 bg-amber-300/15 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+                    {t("alerts.labels.warn")}
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">{typeof card.value === "number" ? card.value : "-"}</p>
+              <p className="mt-1 text-[11px] text-zinc-500">{isFr ? "Cliquer pour filtrer" : "Click to focus"}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+          <h3 className="text-lg font-semibold text-white">{t("alerts.title")}</h3>
+          <p className="mt-1 text-xs text-zinc-400">{isFr ? "Alertes actives, priorisees par severite." : "Active alerts prioritized by severity."}</p>
+
+          {activeAlerts.length === 0 ? (
+            <p className="mt-4 text-sm text-zinc-400">{t("alerts.none")}</p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {activeAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        alert.severity === "CRITICAL"
+                          ? "border-rose-300/50 bg-rose-300/15 text-rose-100"
+                          : "border-amber-300/50 bg-amber-300/15 text-amber-100"
+                      }`}
+                    >
+                      {alert.severity}
+                    </span>
+                    <p className="text-xs text-zinc-200">{alert.message}</p>
+                  </div>
+                  {alert.href && alert.actionLabel ? (
+                    <Link
+                      href={alert.href}
+                      className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
+                    >
+                      {alert.actionLabel}
+                    </Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {reconError ? <p className="mt-3 text-xs text-rose-300">{reconError}</p> : null}
-
-        {reconData ? (
-          <div className="mt-4 grid gap-3">
-            <details className="rounded-xl border border-white/10 p-3">
-              <summary className="cursor-pointer text-xs font-semibold text-white">
-                {t("reconciliation.sections.confirmedLedgerMissingPayout")} ({reconCounts.confirmedLedgerMissingPayout})
-              </summary>
-              <div className="mt-2 space-y-1 text-xs text-zinc-300">
-                {reconData.confirmedLedgerMissingPayout.length === 0 ? (
-                  <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
-                ) : (
-                  reconData.confirmedLedgerMissingPayout.map((item) => (
-                    <p key={item.ledgerId}>{item.contextType} {item.contextId} | {item.payoutStatus ?? "NO_PAYOUT"}</p>
-                  ))
-                )}
+        <div className="space-y-4">
+          <div id="ops-notifications-health" className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">{uiText.notificationsHealthTitle}</h3>
+                <p className="mt-1 text-xs text-zinc-400">{uiText.notificationsHealthSubtitle}</p>
               </div>
-            </details>
+              <button
+                type="button"
+                onClick={() => void handleLoadNotificationsHealth()}
+                disabled={notificationsHealthLoading}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {notificationsHealthLoading
+                  ? uiText.notificationsRefreshing
+                  : notificationsHealth
+                  ? uiText.notificationsRefresh
+                  : uiText.notificationsLoad}
+              </button>
+            </div>
 
-            <details className="rounded-xl border border-white/10 p-3">
-              <summary className="cursor-pointer text-xs font-semibold text-white">
-                {t("reconciliation.sections.payoutReadyButActiveDispute")} ({reconCounts.payoutReadyButActiveDispute})
-              </summary>
-              <div className="mt-2 space-y-1 text-xs text-zinc-300">
-                {reconData.payoutReadyButActiveDispute.length === 0 ? (
-                  <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
-                ) : (
-                  reconData.payoutReadyButActiveDispute.map((item) => (
-                    <p key={item.payoutId}>{item.payoutType} {item.contextId} | {item.disputeStatus}</p>
-                  ))
-                )}
-              </div>
-            </details>
+            {notificationsHealthError ? (
+              <p className="mt-3 text-xs text-rose-300">{notificationsHealthError}</p>
+            ) : null}
 
-            <details className="rounded-xl border border-white/10 p-3">
-              <summary className="cursor-pointer text-xs font-semibold text-white">
-                {t("reconciliation.sections.orderPaidButLedgerNotConfirmed")} ({reconCounts.orderPaidButLedgerNotConfirmed})
-              </summary>
-              <div className="mt-2 space-y-1 text-xs text-zinc-300">
-                {reconData.orderPaidButLedgerNotConfirmed.length === 0 ? (
-                  <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
-                ) : (
-                  reconData.orderPaidButLedgerNotConfirmed.map((item) => (
-                    <p key={item.orderId}>{item.orderId} | ledger={item.ledgerStatus ?? "MISSING"}</p>
-                  ))
-                )}
+            {notificationsHealth ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                  <p className="text-zinc-500">{uiText.pendingLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.counts.PENDING}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                  <p className="text-zinc-500">{uiText.failed24hLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.failedLast24h}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                  <p className="text-zinc-500">{uiText.sent24hLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{notificationsHealth.sentLast24h}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-zinc-900/60 p-3 text-xs text-zinc-300">
+                  <p className="text-zinc-500">{uiText.oldestPendingAgeLabel}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {typeof notificationsHealth.oldestPendingAgeSeconds === "number"
+                      ? `${Math.floor(notificationsHealth.oldestPendingAgeSeconds / 60)}m`
+                      : "-"}
+                  </p>
+                </div>
               </div>
-            </details>
+            ) : (
+              <p className="mt-3 text-xs text-zinc-400">{uiText.loadNotificationHealthHint}</p>
+            )}
           </div>
-        ) : null}
-      </div>
+
+          <div id="ops-reconciliation" className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">{t("reconciliation.title")} (dry-run)</h3>
+              <button
+                type="button"
+                onClick={() => void handleRunReconciliation()}
+                disabled={reconLoading}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {reconLoading ? t("reconciliation.running") : t("reconciliation.run")}
+              </button>
+            </div>
+
+            {reconError ? <p className="mt-3 text-xs text-rose-300">{reconError}</p> : null}
+
+            {reconData ? (
+              <div className="mt-4 grid gap-3">
+                <details className="rounded-xl border border-white/10 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-white">
+                    {t("reconciliation.sections.confirmedLedgerMissingPayout")} ({reconCounts.confirmedLedgerMissingPayout})
+                  </summary>
+                  <div className="mt-2 space-y-1 text-xs text-zinc-300">
+                    {reconData.confirmedLedgerMissingPayout.length === 0 ? (
+                      <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
+                    ) : (
+                      reconData.confirmedLedgerMissingPayout.map((item) => (
+                        <p key={item.ledgerId}>{item.contextType} {item.contextId} | {item.payoutStatus ?? "NO_PAYOUT"}</p>
+                      ))
+                    )}
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-white/10 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-white">
+                    {t("reconciliation.sections.payoutReadyButActiveDispute")} ({reconCounts.payoutReadyButActiveDispute})
+                  </summary>
+                  <div className="mt-2 space-y-1 text-xs text-zinc-300">
+                    {reconData.payoutReadyButActiveDispute.length === 0 ? (
+                      <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
+                    ) : (
+                      reconData.payoutReadyButActiveDispute.map((item) => (
+                        <p key={item.payoutId}>{item.payoutType} {item.contextId} | {item.disputeStatus}</p>
+                      ))
+                    )}
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-white/10 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-white">
+                    {t("reconciliation.sections.orderPaidButLedgerNotConfirmed")} ({reconCounts.orderPaidButLedgerNotConfirmed})
+                  </summary>
+                  <div className="mt-2 space-y-1 text-xs text-zinc-300">
+                    {reconData.orderPaidButLedgerNotConfirmed.length === 0 ? (
+                      <p className="text-zinc-500">{t("reconciliation.noFindings")}</p>
+                    ) : (
+                      reconData.orderPaidButLedgerNotConfirmed.map((item) => (
+                        <p key={item.orderId}>{item.orderId} | ledger={item.ledgerStatus ?? "MISSING"}</p>
+                      ))
+                    )}
+                  </div>
+                </details>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
     </section>
   );
 }
-

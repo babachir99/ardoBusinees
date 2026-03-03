@@ -49,14 +49,7 @@ export default async function AdminPage() {
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
 
   const [
-    usersCount,
-    sellersCount,
-    storesCount,
-    categoriesCount,
     pendingKycCount,
-    pendingOrdersCount,
-    inactiveProductsCount,
-    failedPaymentsCount,
     ordersTodayCount,
     revenueTotal,
     revenueMonth,
@@ -66,14 +59,7 @@ export default async function AdminPage() {
     topItems,
     topSellerStats,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.sellerProfile.count(),
-    prisma.store.count(),
-    prisma.category.count(),
     prisma.kycSubmission.count({ where: { status: "PENDING" } }),
-    prisma.order.count({ where: { status: "PENDING" } }),
-    prisma.product.count({ where: { isActive: false } }),
-    prisma.order.count({ where: { paymentStatus: "FAILED" } }),
     prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
@@ -595,8 +581,7 @@ export default async function AdminPage() {
       }
       return a.createdAtMs - b.createdAtMs;
     })
-    .slice(0, 20)
-    .map(({ createdAtMs, ...item }) => item);
+    .slice(0, 20);
 
   const opsKpis = {
     payoutsReady:
@@ -619,70 +604,80 @@ export default async function AdminPage() {
       typeof trustDisputesActiveCount === "number" ? trustDisputesActiveCount : null,
   };
 
+  const isFr = locale.toLowerCase().startsWith("fr");
+
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
+      <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 fade-up">
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/logo.png"
             alt="JONTAADO logo"
             width={140}
             height={140}
-            className="h-[115px] w-auto md:h-[135px]"
+            className="h-[105px] w-auto md:h-[120px]"
             priority
           />
         </Link>
-        <Link
-          href="/seller"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {t("nav.seller")}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/seller"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {t("nav.seller")}
+          </Link>
+          <Link
+            href="/admin/orders"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {t("orders.cta")}
+          </Link>
+        </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-sky-300/15 via-zinc-900 to-zinc-900 p-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-200">
-            {t("hero.kicker")}
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold md:text-4xl">
-            {t("hero.title")}
-          </h1>
-          <p className="mt-3 text-sm text-zinc-300">{t("hero.subtitle")}</p>
-        </section>
-
-                <section className="grid gap-4 md:grid-cols-4">
-          {[
-            {
-              label: t("kpis.revenueTotal"),
-              value: formatMoney(revenueTotal._sum.totalCents ?? 0, "XOF", locale),
-            },
-            {
-              label: t("kpis.revenueMonth"),
-              value: formatMoney(revenueMonth._sum.totalCents ?? 0, "XOF", locale),
-            },
-            {
-              label: t("kpis.avgOrder"),
-              value: formatMoney(Math.round(avgOrder._avg.totalCents ?? 0), "XOF", locale),
-            },
-            {
-              label: t("kpis.ordersToday"),
-              value: ordersTodayCount,
-            },
-          ].map((card) => (
-            <div
-              key={card.label}
-              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5"
-            >
-              <p className="text-xs text-zinc-400">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-white">
-                {card.value}
-              </p>
-            </div>
-          ))}
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 pb-24">
+        <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-sky-300/12 via-zinc-900/80 to-zinc-900/80 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-200">{t("hero.kicker")}</p>
+          <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">Ops Hub</h1>
+          <p className="mt-2 text-sm text-zinc-300">{isFr ? "Supervision globale des flux operations, risques et monetisation." : "Global supervision for operations, risk and monetization flows."}</p>
         </section>
 
         <AdminOpsHub kpis={opsKpis} queueItems={opsQueueItems} />
+
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-white">{isFr ? "Business Snapshot" : "Business Snapshot"}</h2>
+            <p className="mt-1 text-xs text-zinc-400">{isFr ? "Performance commerciale consolid?e." : "Consolidated business performance."}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: t("kpis.revenueTotal"),
+                value: formatMoney(revenueTotal._sum.totalCents ?? 0, "XOF", locale),
+              },
+              {
+                label: t("kpis.revenueMonth"),
+                value: formatMoney(revenueMonth._sum.totalCents ?? 0, "XOF", locale),
+              },
+              {
+                label: t("kpis.avgOrder"),
+                value: formatMoney(Math.round(avgOrder._avg.totalCents ?? 0), "XOF", locale),
+              },
+              {
+                label: t("kpis.ordersToday"),
+                value: ordersTodayCount,
+              },
+            ].map((card) => (
+              <article
+                key={card.label}
+                className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/35"
+              >
+                <p className="text-xs text-zinc-400">{card.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{card.value}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <AdminTrendsPanel
           dates={trendDates}
@@ -692,11 +687,11 @@ export default async function AdminPage() {
         />
 
         <section className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+          <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">{t("topProducts.title")}</h2>
-                <p className="mt-2 text-sm text-zinc-300">{t("topProducts.subtitle")}</p>
+                <h2 className="text-lg font-semibold text-white">{t("topProducts.title")}</h2>
+                <p className="mt-1 text-xs text-zinc-400">{t("topProducts.subtitle")}</p>
               </div>
               <Link
                 href="/admin/products"
@@ -709,7 +704,7 @@ export default async function AdminPage() {
               <p className="mt-4 text-sm text-zinc-400">{t("topProducts.empty")}</p>
             )}
             {topItems.length > 0 && (
-              <div className="mt-5 grid gap-3">
+              <div className="mt-4 grid gap-3">
                 {topItems.map((item) => {
                   const product = topProductMap.get(item.productId);
                   const units = item._sum.quantity ?? 0;
@@ -717,7 +712,7 @@ export default async function AdminPage() {
                   return (
                     <div
                       key={item.productId}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
+                      className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -745,11 +740,11 @@ export default async function AdminPage() {
             )}
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+          <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">{t("topSellers.title")}</h2>
-                <p className="mt-2 text-sm text-zinc-300">{t("topSellers.subtitle")}</p>
+                <h2 className="text-lg font-semibold text-white">{t("topSellers.title")}</h2>
+                <p className="mt-1 text-xs text-zinc-400">{t("topSellers.subtitle")}</p>
               </div>
               <Link
                 href="/admin/users"
@@ -762,33 +757,23 @@ export default async function AdminPage() {
               <p className="mt-4 text-sm text-zinc-400">{t("topSellers.empty")}</p>
             )}
             {topSellers.length > 0 && (
-              <div className="mt-5 grid gap-3">
+              <div className="mt-4 grid gap-3">
                 {topSellers.map((seller) => {
-                  const width = Math.max(
-                    8,
-                    Math.round((seller.revenueCents / topSellerMax) * 100)
-                  );
+                  const width = Math.max(8, Math.round((seller.revenueCents / topSellerMax) * 100));
                   return (
                     <div
                       key={seller.id || seller.name}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-xs text-zinc-300"
+                      className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-white">{seller.name}</p>
-                          <p className="mt-1 text-[11px] text-zinc-500">
-                            {t("topSellers.orders", { count: seller.orders })}
-                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">{t("topSellers.orders", { count: seller.orders })}</p>
                         </div>
-                        <div className="text-sky-200">
-                          {formatMoney(seller.revenueCents, "XOF", locale)}
-                        </div>
+                        <div className="text-sky-200">{formatMoney(seller.revenueCents, "XOF", locale)}</div>
                       </div>
                       <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
-                        <div
-                          className="h-2 rounded-full bg-sky-400"
-                          style={{ width: `${width}%` }}
-                        />
+                        <div className="h-2 rounded-full bg-sky-400" style={{ width: `${width}%` }} />
                       </div>
                     </div>
                   );
@@ -798,117 +783,12 @@ export default async function AdminPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-          <h2 className="text-xl font-semibold">{t("alerts.title")}</h2>
-          <p className="mt-2 text-sm text-zinc-300">{t("alerts.subtitle")}</p>
-          <div className="mt-4 grid gap-3 text-xs text-zinc-200">
-            {pendingKycCount === 0 &&
-            pendingOrdersCount === 0 &&
-            failedPaymentsCount === 0 &&
-            inactiveProductsCount === 0 ? (
-              <p className="text-xs text-zinc-400">{t("alerts.empty")}</p>
-            ) : (
-              <>
-                <Link
-                  href="/admin/kyc"
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
-                >
-                  <span>{t("alerts.kyc")}</span>
-                  <span className="text-amber-200">{pendingKycCount}</span>
-                </Link>
-                <Link
-                  href="/admin/orders"
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
-                >
-                  <span>{t("alerts.orders")}</span>
-                  <span className="text-amber-200">{pendingOrdersCount}</span>
-                </Link>
-                <Link
-                  href="/admin/orders"
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
-                >
-                  <span>{t("alerts.payments")}</span>
-                  <span className="text-rose-200">{failedPaymentsCount}</span>
-                </Link>
-                <Link
-                  href="/admin/products"
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950/40 px-4 py-3"
-                >
-                  <span>{t("alerts.products")}</span>
-                  <span className="text-amber-200">{inactiveProductsCount}</span>
-                </Link>
-              </>
-            )}
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-white">{isFr ? "Raccourcis admin" : "Admin shortcuts"}</h2>
+            <p className="mt-1 text-xs text-zinc-400">{isFr ? "Acces direct aux outils critiques du back-office." : "Direct access to critical back-office tools."}</p>
           </div>
-        </section>
-
-        <section className="grid gap-6 md:grid-cols-3">
-          {[0, 1, 2].map((index) => (
-            <div
-              key={index}
-              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6"
-            >
-              <p className="text-xs font-semibold text-sky-200">
-                {t(`stats.${index}.label`)}
-              </p>
-              <p className="mt-3 text-2xl font-semibold">
-                {t(`stats.${index}.value`)}
-              </p>
-              <p className="mt-2 text-xs text-zinc-400">
-                {t(`stats.${index}.note`)}
-              </p>
-            </div>
-          ))}
-        </section>
-
-        <section className="grid gap-6 md:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <h2 className="text-xl font-semibold">{t("cards.vendors")}</h2>
-            <p className="mt-2 text-sm text-zinc-300">
-              {t("cards.vendorsDesc")}
-            </p>
-            <div className="mt-6 grid gap-3 text-xs text-zinc-400">
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-                {t("cards.vendorsLine1")}
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-                {t("cards.vendorsLine2")}
-              </div>
-            </div>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <h2 className="text-xl font-semibold">{t("cards.catalog")}</h2>
-            <p className="mt-2 text-sm text-zinc-300">
-              {t("cards.catalogDesc")}
-            </p>
-            <div className="mt-6 grid gap-3 text-xs text-zinc-400">
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-                {t("cards.catalogLine1")}
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
-                {t("cards.catalogLine2")}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 via-zinc-900 to-sky-300/10 p-8">
-          <h2 className="text-xl font-semibold">{t("compliance.title")}</h2>
-          <p className="mt-2 text-sm text-zinc-300">
-            {t("compliance.desc")}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <span className="rounded-full bg-sky-400/20 px-3 py-1 text-xs text-sky-200">
-              {t("compliance.badge1")}
-            </span>
-            <span className="rounded-full bg-sky-400/20 px-3 py-1 text-xs text-sky-200">
-              {t("compliance.badge2")}
-            </span>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               {
                 title: t("orders.title"),
@@ -947,21 +827,21 @@ export default async function AdminPage() {
                 href: "/admin/stores",
               },
               {
-                title: t("sellers.title"),
-                subtitle: t("sellers.subtitle"),
-                cta: t("sellers.cta"),
-                href: "/admin/sellers",
+                title: isFr ? "Trust Center" : "Trust Center",
+                subtitle: isFr ? "Signalements, litiges et moderation" : "Reports, disputes and moderation",
+                cta: isFr ? "Ouvrir" : "Open",
+                href: "/admin/trust",
               },
               {
-                title: "IMMO monetization",
-                subtitle: "Purchases and ledger status",
-                cta: "Open",
+                title: "Monetization",
+                subtitle: isFr ? "IMMO / AUTO / CARS" : "IMMO / AUTO / CARS",
+                cta: isFr ? "Ouvrir" : "Open",
                 href: "/admin/immo/monetization",
               },
             ].map((card) => (
-              <div
+              <article
                 key={card.title}
-                className="rounded-2xl border border-white/10 bg-zinc-950/50 p-5"
+                className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/35"
               >
                 <h3 className="text-sm font-semibold text-white">{card.title}</h3>
                 <p className="mt-2 text-xs text-zinc-400">{card.subtitle}</p>
@@ -971,7 +851,7 @@ export default async function AdminPage() {
                 >
                   {card.cta}
                 </Link>
-              </div>
+              </article>
             ))}
           </div>
         </section>
