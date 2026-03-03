@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getInboxUnreadCount } from "@/lib/inboxCount";
 import CartHeaderButton from "@/components/cart/CartHeaderButton";
 import SignOutIconButton from "@/components/auth/SignOutIconButton";
@@ -24,6 +25,33 @@ export default async function UserHeaderActions({
   const inboxCount = session?.user?.id
     ? await getInboxUnreadCount(session.user.id)
     : 0;
+
+  let adminTodoCount = 0;
+  if (showAdminLink && session?.user?.role === "ADMIN") {
+    const last7Days = new Date();
+    last7Days.setDate(last7Days.getDate() - 7);
+
+    const [pendingKyc, openDisputes, failedPayments7d, trustReportsPending, trustDisputesActive] =
+      await Promise.all([
+        prisma.kycSubmission.count({ where: { status: "PENDING" } }).catch(() => 0),
+        prisma.dispute.count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } }).catch(() => 0),
+        prisma.paymentLedger
+          .count({ where: { status: "FAILED", createdAt: { gte: last7Days } } })
+          .catch(() => 0),
+        prisma.report.count({ where: { status: "PENDING" } }).catch(() => 0),
+        prisma.trustDispute
+          .count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } })
+          .catch(() => 0),
+      ]);
+
+    adminTodoCount =
+      pendingKyc +
+      openDisputes +
+      failedPayments7d +
+      trustReportsPending +
+      trustDisputesActive;
+  }
+
   const profileInitial = (
     session?.user?.name?.trim() ||
     session?.user?.email?.trim() ||
@@ -44,9 +72,17 @@ export default async function UserHeaderActions({
       {showAdminLink && session?.user?.role === "ADMIN" && (
         <Link
           href="/admin"
-          className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
+          className="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
+          title={
+            locale === "fr"
+              ? `${adminTodoCount} dossier${adminTodoCount > 1 ? "s" : ""} a traiter`
+              : `${adminTodoCount} items to review`
+          }
         >
-          Admin
+          <span>Admin</span>
+          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-bold leading-none text-zinc-950">
+            {adminTodoCount > 99 ? "99+" : adminTodoCount}
+          </span>
         </Link>
       )}
 

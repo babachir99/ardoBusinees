@@ -9,6 +9,8 @@ type OpsKpis = {
   payoutsReady: number | null;
   disputesActive: number | null;
   paymentsFailed7d: number | null;
+  pendingOrders: number | null;
+  inactiveProducts: number | null;
   kycPending: number | null;
   immoMonetizationIssues: number | null;
   autoMonetizationIssues: number | null;
@@ -172,6 +174,8 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
     immoMonetizationTab: isFr ? "Monetisation IMMO" : "IMMO monetization",
     autoMonetizationTab: isFr ? "Monetisation AUTO" : "AUTO monetization",
     carsMonetizationTab: isFr ? "Monetisation CARS" : "CARS monetization",
+    pendingOrders: isFr ? "Commandes en attente" : "Pending orders",
+    inactiveProducts: isFr ? "Produits inactifs" : "Inactive products",
     trustTab: isFr ? "Trust" : "Trust",
     trustModeration: isFr ? "Moderation trust" : "Trust moderation",
     trustReportsAlert: isFr ? "Signalements trust en attente" : "Trust reports pending",
@@ -196,6 +200,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeFilter = normalizeFilter(searchParams.get("opsFilter"));
+  const focusItemId = searchParams.get("focus") ?? "";
 
   const [pendingRelease, setPendingRelease] = useState<Record<string, boolean>>({});
   const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
@@ -276,6 +281,22 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
         href: { pathname: "/admin", query: { opsFilter: "PAYMENT_FAILED" } },
         filter: "PAYMENT_FAILED" as QueueFilter,
         warn: warnFlags.paymentsFailed7d,
+      },
+      {
+        key: "pendingOrders",
+        label: uiText.pendingOrders,
+        value: kpis.pendingOrders,
+        href: "/admin/orders",
+        filter: null,
+        warn: typeof kpis.pendingOrders === "number" && kpis.pendingOrders > 0,
+      },
+      {
+        key: "inactiveProducts",
+        label: uiText.inactiveProducts,
+        value: kpis.inactiveProducts,
+        href: "/admin/products",
+        filter: null,
+        warn: typeof kpis.inactiveProducts === "number" && kpis.inactiveProducts > 0,
       },
       {
         key: "kyc",
@@ -654,6 +675,13 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
     );
   }, [filteredQueue]);
 
+  useEffect(() => {
+    if (!focusItemId) return;
+    const row = document.getElementById(`ops-row-${focusItemId}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusItemId, activeFilter, queueSortedByAge.length]);
+
   const lastUpdatedLabel = useMemo(() => {
     const minutes = Math.max(0, Math.floor((clockTick - lastUpdatedAt) / 60000));
     if (minutes === 0) return isFr ? "A l'instant" : "Just now";
@@ -709,7 +737,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
 
   return (
     <section className="space-y-6">
-      <header className="sticky top-16 z-20 rounded-2xl border border-white/10 bg-zinc-900/85 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
+      <header className="sticky top-0 z-30 rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold text-white">Ops Hub</h2>
@@ -801,10 +829,13 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
                   const priority = getQueuePriority(item);
                   const isUrgent = priority === "URGENT";
 
+                  const isFocused = focusItemId === item.id;
+
                   return (
                     <div
+                      id={`ops-row-${item.id}`}
                       key={`${item.type}-${item.id}`}
-                      className={`${queueGridCols} px-6 py-4 border-b border-white/10 transition ${isUrgent ? "border-l-4 border-l-red-500 bg-red-500/5 hover:bg-red-500/10" : "hover:bg-white/[0.02]"} last:border-b-0`}
+                      className={`${queueGridCols} px-6 py-4 border-b border-white/10 transition ${isUrgent ? "border-l-4 border-l-red-500 bg-red-500/5 hover:bg-red-500/10" : "hover:bg-white/[0.02]"} ${isFocused ? "bg-cyan-300/10 ring-1 ring-cyan-300/40" : ""} last:border-b-0`}
                     >
                       <span className="text-sm font-medium text-sky-200">{typeLabels[item.type]}</span>
                       <span className="min-w-0 truncate text-sm text-zinc-200" title={item.refLabel}>{item.refLabel}</span>

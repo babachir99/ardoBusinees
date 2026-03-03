@@ -51,6 +51,8 @@ export default async function AdminPage() {
   const [
     pendingKycCount,
     ordersTodayCount,
+    pendingOrdersCount,
+    inactiveProductsCount,
     revenueTotal,
     revenueMonth,
     avgOrder,
@@ -61,6 +63,8 @@ export default async function AdminPage() {
   ] = await Promise.all([
     prisma.kycSubmission.count({ where: { status: "PENDING" } }),
     prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.order.count({ where: { status: "PENDING" } }),
+    prisma.product.count({ where: { isActive: false } }),
     prisma.order.aggregate({
       _sum: { totalCents: true },
       where: { paymentStatus: "PAID" },
@@ -591,6 +595,8 @@ export default async function AdminPage() {
     disputesActive: typeof disputesActiveCount === "number" ? disputesActiveCount : null,
     paymentsFailed7d:
       typeof paymentLedgerFailed7dCount === "number" ? paymentLedgerFailed7dCount : null,
+    pendingOrders: typeof pendingOrdersCount === "number" ? pendingOrdersCount : null,
+    inactiveProducts: typeof inactiveProductsCount === "number" ? inactiveProductsCount : null,
     kycPending: typeof pendingKycCount === "number" ? pendingKycCount : null,
     immoMonetizationIssues:
       typeof immoMonetizationIssueCount === "number" ? immoMonetizationIssueCount : null,
