@@ -21,6 +21,23 @@ function hasTiakDelegates() {
   return Boolean(runtimePrisma.tiakDelivery && runtimePrisma.tiakDeliveryEvent);
 }
 
+async function releaseExpiredAssignments() {
+  const now = new Date();
+
+  await prisma.tiakDelivery.updateMany({
+    where: {
+      status: "ASSIGNED",
+      assignExpiresAt: { lte: now },
+    },
+    data: {
+      status: "REQUESTED",
+      courierId: null,
+      assignedAt: null,
+      assignExpiresAt: null,
+    },
+  });
+}
+
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -152,32 +169,46 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  await releaseExpiredAssignments();
+
   const session = await getServerSession(authOptions);
   const { searchParams } = new URL(request.url);
+  const mine = searchParams.get("mine") === "1";
   const takeRaw = Number(searchParams.get("take") ?? "20");
   const take = Number.isFinite(takeRaw) ? Math.min(Math.max(Math.trunc(takeRaw), 1), 100) : 20;
 
-  const where = session?.user?.id
-    ? session.user.role === "ADMIN"
-      ? { status: "REQUESTED" as const }
-      : {
-          OR: [
-            {
-              status: "REQUESTED" as const,
-              courierId: null,
-            },
-            {
-              courierId: session.user.id,
-              status: {
-                in: [...courierVisibleStatuses],
+  if (mine && !session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const where = mine
+    ? {
+        OR: [
+          { customerId: session!.user.id },
+          { courierId: session!.user.id },
+        ],
+      }
+    : session?.user?.id
+      ? session.user.role === "ADMIN"
+        ? { status: "REQUESTED" as const }
+        : {
+            OR: [
+              {
+                status: "REQUESTED" as const,
+                courierId: null,
               },
-            },
-          ],
-        }
-    : {
-        status: "REQUESTED" as const,
-        courierId: null,
-      };
+              {
+                courierId: session.user.id,
+                status: {
+                  in: [...courierVisibleStatuses],
+                },
+              },
+            ],
+          }
+      : {
+          status: "REQUESTED" as const,
+          courierId: null,
+        };
 
   const deliveries = await prisma.tiakDelivery.findMany({
     where,
@@ -235,6 +266,8 @@ export async function POST(request: NextRequest) {
       { status: 503 }
     );
   }
+
+  await releaseExpiredAssignments();
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

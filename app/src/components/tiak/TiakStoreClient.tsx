@@ -77,6 +77,8 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [selectedDelivery, setSelectedDelivery] = useState<TiakDelivery | null>(null);
   const [courierSpaceOpen, setCourierSpaceOpen] = useState(false);
   const [earningsOpen, setEarningsOpen] = useState(false);
+  const [openNewMission, setOpenNewMission] = useState(false);
+  const [myDeliveriesView, setMyDeliveriesView] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
 
   const [myProfile, setMyProfile] = useState<TiakCourierProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -96,7 +98,10 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
   const storageKey = getStoreKey(currentUserId);
 
+  const isAdmin = currentUserRole === "ADMIN";
   const isCourierOrAdmin = currentUserRole === "COURIER" || currentUserRole === "ADMIN";
+  const isConfirmedCourier = isAdmin || Boolean(myProfile?.isConfirmedCourier);
+  const canViewEarnings = isLoggedIn && isConfirmedCourier;
 
   const requestLogin = useCallback(() => {
     const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
@@ -154,38 +159,27 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
       return;
     }
 
-    const ids = readStoredIds(storageKey);
-    if (ids.length === 0) {
+    try {
+      const response = await fetch("/api/tiak-tiak/deliveries?mine=1&take=80", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setTrackedDeliveries([]);
+        return;
+      }
+
+      const data = await response.json().catch(() => []);
+      const list = Array.isArray(data) ? (data as TiakDelivery[]) : [];
+      list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      setTrackedDeliveries(list);
+
+      const trackedIds = list.map((entry) => entry.id);
+      writeStoredIds(storageKey, trackedIds);
+    } catch {
       setTrackedDeliveries([]);
-      return;
     }
-
-    const loaded: TiakDelivery[] = [];
-    const validIds: string[] = [];
-
-    await Promise.all(
-      ids.map(async (id) => {
-        try {
-          const response = await fetch(`/api/tiak-tiak/deliveries/${id}?includeAddress=1`, {
-            method: "GET",
-            cache: "no-store",
-          });
-          if (!response.ok) return;
-
-          const data = await response.json().catch(() => null);
-          if (!data || typeof data !== "object") return;
-
-          validIds.push(id);
-          loaded.push(data as TiakDelivery);
-        } catch {
-          return;
-        }
-      })
-    );
-
-    writeStoredIds(storageKey, validIds);
-    loaded.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    setTrackedDeliveries(loaded);
   }, [currentUserId, isLoggedIn, storageKey]);
 
   const refreshCouriers = useCallback(async () => {
@@ -260,7 +254,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   }, [isCourierOrAdmin, isLoggedIn]);
 
   const refreshPayouts = useCallback(async () => {
-    if (!isCourierOrAdmin || !isLoggedIn) {
+    if (!canViewEarnings) {
       setPayouts([]);
       setPayoutsMeta(null);
       return;
@@ -305,7 +299,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     } finally {
       setPayoutsLoading(false);
     }
-  }, [isCourierOrAdmin, isLoggedIn, locale]);
+  }, [canViewEarnings, locale]);
 
   useEffect(() => {
     refreshOpenDeliveries();
@@ -341,6 +335,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const handleCreated = useCallback((created: TiakDelivery) => {
     trackDeliveryId(created.id);
     handleDeliveryUpdated(created);
+    setOpenNewMission(false);
   }, [handleDeliveryUpdated, trackDeliveryId]);
 
   async function handleSaveProfile(event: FormEvent<HTMLFormElement>) {
@@ -414,6 +409,23 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
       (entry) => entry.customerId === currentUserId || entry.courierId === currentUserId
     );
   }, [currentUserId, currentUserRole, trackedDeliveries]);
+
+  const archivedStatuses = useMemo(
+    () => new Set<TiakDelivery["status"]>(["COMPLETED", "CANCELED", "REJECTED"]),
+    []
+  );
+
+  const activeTrackedDeliveries = useMemo(
+    () => displayedTracked.filter((entry) => !archivedStatuses.has(entry.status)),
+    [archivedStatuses, displayedTracked]
+  );
+
+  const archivedTrackedDeliveries = useMemo(
+    () => displayedTracked.filter((entry) => archivedStatuses.has(entry.status)),
+    [archivedStatuses, displayedTracked]
+  );
+
+  const trackedDeliveriesToShow = myDeliveriesView === "ARCHIVED" ? archivedTrackedDeliveries : activeTrackedDeliveries;
 
   const filteredCouriers = useMemo(() => {
     const query = courierSearch.trim().toLowerCase();
@@ -500,6 +512,24 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     }
   }, [openDeliveries, selectedDelivery?.id, selectedDelivery?.updatedAt, trackedDeliveries]);
 
+  useEffect(() => {
+    if (!openNewMission) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenNewMission(false);
+      }
+    };
+
+    document.body.classList.add("overflow-hidden");
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openNewMission]);
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
@@ -543,18 +573,38 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
           <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
             {locale === "fr" ? "Livraisons en cours" : "In progress"}: {inProgressCount}
           </span>
-          <span className="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
-            {locale === "fr" ? "Gains (mois)" : "Earnings (month)"}: {formatAmount(monthlyGainCents, "XOF")}
-          </span>
+          {canViewEarnings ? (
+            <span className="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+              {locale === "fr" ? "Gains (mois)" : "Earnings (month)"}: {formatAmount(monthlyGainCents, "XOF")}
+            </span>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="sticky top-20 z-30 rounded-2xl border border-emerald-300/30 bg-zinc-950/35 p-3 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">
+              {locale === "fr" ? "Dispatch rapide" : "Quick dispatch"}
+            </p>
+            <p className="text-xs text-zinc-400">
+              {locale === "fr"
+                ? "Cree une mission sans alourdir la page principale."
+                : "Create a mission without crowding the main page."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenNewMission(true)}
+            className="rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-zinc-950 shadow-[0_10px_24px_rgba(16,185,129,0.25)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+          >
+            {locale === "fr" ? "+ Nouvelle mission" : "+ New mission"}
+          </button>
         </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-7">
-          <div id="tiak-create-delivery-form">
-            <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
-          </div>
-
           <section className="space-y-3">
             {loading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
             {error && <p className="text-sm text-rose-300">{error}</p>}
@@ -576,6 +626,23 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
           {isLoggedIn && (
             <section id="tiak-my-deliveries" className="space-y-3">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-zinc-950/70 p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setMyDeliveriesView("ACTIVE")}
+                  className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ACTIVE" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                >
+                  {locale === "fr" ? "En cours" : "Active"} ({activeTrackedDeliveries.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMyDeliveriesView("ARCHIVED")}
+                  className={`rounded-full px-3 py-1 font-medium transition ${myDeliveriesView === "ARCHIVED" ? "bg-white text-zinc-900" : "text-zinc-300 hover:text-white"}`}
+                >
+                  {locale === "fr" ? "Archivees" : "Archived"} ({archivedTrackedDeliveries.length})
+                </button>
+              </div>
+
               <TiakDeliveryQueue
                 locale={locale}
                 title={
@@ -588,15 +655,23 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                       : "My requests"
                 }
                 subtitle={
-                  locale === "fr"
-                    ? "Historique compact avec ouverture des actions dans le panneau details."
-                    : "Compact history with actions opened in the details panel."
+                  myDeliveriesView === "ARCHIVED"
+                    ? locale === "fr"
+                      ? "Archive des missions traitees, retrouvable a tout moment."
+                      : "Archive of completed missions, always retrievable."
+                    : locale === "fr"
+                      ? "Historique compact avec ouverture des actions dans le panneau details."
+                      : "Compact history with actions opened in the details panel."
                 }
-                deliveries={displayedTracked}
+                deliveries={trackedDeliveriesToShow}
                 emptyLabel={
-                  locale === "fr"
-                    ? "Aucune livraison suivie pour le moment."
-                    : "No tracked deliveries yet."
+                  myDeliveriesView === "ARCHIVED"
+                    ? locale === "fr"
+                      ? "Aucune mission archivee."
+                      : "No archived missions."
+                    : locale === "fr"
+                      ? "Aucune livraison suivie pour le moment."
+                      : "No tracked deliveries yet."
                 }
                 actionLabel={locale === "fr" ? "Voir" : "View"}
                 onOpenDelivery={openDeliveryPanel}
@@ -928,89 +1003,140 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
           ) : null}
 
           {isCourierOrAdmin && isLoggedIn ? (
-            <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
-              <button
-                type="button"
-                onClick={() => setEarningsOpen((open) => !open)}
-                aria-expanded={earningsOpen}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950/45 px-3 py-2 text-left transition hover:border-white/20"
-              >
-                <div>
-                  <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h3>
-                  <p className="mt-1 text-xs text-zinc-400">
-                    {locale === "fr" ? "Resume net + paiements" : "Net summary + payouts"}
-                  </p>
-                </div>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className={`h-4 w-4 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none ${earningsOpen ? "rotate-180" : "rotate-0"}`}
-                  aria-hidden="true"
+            canViewEarnings ? (
+              <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+                <button
+                  type="button"
+                  onClick={() => setEarningsOpen((open) => !open)}
+                  aria-expanded={earningsOpen}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950/45 px-3 py-2 text-left transition hover:border-white/20"
                 >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </button>
-
-              {earningsOpen ? (
-                <div className="mt-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    {payoutsMeta ? (
-                      <p className="text-xs text-zinc-300">
-                        {locale === "fr" ? "Total net" : "Total net"}: {formatAmount(payoutsMeta.sumCourierPayoutCents, "XOF")}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => void refreshPayouts()}
-                      className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
-                    >
-                      {locale === "fr" ? "Rafraichir" : "Refresh"}
-                    </button>
+                  <div>
+                    <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h3>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {locale === "fr" ? "Resume net + paiements" : "Net summary + payouts"}
+                    </p>
                   </div>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={`h-4 w-4 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none ${earningsOpen ? "rotate-180" : "rotate-0"}`}
+                    aria-hidden="true"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
 
-                  {payoutsLoading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
-                  {payoutsError && <p className="text-sm text-rose-300">{payoutsError}</p>}
-
-                  {!payoutsLoading && !payoutsError ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left text-xs text-zinc-200">
-                        <thead className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">
-                          <tr>
-                            <th className="py-2 pr-4">{locale === "fr" ? "Date" : "Date"}</th>
-                            <th className="py-2 pr-4">{locale === "fr" ? "Total" : "Total"}</th>
-                            <th className="py-2 pr-4">Fee</th>
-                            <th className="py-2 pr-4">{locale === "fr" ? "Net" : "Net"}</th>
-                            <th className="py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {payouts.map((payout) => (
-                            <tr key={payout.id} className="border-t border-white/10">
-                              <td className="py-2 pr-4">{formatDateLabel(payout.createdAt, locale)}</td>
-                              <td className="py-2 pr-4">{formatAmount(payout.amountTotalCents, payout.currency)}</td>
-                              <td className="py-2 pr-4">{formatAmount(payout.platformFeeCents, payout.currency)}</td>
-                              <td className="py-2 pr-4 text-emerald-300">{formatAmount(payout.courierPayoutCents, payout.currency)}</td>
-                              <td className="py-2">{payout.status}</td>
-                            </tr>
-                          ))}
-                          {payouts.length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="py-4 text-zinc-400">
-                                {locale === "fr" ? "Aucun payout." : "No payouts."}
-                              </td>
-                            </tr>
-                          ) : null}
-                        </tbody>
-                      </table>
+                {earningsOpen ? (
+                  <div className="mt-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      {payoutsMeta ? (
+                        <p className="text-xs text-zinc-300">
+                          {locale === "fr" ? "Total net" : "Total net"}: {formatAmount(payoutsMeta.sumCourierPayoutCents, "XOF")}
+                        </p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void refreshPayouts()}
+                        className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                      >
+                        {locale === "fr" ? "Rafraichir" : "Refresh"}
+                      </button>
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
+
+                    {payoutsLoading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+                    {payoutsError && <p className="text-sm text-rose-300">{payoutsError}</p>}
+
+                    {!payoutsLoading && !payoutsError ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left text-xs text-zinc-200">
+                          <thead className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                            <tr>
+                              <th className="py-2 pr-4">{locale === "fr" ? "Date" : "Date"}</th>
+                              <th className="py-2 pr-4">{locale === "fr" ? "Total" : "Total"}</th>
+                              <th className="py-2 pr-4">Fee</th>
+                              <th className="py-2 pr-4">{locale === "fr" ? "Net" : "Net"}</th>
+                              <th className="py-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {payouts.map((payout) => (
+                              <tr key={payout.id} className="border-t border-white/10">
+                                <td className="py-2 pr-4">{formatDateLabel(payout.createdAt, locale)}</td>
+                                <td className="py-2 pr-4">{formatAmount(payout.amountTotalCents, payout.currency)}</td>
+                                <td className="py-2 pr-4">{formatAmount(payout.platformFeeCents, payout.currency)}</td>
+                                <td className="py-2 pr-4 text-emerald-300">{formatAmount(payout.courierPayoutCents, payout.currency)}</td>
+                                <td className="py-2">{payout.status}</td>
+                              </tr>
+                            ))}
+                            {payouts.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="py-4 text-zinc-400">
+                                  {locale === "fr" ? "Aucun payout." : "No payouts."}
+                                </td>
+                              </tr>
+                            ) : null}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-amber-300/35 bg-amber-300/10 p-4 text-xs text-amber-100 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+                {locale === "fr"
+                  ? "Tes gains seront visibles apres validation de ton KYC coursier."
+                  : "Your earnings will be visible once your courier KYC is approved."}
+              </section>
+            )
           ) : null}
         </aside>
+      </div>
+
+      <div
+        className={`fixed inset-0 z-50 ${openNewMission ? "pointer-events-auto" : "pointer-events-none"}`}
+        aria-hidden={!openNewMission}
+      >
+        <div
+          className={`absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity duration-200 ease-out motion-reduce:transition-none ${openNewMission ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setOpenNewMission(false)}
+        />
+
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={locale === "fr" ? "Creer une demande" : "Create a request"}
+          className={`absolute inset-x-0 bottom-0 max-h-[90vh] rounded-t-3xl border border-white/10 bg-zinc-950/95 shadow-[0_-20px_50px_rgba(0,0,0,0.45)] transition-all duration-300 ease-out motion-reduce:transition-none lg:inset-y-0 lg:right-0 lg:left-auto lg:h-full lg:w-[520px] lg:max-w-[92vw] lg:max-h-none lg:rounded-none lg:border-l lg:border-t-0 ${openNewMission ? "translate-y-0 opacity-100 lg:translate-x-0" : "translate-y-full opacity-0 lg:translate-x-full"}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">
+                {locale === "fr" ? "Creer une demande" : "Create request"}
+              </h3>
+              <p className="mt-1 text-xs text-zinc-400">
+                {locale === "fr" ? "Mission locale, assignation rapide" : "Local mission, fast assignment"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenNewMission(false)}
+              className="rounded-full border border-white/15 p-2 text-zinc-300 transition hover:border-white/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+              aria-label={locale === "fr" ? "Fermer" : "Close"}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="h-[calc(90vh-84px)] overflow-y-auto p-4 lg:h-[calc(100%-84px)]">
+            <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+          </div>
+        </div>
       </div>
 
       <UserProfileDrawer
@@ -1062,9 +1188,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                 label: locale === "fr" ? "Faire une demande" : "Create request",
                 onClick: () => {
                   setSelectedCourierProfile(null);
-                  document
-                    .getElementById("tiak-create-delivery-form")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  setOpenNewMission(true);
                 },
               }
             : undefined

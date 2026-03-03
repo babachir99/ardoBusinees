@@ -62,6 +62,20 @@ async function resolveProfile(userId: string) {
   });
 }
 
+async function resolveIsConfirmedCourier(userId: string) {
+  const approvedKyc = await prisma.kycSubmission.findFirst({
+    where: {
+      userId,
+      targetRole: { in: [KycRole.COURIER, KycRole.TIAK_COURIER] },
+      status: KycStatus.APPROVED,
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return Boolean(approvedKyc);
+}
+
 export async function GET(_request: NextRequest) {
   if (!hasTiakCourierProfileDelegate()) {
     return NextResponse.json(
@@ -79,8 +93,19 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const profile = await resolveProfile(session.user.id);
-  return NextResponse.json(profile);
+  const [profile, isConfirmedCourier] = await Promise.all([
+    resolveProfile(session.user.id),
+    hasUserRole(session.user, "ADMIN") ? Promise.resolve(true) : resolveIsConfirmedCourier(session.user.id),
+  ]);
+
+  if (!profile) {
+    return NextResponse.json(null);
+  }
+
+  return NextResponse.json({
+    ...profile,
+    isConfirmedCourier,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -149,9 +174,20 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const profile = await resolveProfile(session.user.id);
-  return NextResponse.json(profile, { status: 201 });
+  const [profile, isConfirmedCourier] = await Promise.all([
+    resolveProfile(session.user.id),
+    hasUserRole(session.user, "ADMIN") ? Promise.resolve(true) : resolveIsConfirmedCourier(session.user.id),
+  ]);
+
+  return NextResponse.json(
+    profile
+      ? {
+          ...profile,
+          isConfirmedCourier,
+        }
+      : null,
+    { status: 201 }
+  );
 }
 
 export const PATCH = POST;
-

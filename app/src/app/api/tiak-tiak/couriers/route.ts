@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { KycRole, KycStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function hasTiakCourierProfileDelegate() {
@@ -24,7 +25,17 @@ export async function GET(request: NextRequest) {
   const takeRaw = Number(searchParams.get("take") ?? "20");
   const take = Number.isFinite(takeRaw) ? Math.min(Math.max(Math.trunc(takeRaw), 1), 100) : 20;
 
-  const where: Record<string, unknown> = { isActive: true };
+  const where: Record<string, unknown> = {
+    isActive: true,
+    courier: {
+      kycSubmissions: {
+        some: {
+          targetRole: { in: [KycRole.COURIER, KycRole.TIAK_COURIER] },
+          status: KycStatus.APPROVED,
+        },
+      },
+    },
+  };
 
   if (q) {
     where.OR = [
@@ -61,5 +72,10 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(profiles);
+  return NextResponse.json(
+    profiles.map((profile) => ({
+      ...profile,
+      isConfirmedCourier: true,
+    }))
+  );
 }

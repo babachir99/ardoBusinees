@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { KycRole, KycStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasAnyUserRole, hasUserRole } from "@/lib/userRoles";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -32,19 +34,37 @@ export async function GET(request: NextRequest) {
     return errorResponse(401, "UNAUTHORIZED", "Authentication required.");
   }
 
-  if (session.user.role !== "COURIER" && session.user.role !== "ADMIN") {
+  if (!hasAnyUserRole(session.user, ["COURIER", "TIAK_COURIER", "ADMIN"])) {
     return errorResponse(403, "FORBIDDEN", "Courier or admin role required.");
+  }
+
+  const isAdmin = hasUserRole(session.user, "ADMIN");
+
+  if (!isAdmin) {
+    const approvedKyc = await prisma.kycSubmission.findFirst({
+      where: {
+        userId: session.user.id,
+        targetRole: { in: [KycRole.COURIER, KycRole.TIAK_COURIER] },
+        status: KycStatus.APPROVED,
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!approvedKyc) {
+      return errorResponse(403, "KYC_REQUIRED", "Courier KYC approval required.");
+    }
   }
 
   const { searchParams } = new URL(request.url);
   const mine = searchParams.get("mine") === "1";
 
-  if (!mine && session.user.role !== "ADMIN") {
+  if (!mine && !isAdmin) {
     return errorResponse(403, "FORBIDDEN", "Use mine=1 unless admin.");
   }
 
   const take = normalizeTake(searchParams.get("take"), 40, 100);
-  const where = mine || session.user.role !== "ADMIN" ? { courierId: session.user.id } : {};
+  const where = mine || !isAdmin ? { courierId: session.user.id } : {};
 
   try {
     const runtimePrisma = prisma as unknown as {

@@ -57,11 +57,11 @@ export type TiakDeliveryEvent = {
   } | null;
 };
 
-
 export type TiakCourierProfile = {
   id: string;
   courierId: string;
   isActive: boolean;
+  isConfirmedCourier?: boolean;
   cities: string[];
   areas: string[];
   vehicleType: string | null;
@@ -76,6 +76,7 @@ export type TiakCourierProfile = {
     role: string;
   };
 };
+
 export type TiakPayout = {
   id: string;
   status: "PENDING" | "READY" | "PAID" | "FAILED";

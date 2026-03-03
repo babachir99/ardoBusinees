@@ -30,6 +30,24 @@ function hasTiakDelegates() {
   return Boolean(runtimePrisma.tiakDelivery && runtimePrisma.tiakDeliveryEvent && runtimePrisma.tiakPayout);
 }
 
+async function releaseExpiredAssignmentForDelivery(deliveryId: string) {
+  const now = new Date();
+
+  await prisma.tiakDelivery.updateMany({
+    where: {
+      id: deliveryId,
+      status: "ASSIGNED",
+      assignExpiresAt: { lte: now },
+    },
+    data: {
+      status: "REQUESTED",
+      courierId: null,
+      assignedAt: null,
+      assignExpiresAt: null,
+    },
+  });
+}
+
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -130,6 +148,8 @@ export async function GET(
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const includeAddress = searchParams.get("includeAddress") === "1";
+
+  await releaseExpiredAssignmentForDelivery(id);
 
   const delivery = await prisma.tiakDelivery.findUnique({
     where: { id },
