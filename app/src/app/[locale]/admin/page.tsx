@@ -604,6 +604,29 @@ export default async function AdminPage() {
       typeof trustDisputesActiveCount === "number" ? trustDisputesActiveCount : null,
   };
 
+  const opsInsights = {
+    productsHref: "/admin/products",
+    sellersHref: "/admin/users",
+    products: topItems.map((item) => {
+      const product = topProductMap.get(item.productId);
+      const units = item._sum.quantity ?? 0;
+      return {
+        id: item.productId,
+        title: product?.title ?? t("topProducts.unknownProduct"),
+        sellerName: product?.seller?.displayName ?? t("topProducts.unknownSeller"),
+        units,
+        barPercent: Math.max(8, Math.round((units / topProductMax) * 100)),
+      };
+    }),
+    sellers: topSellers.map((seller) => ({
+      id: seller.id || seller.name,
+      name: seller.name,
+      orders: seller.orders,
+      revenueLabel: formatMoney(seller.revenueCents, "XOF", locale),
+      barPercent: Math.max(8, Math.round((seller.revenueCents / topSellerMax) * 100)),
+    })),
+  };
+
   const isFr = locale.toLowerCase().startsWith("fr");
 
   return (
@@ -636,13 +659,7 @@ export default async function AdminPage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 pb-24">
-        <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-sky-300/12 via-zinc-900/80 to-zinc-900/80 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-200">{t("hero.kicker")}</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">Ops Hub</h1>
-          <p className="mt-2 text-sm text-zinc-300">{isFr ? "Supervision globale des flux operations, risques et monetisation." : "Global supervision for operations, risk and monetization flows."}</p>
-        </section>
-
-        <AdminOpsHub kpis={opsKpis} queueItems={opsQueueItems} />
+        <AdminOpsHub kpis={opsKpis} queueItems={opsQueueItems} insights={opsInsights} />
 
         <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
           <div className="mb-4">
@@ -685,103 +702,6 @@ export default async function AdminPage() {
           ordersSeries={ordersSeries}
           usersSeries={usersSeries}
         />
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">{t("topProducts.title")}</h2>
-                <p className="mt-1 text-xs text-zinc-400">{t("topProducts.subtitle")}</p>
-              </div>
-              <Link
-                href="/admin/products"
-                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-              >
-                {t("topProducts.cta")}
-              </Link>
-            </div>
-            {topItems.length === 0 && (
-              <p className="mt-4 text-sm text-zinc-400">{t("topProducts.empty")}</p>
-            )}
-            {topItems.length > 0 && (
-              <div className="mt-4 grid gap-3">
-                {topItems.map((item) => {
-                  const product = topProductMap.get(item.productId);
-                  const units = item._sum.quantity ?? 0;
-                  const width = Math.max(8, Math.round((units / topProductMax) * 100));
-                  return (
-                    <div
-                      key={item.productId}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">
-                            {product?.title ?? t("topProducts.unknownProduct")}
-                          </p>
-                          <p className="mt-1 text-[11px] text-zinc-500">
-                            {product?.seller?.displayName ?? t("topProducts.unknownSeller")}
-                          </p>
-                        </div>
-                        <div className="text-emerald-200">
-                          {t("topProducts.units", { count: units })}
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
-                        <div
-                          className="h-2 rounded-full bg-emerald-400"
-                          style={{ width: `${width}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">{t("topSellers.title")}</h2>
-                <p className="mt-1 text-xs text-zinc-400">{t("topSellers.subtitle")}</p>
-              </div>
-              <Link
-                href="/admin/users"
-                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-              >
-                {t("topSellers.cta")}
-              </Link>
-            </div>
-            {topSellers.length === 0 && (
-              <p className="mt-4 text-sm text-zinc-400">{t("topSellers.empty")}</p>
-            )}
-            {topSellers.length > 0 && (
-              <div className="mt-4 grid gap-3">
-                {topSellers.map((seller) => {
-                  const width = Math.max(8, Math.round((seller.revenueCents / topSellerMax) * 100));
-                  return (
-                    <div
-                      key={seller.id || seller.name}
-                      className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">{seller.name}</p>
-                          <p className="mt-1 text-[11px] text-zinc-500">{t("topSellers.orders", { count: seller.orders })}</p>
-                        </div>
-                        <div className="text-sky-200">{formatMoney(seller.revenueCents, "XOF", locale)}</div>
-                      </div>
-                      <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
-                        <div className="h-2 rounded-full bg-sky-400" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
 
         <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_12px_35px_rgba(0,0,0,0.25)]">
           <div className="mb-4">

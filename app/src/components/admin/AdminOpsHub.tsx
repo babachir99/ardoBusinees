@@ -78,9 +78,33 @@ type NotificationsHealth = {
   }>;
 };
 
+type OpsInsightProduct = {
+  id: string;
+  title: string;
+  sellerName: string;
+  units: number;
+  barPercent: number;
+};
+
+type OpsInsightSeller = {
+  id: string;
+  name: string;
+  orders: number;
+  revenueLabel: string;
+  barPercent: number;
+};
+
+type OpsInsights = {
+  products: OpsInsightProduct[];
+  sellers: OpsInsightSeller[];
+  productsHref: string;
+  sellersHref: string;
+};
+
 type Props = {
   kpis: OpsKpis;
   queueItems: OpsQueueItem[];
+  insights?: OpsInsights;
 };
 
 type QueueFilter = "ALL" | "PAYOUT" | "DISPUTE" | "PAYMENT_FAILED" | "IMMO_MONETIZATION" | "AUTO_MONETIZATION" | "CARS_MONETIZATION" | "TRUST";
@@ -135,7 +159,7 @@ const NOTIFICATION_ALERT_THRESHOLDS = {
   TOP_TEMPLATE_FAILURE_WARN: 5,
 } as const;
 
-export default function AdminOpsHub({ kpis, queueItems }: Props) {
+export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
   const t = useTranslations("Admin.opsHub");
   const locale = useLocale();
   const isFr = locale.toLowerCase().startsWith("fr");
@@ -185,11 +209,23 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
   const [notificationsHealthLoading, setNotificationsHealthLoading] = useState(false);
   const [notificationsHealthError, setNotificationsHealthError] = useState("");
   const [notificationsHealthLoaded, setNotificationsHealthLoaded] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   useEffect(() => {
     if (notificationsHealthLoaded || notificationsHealthLoading) return;
     void handleLoadNotificationsHealth();
   }, [notificationsHealthLoaded, notificationsHealthLoading]);
+
+  useEffect(() => {
+    if (!insightsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setInsightsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [insightsOpen]);
 
   const warnFlags = useMemo(
     () => ({
@@ -674,8 +710,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
       <header className="sticky top-16 z-20 rounded-2xl border border-white/10 bg-zinc-900/85 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Ops Hub</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Ops Hub</h2>
+            <h2 className="text-2xl font-semibold text-white">Ops Hub</h2>
             <p className="mt-1 text-sm text-zinc-300">{isFr ? "Supervision globale" : "Global supervision"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -701,6 +736,15 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
             >
               {reconLoading ? t("reconciliation.running") : `${t("reconciliation.title")} (dry-run)`}
             </button>
+            {insights ? (
+              <button
+                type="button"
+                onClick={() => setInsightsOpen(true)}
+                className="rounded-full border border-sky-300/35 bg-sky-300/10 px-4 py-2 text-xs font-semibold text-sky-100 transition hover:border-sky-200/60"
+              >
+                {isFr ? "Insights" : "Insights"}
+              </button>
+            ) : null}
           </div>
         </div>
         <p className="mt-3 text-[11px] text-zinc-500">{isFr ? "Derniere mise a jour" : "Last updated"}: {lastUpdatedLabel}</p>
@@ -818,7 +862,7 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
                 }
                 router.push(card.href as string);
               }}
-              className={`rounded-2xl border bg-zinc-950/60 p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/40 ${
+              className={`cursor-pointer rounded-2xl border bg-zinc-950/60 p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/40 ${
                 card.warn ? "border-amber-300/45" : "border-white/10"
               }`}
             >
@@ -996,6 +1040,112 @@ export default function AdminOpsHub({ kpis, queueItems }: Props) {
           </div>
         </div>
       </section>
+
+      {insights ? (
+        <div
+          className={`fixed inset-0 z-40 transition-opacity duration-200 motion-reduce:transition-none ${
+            insightsOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+          onClick={() => setInsightsOpen(false)}
+          aria-hidden={!insightsOpen}
+        >
+          <div className="absolute inset-0 pointer-events-auto bg-black/55 backdrop-blur-[1px]" />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={isFr ? "Insights admin" : "Admin insights"}
+            className={`absolute right-0 top-0 flex h-full w-[92vw] max-w-[480px] flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 p-4 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none lg:w-[480px] ${
+              insightsOpen ? "pointer-events-auto translate-x-0" : "pointer-events-none translate-x-full"
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-white">{isFr ? "Insights" : "Insights"}</h3>
+              <button
+                type="button"
+                onClick={() => setInsightsOpen(false)}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:border-white/50"
+              >
+                {isFr ? "Fermer" : "Close"}
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6 pr-1">
+              <section className="rounded-2xl border border-white/10 bg-zinc-900/65 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">{isFr ? "Produits les plus vendus" : "Top sold products"}</h4>
+                    <p className="mt-1 text-[11px] text-zinc-400">{isFr ? "Top 5 ventes payees" : "Top 5 paid sales"}</p>
+                  </div>
+                  <Link
+                    href={insights.productsHref}
+                    className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white transition hover:border-white/50"
+                  >
+                    {isFr ? "Voir tout" : "View all"}
+                  </Link>
+                </div>
+                {insights.products.length === 0 ? (
+                  <p className="text-xs text-zinc-400">{isFr ? "Aucune donnee." : "No data."}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {insights.products.map((item) => (
+                      <article key={item.id} className="rounded-xl border border-white/10 bg-zinc-950/60 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-white">{item.title}</p>
+                            <p className="truncate text-[11px] text-zinc-500">{item.sellerName}</p>
+                          </div>
+                          <p className="text-xs text-emerald-200">{isFr ? `${item.units} unites` : `${item.units} units`}</p>
+                        </div>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-800">
+                          <div className="h-1.5 rounded-full bg-emerald-400 transition-all duration-300 motion-reduce:transition-none" style={{ width: `${item.barPercent}%` }} />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-zinc-900/65 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">{isFr ? "Top vendeurs" : "Top sellers"}</h4>
+                    <p className="mt-1 text-[11px] text-zinc-400">{isFr ? "Classement revenu (30j)" : "Revenue ranking (30d)"}</p>
+                  </div>
+                  <Link
+                    href={insights.sellersHref}
+                    className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white transition hover:border-white/50"
+                  >
+                    {isFr ? "Voir tout" : "View all"}
+                  </Link>
+                </div>
+                {insights.sellers.length === 0 ? (
+                  <p className="text-xs text-zinc-400">{isFr ? "Aucune donnee." : "No data."}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {insights.sellers.map((item) => (
+                      <article key={item.id} className="rounded-xl border border-white/10 bg-zinc-950/60 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-white">{item.name}</p>
+                            <p className="truncate text-[11px] text-zinc-500">
+                              {isFr ? `${item.orders} commandes` : `${item.orders} orders`}
+                            </p>
+                          </div>
+                          <p className="text-xs text-sky-200">{item.revenueLabel}</p>
+                        </div>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-800">
+                          <div className="h-1.5 rounded-full bg-sky-400 transition-all duration-300 motion-reduce:transition-none" style={{ width: `${item.barPercent}%` }} />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </section>
   );
 }
