@@ -263,6 +263,8 @@ export async function PATCH(
     await queueTiakAssignedNotification({
       deliveryId: job.id,
       courierId: courier.courierId,
+      customerId: job.customerId,
+      assignedById: session.user.id,
     }).catch(() => null);
 
     return respond(

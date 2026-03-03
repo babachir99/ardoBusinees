@@ -59,6 +59,43 @@ function formatDateLabel(value: string, locale: string) {
   return parsed.toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US");
 }
 
+type TiakActivityLog = {
+  id: string;
+  action: string;
+  entityId: string | null;
+  createdAt: string;
+};
+
+function formatTiakActivityAction(action: string, locale: string) {
+  const frMap: Record<string, string> = {
+    TIAK_JOB_ASSIGNED: "Mission assignee au coursier",
+    TIAK_AUTO_ASSIGNED: "Auto-assignation effectuee",
+    TIAK_DELIVERY_ASSIGNED: "Course assignee",
+    TIAK_DELIVERY_ACCEPTED: "Course acceptee",
+    TIAK_DELIVERY_DECLINED: "Course refusee",
+    TIAK_DELIVERY_PICKED_UP: "Colis recupere",
+    TIAK_DELIVERY_DELIVERED: "Livraison effectuee",
+    TIAK_DELIVERY_COMPLETED: "Livraison confirmee",
+    TIAK_DELIVERY_CANCELED: "Livraison annulee",
+    TIAK_DELIVERY_REJECTED: "Assignation rejetee",
+  };
+
+  const enMap: Record<string, string> = {
+    TIAK_JOB_ASSIGNED: "Courier assignment created",
+    TIAK_AUTO_ASSIGNED: "Auto-assignment completed",
+    TIAK_DELIVERY_ASSIGNED: "Delivery assigned",
+    TIAK_DELIVERY_ACCEPTED: "Delivery accepted",
+    TIAK_DELIVERY_DECLINED: "Delivery declined",
+    TIAK_DELIVERY_PICKED_UP: "Parcel picked up",
+    TIAK_DELIVERY_DELIVERED: "Delivery completed",
+    TIAK_DELIVERY_COMPLETED: "Delivery confirmed",
+    TIAK_DELIVERY_CANCELED: "Delivery canceled",
+    TIAK_DELIVERY_REJECTED: "Assignment rejected",
+  };
+
+  return locale === "fr" ? (frMap[action] ?? action) : (enMap[action] ?? action);
+}
+
 export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, currentUserRole }: Props) {
   const [openDeliveries, setOpenDeliveries] = useState<TiakDelivery[]>([]);
   const [trackedDeliveries, setTrackedDeliveries] = useState<TiakDelivery[]>([]);
@@ -96,7 +133,13 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [payoutsError, setPayoutsError] = useState<string | null>(null);
   const [payoutsMeta, setPayoutsMeta] = useState<{ count: number; sumCourierPayoutCents: number } | null>(null);
 
+  const [tiakNotifications, setTiakNotifications] = useState<TiakActivityLog[]>([]);
+  const [tiakNotificationsLoading, setTiakNotificationsLoading] = useState(false);
+  const [tiakNotificationsError, setTiakNotificationsError] = useState<string | null>(null);
+  const [tiakNotificationsReadAt, setTiakNotificationsReadAt] = useState<string | null>(null);
+
   const storageKey = getStoreKey(currentUserId);
+  const notificationsReadKey = currentUserId ? `tiak-notifications-read:${currentUserId}` : null;
 
   const isAdmin = currentUserRole === "ADMIN";
   const isCourierOrAdmin = currentUserRole === "COURIER" || currentUserRole === "ADMIN";
@@ -301,6 +344,56 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     }
   }, [canViewEarnings, locale]);
 
+  const refreshTiakNotifications = useCallback(async () => {
+    if (!isLoggedIn || !currentUserId) {
+      setTiakNotifications([]);
+      setTiakNotificationsError(null);
+      return;
+    }
+
+    setTiakNotificationsLoading(true);
+    setTiakNotificationsError(null);
+
+    try {
+      const response = await fetch("/api/activity", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        setTiakNotificationsError(locale === "fr" ? "Notifications indisponibles." : "Notifications unavailable.");
+        return;
+      }
+
+      const allLogs = Array.isArray(data) ? (data as Array<{ id?: unknown; action?: unknown; entityId?: unknown; createdAt?: unknown }>) : [];
+      const tiakLogs: TiakActivityLog[] = allLogs
+        .filter((item) => typeof item.action === "string" && item.action.startsWith("TIAK_"))
+        .map((item) => ({
+          id: typeof item.id === "string" ? item.id : "",
+          action: String(item.action ?? ""),
+          entityId: typeof item.entityId === "string" ? item.entityId : null,
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date(0).toISOString(),
+        }))
+        .filter((item) => item.id.length > 0)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 20);
+
+      setTiakNotifications(tiakLogs);
+    } catch {
+      setTiakNotificationsError(locale === "fr" ? "Notifications indisponibles." : "Notifications unavailable.");
+    } finally {
+      setTiakNotificationsLoading(false);
+    }
+  }, [currentUserId, isLoggedIn, locale]);
+
+  const markTiakNotificationsRead = useCallback(() => {
+    if (!notificationsReadKey || typeof window === "undefined") return;
+    const now = new Date().toISOString();
+    window.localStorage.setItem(notificationsReadKey, now);
+    setTiakNotificationsReadAt(now);
+  }, [notificationsReadKey]);
+
   useEffect(() => {
     refreshOpenDeliveries();
   }, [refreshOpenDeliveries]);
@@ -320,6 +413,20 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   useEffect(() => {
     refreshPayouts();
   }, [refreshPayouts]);
+
+  useEffect(() => {
+    if (!notificationsReadKey || typeof window === "undefined") {
+      setTiakNotificationsReadAt(null);
+      return;
+    }
+
+    const stored = window.localStorage.getItem(notificationsReadKey);
+    setTiakNotificationsReadAt(stored);
+  }, [notificationsReadKey]);
+
+  useEffect(() => {
+    refreshTiakNotifications();
+  }, [refreshTiakNotifications]);
 
   const handleDeliveryUpdated = useCallback((updated: TiakDelivery) => {
     setTrackedDeliveries((current) => upsertDelivery(current, updated));
@@ -427,6 +534,21 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
 
   const trackedDeliveriesToShow = myDeliveriesView === "ARCHIVED" ? archivedTrackedDeliveries : activeTrackedDeliveries;
 
+  const unreadTiakNotificationsCount = useMemo(() => {
+    if (!isLoggedIn) return 0;
+    if (!tiakNotificationsReadAt) return tiakNotifications.length;
+
+    const readAt = new Date(tiakNotificationsReadAt).getTime();
+    if (Number.isNaN(readAt)) return tiakNotifications.length;
+
+    return tiakNotifications.filter((entry) => {
+      const createdAt = new Date(entry.createdAt).getTime();
+      return Number.isFinite(createdAt) && createdAt > readAt;
+    }).length;
+  }, [isLoggedIn, tiakNotifications, tiakNotificationsReadAt]);
+
+  const latestTiakNotifications = useMemo(() => tiakNotifications.slice(0, 8), [tiakNotifications]);
+
   const filteredCouriers = useMemo(() => {
     const query = courierSearch.trim().toLowerCase();
     return couriers.filter((profile) => {
@@ -490,8 +612,9 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
       refreshCouriers(),
       refreshMyProfile(),
       refreshPayouts(),
+      refreshTiakNotifications(),
     ]);
-  }, [refreshCouriers, refreshMyProfile, refreshOpenDeliveries, refreshPayouts, refreshTrackedDeliveries]);
+  }, [refreshCouriers, refreshMyProfile, refreshOpenDeliveries, refreshPayouts, refreshTiakNotifications, refreshTrackedDeliveries]);
 
   const openDeliveryPanel = useCallback(
     (delivery: TiakDelivery) => {
@@ -563,6 +686,25 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
             >
               {locale === "fr" ? "Voir historique" : "View history"}
             </button>
+            {isLoggedIn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  document
+                    .getElementById("tiak-notifications")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  markTiakNotificationsRead();
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-zinc-950/60 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+              >
+                {locale === "fr" ? "Notifications" : "Notifications"}
+                {unreadTiakNotificationsCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {unreadTiakNotificationsCount > 99 ? "99+" : unreadTiakNotificationsCount}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -581,24 +723,49 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
         </div>
       </section>
 
-      <section className="sticky top-20 z-30 rounded-2xl border border-emerald-300/30 bg-zinc-950/35 p-3 backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-white">
-              {locale === "fr" ? "Dispatch rapide" : "Quick dispatch"}
-            </p>
-            <p className="text-xs text-zinc-400">
-              {locale === "fr"
-                ? "Cree une mission sans alourdir la page principale."
-                : "Create a mission without crowding the main page."}
-            </p>
+      <section className="sticky top-20 z-30 rounded-2xl border border-neutral-800/70 bg-neutral-900/60 p-5 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-colors duration-200 ease-out hover:border-emerald-400/25 hover:bg-neutral-900/70 motion-reduce:transition-none">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-lg font-semibold text-white">
+                {locale === "fr" ? "Dispatch livraison" : "Delivery dispatch"}
+              </h3>
+              <p className="mt-1 text-sm text-neutral-400">
+                {locale === "fr"
+                  ? "Cree une livraison et assigne un livreur en quelques secondes."
+                  : "Create a delivery and assign a courier in seconds."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full bg-neutral-800/50 px-3 py-1 text-xs text-neutral-200">
+                {locale === "fr" ? "Demandes" : "Requests"}: {openDeliveries.length}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-neutral-800/50 px-3 py-1 text-xs text-neutral-200">
+                {locale === "fr" ? "En cours" : "In progress"}: {inProgressCount}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-neutral-800/50 px-3 py-1 text-xs text-neutral-200">
+                {locale === "fr" ? "Livreurs" : "Couriers"}: {availableCourierCount}
+              </span>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={() => setOpenNewMission(true)}
-            className="rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-zinc-950 shadow-[0_10px_24px_rgba(16,185,129,0.25)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+            className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-2.5 font-medium text-neutral-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition-all duration-200 ease-out hover:brightness-110 hover:shadow-[0_14px_36px_rgba(16,185,129,0.35)] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/50 motion-reduce:transition-none"
           >
-            {locale === "fr" ? "+ Nouvelle mission" : "+ New mission"}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none motion-reduce:transition-none"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="m13 6 6 6-6 6" />
+            </svg>
+            <span>{locale === "fr" ? "Demarrer une livraison" : "Start a delivery"}</span>
           </button>
         </div>
       </section>
@@ -623,6 +790,85 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
               onOpenDelivery={openDeliveryPanel}
             />
           </section>
+
+          {isLoggedIn ? (
+            <section id="tiak-notifications" className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_24px_rgba(0,0,0,0.25)]">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    {locale === "fr" ? "Notifications TIAK" : "TIAK notifications"}
+                  </h3>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {locale === "fr"
+                      ? "Suivi interne des assignations et statuts de livraison."
+                      : "Internal feed for assignments and delivery status updates."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadTiakNotificationsCount > 0 ? (
+                    <span className="inline-flex items-center rounded-full border border-rose-300/35 bg-rose-300/10 px-2 py-0.5 text-[11px] font-medium text-rose-100">
+                      {locale === "fr" ? "Non lues" : "Unread"}: {unreadTiakNotificationsCount}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void refreshTiakNotifications()}
+                    className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                  >
+                    {locale === "fr" ? "Rafraichir" : "Refresh"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={markTiakNotificationsRead}
+                    className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/60"
+                  >
+                    {locale === "fr" ? "Marquer lu" : "Mark read"}
+                  </button>
+                </div>
+              </div>
+
+              {tiakNotificationsLoading ? (
+                <p className="text-xs text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>
+              ) : null}
+
+              {tiakNotificationsError ? (
+                <p className="text-xs text-rose-300">{tiakNotificationsError}</p>
+              ) : null}
+
+              {!tiakNotificationsLoading && !tiakNotificationsError ? (
+                <div className="space-y-2">
+                  {latestTiakNotifications.length === 0 ? (
+                    <p className="text-xs text-zinc-500">
+                      {locale === "fr" ? "Aucune notification TIAK." : "No TIAK notifications."}
+                    </p>
+                  ) : (
+                    latestTiakNotifications.map((entry) => {
+                      const isUnread =
+                        !tiakNotificationsReadAt ||
+                        new Date(entry.createdAt).getTime() > new Date(tiakNotificationsReadAt).getTime();
+
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`rounded-xl border px-3 py-2 text-xs transition ${isUnread ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100" : "border-white/10 bg-zinc-950/60 text-zinc-200"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">{formatTiakActivityAction(entry.action, locale)}</p>
+                            {entry.entityId ? (
+                              <span className="text-[10px] text-zinc-400">#{entry.entityId.slice(0, 8)}</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-[11px] text-zinc-400">
+                            {new Date(entry.createdAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}
+                          </p>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           {isLoggedIn && (
             <section id="tiak-my-deliveries" className="space-y-3">

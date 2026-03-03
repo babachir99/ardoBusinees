@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { evaluateContactPolicy } from "@/lib/policies/contactPolicy";
 import { isEitherBlocked } from "@/lib/trust-blocks";
+import { queueTiakStatusNotification } from "@/lib/tiak/notifications";
 
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
@@ -525,6 +526,46 @@ export async function PATCH(
 
     return { updated, payout };
   });
+
+  const notificationTasks: Array<Promise<unknown>> = [];
+
+  if (nextStatus === "PICKED_UP" || nextStatus === "DELIVERED") {
+    notificationTasks.push(
+      queueTiakStatusNotification({
+        deliveryId: result.updated.id,
+        recipientId: result.updated.customerId,
+        trackingStep: nextStatus,
+        action: `TIAK_DELIVERY_${nextStatus}`,
+        actorId: session.user.id,
+      })
+    );
+  }
+
+  if ((nextStatus === "COMPLETED" || nextStatus === "CANCELED") && result.updated.courierId) {
+    notificationTasks.push(
+      queueTiakStatusNotification({
+        deliveryId: result.updated.id,
+        recipientId: result.updated.courierId,
+        trackingStep: nextStatus,
+        action: `TIAK_DELIVERY_${nextStatus}`,
+        actorId: session.user.id,
+      })
+    );
+  }
+
+  if (nextStatus === "REJECTED") {
+    notificationTasks.push(
+      queueTiakStatusNotification({
+        deliveryId: result.updated.id,
+        recipientId: result.updated.customerId,
+        trackingStep: "REJECTED",
+        action: "TIAK_DELIVERY_REJECTED",
+        actorId: session.user.id,
+      })
+    );
+  }
+
+  await Promise.allSettled(notificationTasks);
 
   const contact = getContactState(result.updated, {
     id: session.user.id,

@@ -217,6 +217,8 @@ export async function POST(
     await queueTiakAssignedNotification({
       deliveryId: job.id,
       courierId: winner.courierId,
+      customerId: job.customerId,
+      assignedById: session.user.id,
     }).catch(() => null);
 
     return respond(
