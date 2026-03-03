@@ -72,7 +72,7 @@ export default async function UserHeaderActions({
       {showAdminLink && session?.user?.role === "ADMIN" && (
         <Link
           href="/admin"
-          className="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
+          className="relative inline-flex items-center rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
           title={
             locale === "fr"
               ? `${adminTodoCount} dossier${adminTodoCount > 1 ? "s" : ""} a traiter`
@@ -80,7 +80,13 @@ export default async function UserHeaderActions({
           }
         >
           <span>Admin</span>
-          <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-bold leading-none text-zinc-950">
+          <span
+            className={`absolute -right-1.5 -top-1.5 inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-zinc-950 ${
+              adminTodoCount > 5
+                ? "bg-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.45)]"
+                : "bg-emerald-400 shadow-[0_2px_8px_rgba(16,185,129,0.45)]"
+            }`}
+          >
             {adminTodoCount > 99 ? "99+" : adminTodoCount}
           </span>
         </Link>

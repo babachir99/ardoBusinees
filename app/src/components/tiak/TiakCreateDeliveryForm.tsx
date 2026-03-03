@@ -105,8 +105,8 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
 
   if (!isLoggedIn) {
     return (
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-        <h2 className="text-base font-semibold text-white">
+      <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.3)]">
+        <h2 className="text-lg font-semibold text-white">
           {locale === "fr" ? "Creer une demande" : "Create a request"}
         </h2>
         <p className="mt-2 text-sm text-zinc-300">
@@ -117,7 +117,7 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
         <button
           type="button"
           onClick={redirectToLogin}
-          className="mt-4 rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950"
+          className="mt-4 rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-105"
         >
           {locale === "fr" ? "Creer une demande" : "Create a request"}
         </button>
@@ -125,101 +125,128 @@ export default function TiakCreateDeliveryForm({ locale, isLoggedIn, onCreated }
     );
   }
 
+  const canSubmit = pickupAddress.trim().length > 0 && dropoffAddress.trim().length > 0 && !submitting;
+
   return (
-    <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-      <h2 className="text-base font-semibold text-white">
-        {locale === "fr" ? "Nouvelle demande" : "New request"}
-      </h2>
-      <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleSubmit}>
-        <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-          {locale === "fr" ? "Adresse de ramassage" : "Pickup address"}
-          <input
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={pickupAddress}
-            onChange={(event) => setPickupAddress(event.target.value)}
-            required
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-          {locale === "fr" ? "Adresse de livraison" : "Dropoff address"}
-          <input
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={dropoffAddress}
-            onChange={(event) => setDropoffAddress(event.target.value)}
-            required
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-zinc-300">
-          {locale === "fr" ? "Prix (optionnel)" : "Price (optional)"}
-          <input
-            type="number"
-            min={1}
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={priceCents}
-            onChange={(event) => setPriceCents(event.target.value)}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-zinc-300">
-          {locale === "fr" ? "Devise" : "Currency"}
-          <select
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
-          >
-            <option value="XOF">XOF</option>
-            <option value="EUR">EUR</option>
-            <option value="USD">USD</option>
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-zinc-300">
-          {locale === "fr" ? "Paiement" : "Payment"}
-          <select
-            className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
-            value={paymentMethod}
-            onChange={(event) => setPaymentMethod(event.target.value)}
-          >
-            {paymentMethods.map((method) => (
-              <option key={method} value={method}>
-                {method}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-          {locale === "fr" ? "Note (optionnelle)" : "Optional note"}
-          <textarea
-            className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            maxLength={1200}
-          />
-        </label>
-
-        <div className="md:col-span-2 flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-            >
-              {submitting
-                ? locale === "fr"
-                  ? "Envoi..."
-                  : "Submitting..."
-                : locale === "fr"
-                  ? "Creer la demande"
-                  : "Create request"}
-            </button>
-            {error && <p className="text-sm text-rose-300">{error}</p>}
-            {success && <p className="text-sm text-emerald-300">{success}</p>}
-          </div>
-          {paymentInfo && <p className="text-xs text-emerald-300">{paymentInfo}</p>}
+    <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.3)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{locale === "fr" ? "Nouvelle mission" : "New mission"}</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">
+            {locale === "fr" ? "Creer une demande" : "Create request"}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-400">
+            {locale === "fr" ? "Formulaire rapide pour lancer une livraison locale." : "Fast form to launch a local delivery."}
+          </p>
         </div>
+      </div>
+
+      <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+        <div className="rounded-xl border border-white/10 bg-zinc-950/40 p-4">
+          <h3 className="text-sm font-semibold text-white">{locale === "fr" ? "Trajet" : "Route"}</h3>
+          <div className="mt-3 grid gap-3">
+            <label className="grid gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Adresse de ramassage" : "Pickup address"}
+              <input
+                className="h-11 rounded-xl border border-white/10 bg-zinc-950/60 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+                value={pickupAddress}
+                onChange={(event) => setPickupAddress(event.target.value)}
+                placeholder={locale === "fr" ? "Ex: Almadies, Dakar" : "Ex: Almadies, Dakar"}
+                required
+              />
+              <span className="text-[11px] text-zinc-500">{locale === "fr" ? "Point de collecte" : "Pickup location"}</span>
+            </label>
+
+            <label className="grid gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Adresse de livraison" : "Dropoff address"}
+              <input
+                className="h-11 rounded-xl border border-white/10 bg-zinc-950/60 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+                value={dropoffAddress}
+                onChange={(event) => setDropoffAddress(event.target.value)}
+                placeholder={locale === "fr" ? "Ex: Plateau, Dakar" : "Ex: Plateau, Dakar"}
+                required
+              />
+              <span className="text-[11px] text-zinc-500">{locale === "fr" ? "Destination finale" : "Final destination"}</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-zinc-950/40 p-4">
+          <h3 className="text-sm font-semibold text-white">{locale === "fr" ? "Paiement" : "Payment"}</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <label className="grid gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Prix (optionnel)" : "Price (optional)"}
+              <input
+                type="number"
+                min={1}
+                className="h-11 rounded-xl border border-white/10 bg-zinc-950/60 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+                value={priceCents}
+                onChange={(event) => setPriceCents(event.target.value)}
+              />
+            </label>
+
+            <label className="grid gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Devise" : "Currency"}
+              <select
+                className="h-11 rounded-xl border border-white/10 bg-zinc-950/60 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value)}
+              >
+                <option value="XOF">XOF</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-xs text-zinc-300">
+              {locale === "fr" ? "Paiement" : "Payment"}
+              <select
+                className="h-11 rounded-xl border border-white/10 bg-zinc-950/60 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+                value={paymentMethod}
+                onChange={(event) => setPaymentMethod(event.target.value)}
+              >
+                {paymentMethods.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-zinc-950/40 p-4">
+          <h3 className="text-sm font-semibold text-white">{locale === "fr" ? "Note" : "Note"}</h3>
+          <label className="mt-3 grid gap-1 text-xs text-zinc-300">
+            {locale === "fr" ? "Informations complementaires (optionnelles)" : "Additional details (optional)"}
+            <textarea
+              className="min-h-20 rounded-xl border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              maxLength={1200}
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="rounded-full bg-emerald-400 px-5 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting
+              ? locale === "fr"
+                ? "Envoi..."
+                : "Submitting..."
+              : locale === "fr"
+                ? "Creer la demande"
+                : "Create request"}
+          </button>
+          {error && <p className="text-sm text-rose-300">{error}</p>}
+          {success && <p className="text-sm text-emerald-300">{success}</p>}
+        </div>
+
+        {paymentInfo && <p className="text-xs text-emerald-300">{paymentInfo}</p>}
       </form>
     </section>
   );

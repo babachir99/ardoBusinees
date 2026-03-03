@@ -3,7 +3,8 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
-import TiakDeliveryCard from "@/components/tiak/TiakDeliveryCard";
+import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
+import TiakDeliveryDetailsPanel from "@/components/tiak/TiakDeliveryDetailsPanel";
 import PublicUserCard from "@/components/trust/PublicUserCard";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
@@ -69,6 +70,13 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [couriersLoading, setCouriersLoading] = useState(false);
   const [couriersError, setCouriersError] = useState<string | null>(null);
   const [selectedCourierProfile, setSelectedCourierProfile] = useState<TiakCourierProfile | null>(null);
+  const [courierSearch, setCourierSearch] = useState("");
+  const [couriersAvailableOnly, setCouriersAvailableOnly] = useState(true);
+  const [couriersVisibleCount, setCouriersVisibleCount] = useState(6);
+
+  const [selectedDelivery, setSelectedDelivery] = useState<TiakDelivery | null>(null);
+  const [courierSpaceOpen, setCourierSpaceOpen] = useState(false);
+  const [earningsOpen, setEarningsOpen] = useState(false);
 
   const [myProfile, setMyProfile] = useState<TiakCourierProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -407,314 +415,499 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     );
   }, [currentUserId, currentUserRole, trackedDeliveries]);
 
+  const filteredCouriers = useMemo(() => {
+    const query = courierSearch.trim().toLowerCase();
+    return couriers.filter((profile) => {
+      if (couriersAvailableOnly && !profile.isActive) return false;
+      if (!query) return true;
+
+      const haystack = [
+        profile.courier.name ?? "",
+        profile.vehicleType ?? "",
+        ...profile.cities,
+        ...profile.areas,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [courierSearch, couriers, couriersAvailableOnly]);
+
+  const visibleCouriers = useMemo(
+    () => filteredCouriers.slice(0, couriersVisibleCount),
+    [couriersVisibleCount, filteredCouriers]
+  );
+
+  const hasMoreCouriers = filteredCouriers.length > couriersVisibleCount;
+
+  const inProgressCount = useMemo(
+    () =>
+      displayedTracked.filter(
+        (delivery) =>
+          delivery.status === "ASSIGNED" ||
+          delivery.status === "ACCEPTED" ||
+          delivery.status === "PICKED_UP" ||
+          delivery.status === "DELIVERED"
+      ).length,
+    [displayedTracked]
+  );
+
+  const monthlyGainCents = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+
+    return payouts.reduce((sum, payout) => {
+      const createdAt = new Date(payout.createdAt);
+      if (Number.isNaN(createdAt.getTime())) return sum;
+      if (createdAt.getMonth() !== month || createdAt.getFullYear() !== year) return sum;
+      return sum + payout.courierPayoutCents;
+    }, 0);
+  }, [payouts]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      refreshOpenDeliveries(),
+      refreshTrackedDeliveries(),
+      refreshCouriers(),
+      refreshMyProfile(),
+      refreshPayouts(),
+    ]);
+  }, [refreshCouriers, refreshMyProfile, refreshOpenDeliveries, refreshPayouts, refreshTrackedDeliveries]);
+
+  const openDeliveryPanel = useCallback(
+    (delivery: TiakDelivery) => {
+      trackDeliveryId(delivery.id);
+      setSelectedDelivery(delivery);
+    },
+    [trackDeliveryId]
+  );
+
+  useEffect(() => {
+    if (!selectedDelivery?.id) return;
+    const latest = [...openDeliveries, ...trackedDeliveries].find(
+      (entry) => entry.id === selectedDelivery.id
+    );
+    if (!latest) return;
+    if (latest.updatedAt !== selectedDelivery.updatedAt) {
+      setSelectedDelivery(latest);
+    }
+  }, [openDeliveries, selectedDelivery?.id, selectedDelivery?.updatedAt, trackedDeliveries]);
+
   return (
-    <div className="space-y-8">
-      <div id="tiak-create-delivery-form">
-        <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
-      </div>
-
-      <TiakCourierAvailabilityPanel
-        locale={locale}
-        isLoggedIn={isLoggedIn}
-        currentUserRole={currentUserRole}
-        onRequireLogin={requestLogin}
-      />
-
-      {isCourierOrAdmin && (
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Espace livreur" : "Courier space"}</h2>
-          <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleSaveProfile}>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Villes (separees par virgules)" : "Cities (comma separated)"}
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileCities} onChange={(event) => setProfileCities(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Zones (separees par virgules)" : "Areas (comma separated)"}
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileAreas} onChange={(event) => setProfileAreas(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              {locale === "fr" ? "Vehicule" : "Vehicle"}
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileVehicleType} onChange={(event) => setProfileVehicleType(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              {locale === "fr" ? "Poids max (kg)" : "Max weight (kg)"}
-              <input type="number" min={1} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileMaxWeightKg} onChange={(event) => setProfileMaxWeightKg(event.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Horaires" : "Available hours"}
-              <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileHours} onChange={(event) => setProfileHours(event.target.value)} />
-            </label>
-            <label className="inline-flex items-center gap-2 text-xs text-zinc-300 md:col-span-2">
-              <input type="checkbox" checked={profileIsActive} onChange={(event) => setProfileIsActive(event.target.checked)} />
-              {locale === "fr" ? "Profil actif" : "Profile active"}
-            </label>
-            <div className="md:col-span-2 flex items-center gap-3">
-              <button type="submit" disabled={profileLoading} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                {profileLoading ? (locale === "fr" ? "Envoi..." : "Saving...") : locale === "fr" ? "Enregistrer" : "Save"}
-              </button>
-              {profileError && <p className="text-sm text-rose-300">{profileError}</p>}
-              {profileSuccess && <p className="text-sm text-emerald-300">{profileSuccess}</p>}
-            </div>
-          </form>
-          {myProfile && (
-            <p className="mt-3 text-xs text-zinc-400">
-              {locale === "fr" ? "Derniere mise a jour" : "Last update"}: {new Date(myProfile.updatedAt).toLocaleString()}
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-white">
+              {locale === "fr" ? "Livraison locale express" : "Local express delivery"}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              {locale === "fr"
+                ? "Cree une demande, trouve un coursier et pilote les preuves en un flux simple."
+                : "Create a request, find a courier and manage proofs in a single flow."}
             </p>
-          )}
-        </section>
-      )}
-
-      {isCourierOrAdmin && isLoggedIn && (
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={refreshPayouts}
-              className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
+              onClick={() => void refreshAll()}
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
             >
               {locale === "fr" ? "Rafraichir" : "Refresh"}
             </button>
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById("tiak-my-deliveries")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/65"
+            >
+              {locale === "fr" ? "Voir historique" : "View history"}
+            </button>
           </div>
-
-          {payoutsMeta && (
-            <p className="mt-2 text-xs text-zinc-400">
-              {locale === "fr" ? "Total net" : "Total net"}: {formatAmount(payoutsMeta.sumCourierPayoutCents, "XOF")}
-            </p>
-          )}
-
-          {payoutsLoading && <p className="mt-3 text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
-          {payoutsError && <p className="mt-3 text-sm text-rose-300">{payoutsError}</p>}
-
-          {!payoutsLoading && !payoutsError && (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-full text-left text-xs text-zinc-200">
-                <thead className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">
-                  <tr>
-                    <th className="py-2 pr-4">{locale === "fr" ? "Date" : "Date"}</th>
-                    <th className="py-2 pr-4">{locale === "fr" ? "Total" : "Total"}</th>
-                    <th className="py-2 pr-4">Fee</th>
-                    <th className="py-2 pr-4">{locale === "fr" ? "Net" : "Net"}</th>
-                    <th className="py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payouts.map((payout) => (
-                    <tr key={payout.id} className="border-t border-white/10">
-                      <td className="py-2 pr-4">{formatDateLabel(payout.createdAt, locale)}</td>
-                      <td className="py-2 pr-4">{formatAmount(payout.amountTotalCents, payout.currency)}</td>
-                      <td className="py-2 pr-4">{formatAmount(payout.platformFeeCents, payout.currency)}</td>
-                      <td className="py-2 pr-4 text-emerald-300">{formatAmount(payout.courierPayoutCents, payout.currency)}</td>
-                      <td className="py-2">{payout.status}</td>
-                    </tr>
-                  ))}
-                  {payouts.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-4 text-zinc-400">
-                        {locale === "fr" ? "Aucun payout." : "No payouts."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">
-            {locale === "fr" ? "Coursiers disponibles" : "Available couriers"}
-          </h2>
-          <button
-            type="button"
-            onClick={refreshCouriers}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
-          >
-            {locale === "fr" ? "Rafraichir" : "Refresh"}
-          </button>
         </div>
 
-        {couriersLoading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
-        {couriersError && <p className="text-sm text-rose-300">{couriersError}</p>}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="inline-flex items-center rounded-full border border-white/15 bg-zinc-950/70 px-3 py-1 text-xs text-zinc-200">
+            {locale === "fr" ? "Demandes ouvertes" : "Open requests"}: {openDeliveries.length}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+            {locale === "fr" ? "Livraisons en cours" : "In progress"}: {inProgressCount}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+            {locale === "fr" ? "Gains (mois)" : "Earnings (month)"}: {formatAmount(monthlyGainCents, "XOF")}
+          </span>
+        </div>
+      </section>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {couriers.map((profile) => (
-            <PublicUserCard
-              key={profile.id}
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-7">
+          <div id="tiak-create-delivery-form">
+            <TiakCreateDeliveryForm locale={locale} isLoggedIn={isLoggedIn} onCreated={handleCreated} />
+          </div>
+
+          <section className="space-y-3">
+            {loading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+            {error && <p className="text-sm text-rose-300">{error}</p>}
+            <TiakDeliveryQueue
+              id="tiak-open-deliveries"
               locale={locale}
-              userId={profile.courierId}
-              viewerUserId={currentUserId}
-              name={profile.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
-              avatarUrl={profile.courier.image}
-              roleLabel={locale === "fr" ? "Coursier" : "Courier"}
-              reliabilityLabel={
-                locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"
+              title={locale === "fr" ? "Demandes ouvertes" : "Open requests"}
+              subtitle={
+                locale === "fr"
+                  ? "File operationnelle: ouvre une ligne pour traiter preuves, statut et assignation."
+                  : "Operational queue: open a row to process proof, status and assignment."
               }
-              updatedAt={profile.updatedAt}
-              details={[
+              deliveries={openDeliveries}
+              emptyLabel={locale === "fr" ? "Aucune demande ouverte." : "No open requests."}
+              actionLabel={locale === "fr" ? "Traiter" : "Process"}
+              onOpenDelivery={openDeliveryPanel}
+            />
+          </section>
+
+          {isLoggedIn && (
+            <section id="tiak-my-deliveries" className="space-y-3">
+              <TiakDeliveryQueue
+                locale={locale}
+                title={
+                  isCourierOrAdmin
+                    ? locale === "fr"
+                      ? "Mes livraisons"
+                      : "My deliveries"
+                    : locale === "fr"
+                      ? "Mes demandes"
+                      : "My requests"
+                }
+                subtitle={
+                  locale === "fr"
+                    ? "Historique compact avec ouverture des actions dans le panneau details."
+                    : "Compact history with actions opened in the details panel."
+                }
+                deliveries={displayedTracked}
+                emptyLabel={
+                  locale === "fr"
+                    ? "Aucune livraison suivie pour le moment."
+                    : "No tracked deliveries yet."
+                }
+                actionLabel={locale === "fr" ? "Voir" : "View"}
+                onOpenDelivery={openDeliveryPanel}
+              />
+            </section>
+          )}
+        </div>
+
+        <aside className="space-y-4 lg:col-span-5 lg:sticky lg:top-24 lg:self-start">
+          <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-white">
+                  {locale === "fr" ? "Trouver un livreur" : "Find a courier"}
+                </h3>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {locale === "fr"
+                    ? "Matching rapide par ville/zone, puis ouverture du profil."
+                    : "Fast matching by city/area, then profile review."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshCouriers()}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+              >
+                {locale === "fr" ? "Rafraichir" : "Refresh"}
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={courierSearch}
+                onChange={(event) => {
+                  setCourierSearch(event.target.value);
+                  setCouriersVisibleCount(6);
+                }}
+                placeholder={locale === "fr" ? "Ville, zone, vehicule..." : "City, area, vehicle..."}
+                className="h-10 rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30"
+              />
+              <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/50 px-3 text-xs text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={couriersAvailableOnly}
+                  onChange={(event) => setCouriersAvailableOnly(event.target.checked)}
+                />
+                {locale === "fr" ? "Disponible uniquement" : "Available only"}
+              </label>
+            </div>
+
+            {couriersLoading && <p className="mt-3 text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+            {couriersError && <p className="mt-3 text-sm text-rose-300">{couriersError}</p>}
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {visibleCouriers.map((profile) => (
+                <PublicUserCard
+                  key={profile.id}
+                  locale={locale}
+                  userId={profile.courierId}
+                  viewerUserId={currentUserId}
+                  name={profile.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
+                  avatarUrl={profile.courier.image}
+                  roleLabel={locale === "fr" ? "Coursier" : "Courier"}
+                  reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
+                  updatedAt={profile.updatedAt}
+                  details={[
+                    {
+                      label: locale === "fr" ? "Vehicule" : "Vehicle",
+                      value: profile.vehicleType ?? "-",
+                    },
+                    {
+                      label: locale === "fr" ? "Villes" : "Cities",
+                      value: profile.cities.length ? profile.cities.join(", ") : "-",
+                    },
+                    {
+                      label: locale === "fr" ? "Zones" : "Areas",
+                      value: profile.areas.length ? profile.areas.join(", ") : "-",
+                    },
+                  ]}
+                  onViewProfile={() => setSelectedCourierProfile(profile)}
+                  viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
+                />
+              ))}
+
+              {!couriersLoading && filteredCouriers.length === 0 && (
+                <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
+                  {locale === "fr" ? "Aucun coursier disponible avec ces filtres." : "No couriers with current filters."}
+                </div>
+              )}
+            </div>
+
+            {hasMoreCouriers ? (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setCouriersVisibleCount((count) => count + 6)}
+                  className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                >
+                  {locale === "fr" ? "Afficher plus" : "Show more"}
+                </button>
+              </div>
+            ) : null}
+          </section>
+
+          {isCourierOrAdmin && isLoggedIn ? (
+            <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+              <button
+                type="button"
+                onClick={() => setCourierSpaceOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div>
+                  <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Espace livreur" : "Courier space"}</h3>
+                  <p className="mt-1 text-xs text-zinc-400">{locale === "fr" ? "Profil, zones et disponibilite" : "Profile, zones and availability"}</p>
+                </div>
+                <span className="text-xs text-zinc-400">{courierSpaceOpen ? "-" : "+"}</span>
+              </button>
+
+              {courierSpaceOpen ? (
+                <div className="mt-4 space-y-4">
+                  <TiakCourierAvailabilityPanel
+                    locale={locale}
+                    isLoggedIn={isLoggedIn}
+                    currentUserRole={currentUserRole}
+                    onRequireLogin={requestLogin}
+                  />
+
+                  <form className="grid gap-3 rounded-xl border border-white/10 bg-zinc-950/40 p-4 md:grid-cols-2" onSubmit={handleSaveProfile}>
+                    <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+                      {locale === "fr" ? "Villes (separees par virgules)" : "Cities (comma separated)"}
+                      <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileCities} onChange={(event) => setProfileCities(event.target.value)} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+                      {locale === "fr" ? "Zones (separees par virgules)" : "Areas (comma separated)"}
+                      <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileAreas} onChange={(event) => setProfileAreas(event.target.value)} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                      {locale === "fr" ? "Vehicule" : "Vehicle"}
+                      <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileVehicleType} onChange={(event) => setProfileVehicleType(event.target.value)} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-zinc-300">
+                      {locale === "fr" ? "Poids max (kg)" : "Max weight (kg)"}
+                      <input type="number" min={1} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileMaxWeightKg} onChange={(event) => setProfileMaxWeightKg(event.target.value)} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-zinc-300 md:col-span-2">
+                      {locale === "fr" ? "Horaires" : "Available hours"}
+                      <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={profileHours} onChange={(event) => setProfileHours(event.target.value)} />
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-xs text-zinc-300 md:col-span-2">
+                      <input type="checkbox" checked={profileIsActive} onChange={(event) => setProfileIsActive(event.target.checked)} />
+                      {locale === "fr" ? "Profil actif" : "Profile active"}
+                    </label>
+                    <div className="md:col-span-2 flex items-center gap-3">
+                      <button type="submit" disabled={profileLoading} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
+                        {profileLoading ? (locale === "fr" ? "Envoi..." : "Saving...") : locale === "fr" ? "Enregistrer" : "Save"}
+                      </button>
+                      {profileError && <p className="text-sm text-rose-300">{profileError}</p>}
+                      {profileSuccess && <p className="text-sm text-emerald-300">{profileSuccess}</p>}
+                    </div>
+                  </form>
+                  {myProfile && (
+                    <p className="text-xs text-zinc-500">
+                      {locale === "fr" ? "Derniere mise a jour" : "Last update"}: {new Date(myProfile.updatedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isCourierOrAdmin && isLoggedIn ? (
+            <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+              <button
+                type="button"
+                onClick={() => setEarningsOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div>
+                  <h3 className="text-base font-semibold text-white">{locale === "fr" ? "Mes gains" : "My earnings"}</h3>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {locale === "fr" ? "Resume net + paiements" : "Net summary + payouts"}
+                  </p>
+                </div>
+                <span className="text-xs text-zinc-400">{earningsOpen ? "-" : "+"}</span>
+              </button>
+
+              {earningsOpen ? (
+                <div className="mt-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    {payoutsMeta ? (
+                      <p className="text-xs text-zinc-300">
+                        {locale === "fr" ? "Total net" : "Total net"}: {formatAmount(payoutsMeta.sumCourierPayoutCents, "XOF")}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void refreshPayouts()}
+                      className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
+                    >
+                      {locale === "fr" ? "Rafraichir" : "Refresh"}
+                    </button>
+                  </div>
+
+                  {payoutsLoading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
+                  {payoutsError && <p className="text-sm text-rose-300">{payoutsError}</p>}
+
+                  {!payoutsLoading && !payoutsError ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-xs text-zinc-200">
+                        <thead className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                          <tr>
+                            <th className="py-2 pr-4">{locale === "fr" ? "Date" : "Date"}</th>
+                            <th className="py-2 pr-4">{locale === "fr" ? "Total" : "Total"}</th>
+                            <th className="py-2 pr-4">Fee</th>
+                            <th className="py-2 pr-4">{locale === "fr" ? "Net" : "Net"}</th>
+                            <th className="py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payouts.map((payout) => (
+                            <tr key={payout.id} className="border-t border-white/10">
+                              <td className="py-2 pr-4">{formatDateLabel(payout.createdAt, locale)}</td>
+                              <td className="py-2 pr-4">{formatAmount(payout.amountTotalCents, payout.currency)}</td>
+                              <td className="py-2 pr-4">{formatAmount(payout.platformFeeCents, payout.currency)}</td>
+                              <td className="py-2 pr-4 text-emerald-300">{formatAmount(payout.courierPayoutCents, payout.currency)}</td>
+                              <td className="py-2">{payout.status}</td>
+                            </tr>
+                          ))}
+                          {payouts.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-4 text-zinc-400">
+                                {locale === "fr" ? "Aucun payout." : "No payouts."}
+                              </td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+        </aside>
+      </div>
+
+      <UserProfileDrawer
+        open={Boolean(selectedCourierProfile)}
+        onClose={() => setSelectedCourierProfile(null)}
+        locale={locale}
+        userId={selectedCourierProfile?.courierId}
+        viewerUserId={currentUserId}
+        name={selectedCourierProfile?.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
+        avatarUrl={selectedCourierProfile?.courier.image ?? null}
+        roleLabel={locale === "fr" ? "Coursier" : "Courier"}
+        reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
+        details={
+          selectedCourierProfile
+            ? [
                 {
                   label: locale === "fr" ? "Vehicule" : "Vehicle",
-                  value: profile.vehicleType ?? "-",
+                  value: selectedCourierProfile.vehicleType ?? "-",
                 },
                 {
                   label: locale === "fr" ? "Villes" : "Cities",
-                  value: profile.cities.length ? profile.cities.join(", ") : "-",
+                  value: selectedCourierProfile.cities.length
+                    ? selectedCourierProfile.cities.join(", ")
+                    : "-",
                 },
                 {
                   label: locale === "fr" ? "Zones" : "Areas",
-                  value: profile.areas.length ? profile.areas.join(", ") : "-",
+                  value: selectedCourierProfile.areas.length
+                    ? selectedCourierProfile.areas.join(", ")
+                    : "-",
                 },
-              ]}
-              onViewProfile={() => setSelectedCourierProfile(profile)}
-              viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
-            />
-          ))}
-
-          {!couriersLoading && couriers.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Aucun courier actif." : "No active courier profile."}
-            </div>
-          )}
-        </div>
-
-        <UserProfileDrawer
-          open={Boolean(selectedCourierProfile)}
-          onClose={() => setSelectedCourierProfile(null)}
-          locale={locale}
-          userId={selectedCourierProfile?.courierId}
-          viewerUserId={currentUserId}
-          name={selectedCourierProfile?.courier.name ?? (locale === "fr" ? "Coursier" : "Courier")}
-          avatarUrl={selectedCourierProfile?.courier.image ?? null}
-          roleLabel={locale === "fr" ? "Coursier" : "Courier"}
-          reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
-          details={
-            selectedCourierProfile
-              ? [
-                  {
-                    label: locale === "fr" ? "Vehicule" : "Vehicle",
-                    value: selectedCourierProfile.vehicleType ?? "-",
-                  },
-                  {
-                    label: locale === "fr" ? "Villes" : "Cities",
-                    value: selectedCourierProfile.cities.length
-                      ? selectedCourierProfile.cities.join(", ")
+                {
+                  label: locale === "fr" ? "Horaires" : "Hours",
+                  value: selectedCourierProfile.availableHours ?? "-",
+                },
+                {
+                  label: locale === "fr" ? "Charge max" : "Max weight",
+                  value:
+                    typeof selectedCourierProfile.maxWeightKg === "number"
+                      ? `${selectedCourierProfile.maxWeightKg} kg`
                       : "-",
-                  },
-                  {
-                    label: locale === "fr" ? "Zones" : "Areas",
-                    value: selectedCourierProfile.areas.length
-                      ? selectedCourierProfile.areas.join(", ")
-                      : "-",
-                  },
-                  {
-                    label: locale === "fr" ? "Horaires" : "Hours",
-                    value: selectedCourierProfile.availableHours ?? "-",
-                  },
-                  {
-                    label: locale === "fr" ? "Charge max" : "Max weight",
-                    value:
-                      typeof selectedCourierProfile.maxWeightKg === "number"
-                        ? `${selectedCourierProfile.maxWeightKg} kg`
-                        : "-",
-                  },
-                ]
-              : []
-          }
-          primaryAction={
-            selectedCourierProfile && isLoggedIn && currentUserId !== selectedCourierProfile.courierId
-              ? {
-                  label: locale === "fr" ? "Faire une demande" : "Create request",
-                  onClick: () => {
-                    setSelectedCourierProfile(null);
-                    document
-                      .getElementById("tiak-create-delivery-form")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  },
-                }
-              : undefined
-          }
-        />
-      </section>
+                },
+              ]
+            : []
+        }
+        primaryAction={
+          selectedCourierProfile && isLoggedIn && currentUserId !== selectedCourierProfile.courierId
+            ? {
+                label: locale === "fr" ? "Faire une demande" : "Create request",
+                onClick: () => {
+                  setSelectedCourierProfile(null);
+                  document
+                    .getElementById("tiak-create-delivery-form")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                },
+              }
+            : undefined
+        }
+      />
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">
-            {locale === "fr" ? "Demandes ouvertes" : "Open requests"}
-          </h2>
-          <button
-            type="button"
-            onClick={refreshOpenDeliveries}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
-          >
-            {locale === "fr" ? "Rafraichir" : "Refresh"}
-          </button>
-        </div>
-
-        {loading && <p className="text-sm text-zinc-300">{locale === "fr" ? "Chargement..." : "Loading..."}</p>}
-        {error && <p className="text-sm text-rose-300">{error}</p>}
-
-        <div className="grid gap-3 md:grid-cols-2">
-          {openDeliveries.map((delivery) => (
-            <TiakDeliveryCard
-              key={delivery.id}
-              locale={locale}
-              delivery={delivery}
-              isLoggedIn={isLoggedIn}
-              currentUserId={currentUserId}
-              currentUserRole={currentUserRole}
-              onTrackDelivery={trackDeliveryId}
-              onDeliveryUpdated={handleDeliveryUpdated}
-              onRequireLogin={requestLogin}
-            />
-          ))}
-
-          {!loading && openDeliveries.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-              {locale === "fr" ? "Aucune demande ouverte." : "No open requests."}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {isLoggedIn && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">
-            {isCourierOrAdmin
-              ? locale === "fr"
-                ? "Mes livraisons"
-                : "My deliveries"
-              : locale === "fr"
-                ? "Mes demandes"
-                : "My requests"}
-          </h2>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {displayedTracked.map((delivery) => (
-              <TiakDeliveryCard
-                key={`tracked-${delivery.id}`}
-                locale={locale}
-                delivery={delivery}
-                isLoggedIn={isLoggedIn}
-                currentUserId={currentUserId}
-                currentUserRole={currentUserRole}
-                onTrackDelivery={trackDeliveryId}
-                onDeliveryUpdated={handleDeliveryUpdated}
-                onRequireLogin={requestLogin}
-              />
-            ))}
-
-            {displayedTracked.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-                {locale === "fr"
-                  ? "Aucune livraison suivie pour le moment."
-                  : "No tracked deliveries yet."}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+      <TiakDeliveryDetailsPanel
+        locale={locale}
+        open={Boolean(selectedDelivery)}
+        delivery={selectedDelivery}
+        isLoggedIn={isLoggedIn}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
+        onClose={() => setSelectedDelivery(null)}
+        onTrackDelivery={trackDeliveryId}
+        onDeliveryUpdated={handleDeliveryUpdated}
+        onRequireLogin={requestLogin}
+      />
     </div>
   );
 }
