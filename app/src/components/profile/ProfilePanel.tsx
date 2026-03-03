@@ -9,6 +9,7 @@ import { buildFormDefaults } from "@/lib/forms/prefill";
 import { COUNTRIES, getCountryFlag } from "@/lib/locale/country";
 import ProfileHeaderCard from "@/components/profile/ProfileHeaderCard";
 import KycFlowPanel from "@/components/profile/KycFlowPanel";
+import KycWizard from "@/components/kyc/KycWizard";
 
 type Profile = {
   id: string;
@@ -155,7 +156,6 @@ export default function ProfilePanel() {
     null
   );
   const [kycPreviews, setKycPreviews] = useState<Record<string, string>>({});
-  const [kycApproved, setKycApproved] = useState(false);
   const [kycSubmission, setKycSubmission] = useState<{
     id?: string;
     status?: string | null;
@@ -242,7 +242,6 @@ export default function ProfilePanel() {
           reviewReason?: string | null;
         };
         setKycStatus(kycData.status ?? null);
-        setKycApproved(kycData.status === "APPROVED");
         setKycSubmission(kycData);
         if (kycData.targetRole) {
           setSelectedRole(kycData.targetRole);
@@ -513,8 +512,6 @@ export default function ProfilePanel() {
   };
 
   const requiredFields = kycRequirement?.requiredFields ?? [];
-  const optionalFields = kycRequirement?.optionalFields ?? [];
-
   const isFieldFilled = (field: KycFieldKey) => {
     if (field === "phoneVerified") {
       return Boolean(profile.phone?.trim());
@@ -522,16 +519,37 @@ export default function ProfilePanel() {
     return Boolean((kyc as Record<string, string>)[field]?.trim());
   };
 
-  const visibleKycFields = Array.from(
-    new Set([...requiredFields, ...optionalFields].filter((field) => field !== "phoneVerified"))
-  );
-
   const missingRequiredFields = requiredFields.filter((field) => !isFieldFilled(field));
 
-  const canSubmitKyc =
-    !kycLoading &&
-    requiredFields.length > 0 &&
-    missingRequiredFields.length === 0;
+  const normalizedPartnerStatus: "NOT_STARTED" | "PENDING" | "VERIFIED" | "REJECTED" =
+    kycStatus === "APPROVED"
+      ? "VERIFIED"
+      : kycStatus === "REJECTED"
+      ? "REJECTED"
+      : kycStatus === "PENDING"
+      ? "PENDING"
+      : "NOT_STARTED";
+
+  const kycProgress =
+    normalizedPartnerStatus === "VERIFIED"
+      ? 100
+      : normalizedPartnerStatus === "PENDING"
+      ? 66
+      : normalizedPartnerStatus === "REJECTED"
+      ? 33
+      : 0;
+
+  const currentRoleBadge = roleLabels[0] ?? "CLIENT";
+  const completionHints = missingRequiredFields
+    .filter((field) => field !== "phoneVerified")
+    .slice(0, 3)
+    .map((field) => fieldLabels[field]);
+
+  const openKycFlow = () => {
+    if (!selectedRole) return;
+    setKyc((prev) => ({ ...prev, targetRole: selectedRole }));
+    setShowKycForm(true);
+  };
 
   const quickActions = [
     { href: "/profile/edit", label: t("actions.edit") },
@@ -736,7 +754,7 @@ export default function ProfilePanel() {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -786,23 +804,23 @@ export default function ProfilePanel() {
                   key={role.key}
                   type="button"
                   onClick={() => chooseRole(role.key)}
-                  className={`rounded-2xl border px-4 py-4 text-left text-xs transition-all duration-200 ease-out hover:-translate-y-0.5 ${
+                  className={`rounded-2xl border px-4 py-4 text-left text-xs transition-all duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(0,0,0,0.28)] ${
                     selectedRole === role.key
-                      ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100 shadow-[0_12px_30px_rgba(16,185,129,0.12)]"
-                      : "border-white/10 bg-zinc-950/60 text-white hover:border-white/30"
+                      ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-100 ring-2 ring-emerald-300/50"
+                      : "border-white/10 bg-zinc-950/60 text-white hover:border-emerald-300/40"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">{role.label}</p>
-                    <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${
-                        selectedRole === role.key
-                          ? "border-emerald-300 bg-emerald-300 text-zinc-900"
-                          : "border-white/30 text-zinc-500"
-                      }`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    </span>
+                    {selectedRole === role.key ? (
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-300 text-zinc-900">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                          <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    ) : (
+                      <span className="inline-flex h-5 w-5 rounded-full border border-white/25" />
+                    )}
                   </div>
                   <p className="mt-2 text-xs text-zinc-400">{role.description}</p>
                 </button>
@@ -813,14 +831,156 @@ export default function ProfilePanel() {
 
             <button
               type="button"
-              onClick={() => {
-                setKyc((prev) => ({ ...prev, targetRole: selectedRole }));
-                setShowKycForm(true);
-              }}
-              className="mt-5 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:brightness-105"
+              onClick={openKycFlow}
+              disabled={!selectedRole}
+              className="mt-5 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("roles.cta")}
             </button>
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:p-6 shadow-[0_14px_40px_rgba(0,0,0,0.28)]">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300">
+              {isFr ? "Statut partenaire" : "Partner status"}
+            </h3>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-zinc-400">{isFr ? "Statut actuel" : "Current role"}</span>
+                <span className="rounded-full border border-white/20 bg-zinc-950/60 px-3 py-1 font-medium text-zinc-100">
+                  {currentRoleBadge}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-zinc-400">{isFr ? "Dossier KYC" : "KYC dossier"}</span>
+                <span
+                  className={`rounded-full px-3 py-1 font-medium ${
+                    normalizedPartnerStatus === "VERIFIED"
+                      ? "bg-emerald-400/20 text-emerald-200"
+                      : normalizedPartnerStatus === "REJECTED"
+                      ? "bg-rose-400/20 text-rose-200"
+                      : normalizedPartnerStatus === "PENDING"
+                      ? "bg-amber-400/20 text-amber-200"
+                      : "bg-zinc-700/60 text-zinc-200"
+                  }`}
+                >
+                  {normalizedPartnerStatus === "VERIFIED"
+                    ? isFr
+                      ? "VERIFIE"
+                      : "VERIFIED"
+                    : normalizedPartnerStatus === "REJECTED"
+                    ? isFr
+                      ? "REFUSE"
+                      : "REJECTED"
+                    : normalizedPartnerStatus === "PENDING"
+                    ? isFr
+                      ? "EN ATTENTE"
+                      : "PENDING"
+                    : isFr
+                    ? "NON DEMARRE"
+                    : "NOT STARTED"}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="h-2.5 rounded-full bg-zinc-800/80">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300 transition-all duration-500 ease-out motion-reduce:transition-none"
+                  style={{ width: `${kycProgress}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">{kycProgress}%</p>
+            </div>
+
+            {completionHints.length > 0 && normalizedPartnerStatus !== "VERIFIED" ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-3">
+                <p className="text-[11px] font-medium text-zinc-300">
+                  {isFr ? "A completer" : "To complete"}
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-zinc-400">
+                  {completionHints.map((hint) => (
+                    <li key={hint}>{hint}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {normalizedPartnerStatus === "NOT_STARTED" ? (
+              <button
+                type="button"
+                onClick={openKycFlow}
+                className="mt-5 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40"
+              >
+                {isFr ? "Demarrer" : "Start"}
+              </button>
+            ) : null}
+
+            {normalizedPartnerStatus === "PENDING" ? (
+              <button
+                type="button"
+                onClick={() => setShowKycForm(true)}
+                className="mt-5 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40"
+              >
+                {isFr ? "Voir mon dossier" : "View my dossier"}
+              </button>
+            ) : null}
+
+            {normalizedPartnerStatus === "REJECTED" ? (
+              <div className="mt-5 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowKycForm(true)}
+                  className="rounded-full border border-rose-300/40 px-4 py-2 text-xs font-semibold text-rose-100 transition hover:border-rose-200/60"
+                >
+                  {isFr ? "Modifier et renvoyer" : "Edit and resubmit"}
+                </button>
+                {kycSubmission?.reviewReason ? (
+                  <p className="text-[11px] text-rose-200/90">{kycSubmission.reviewReason}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {normalizedPartnerStatus === "VERIFIED" ? (
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-100">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                  <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {isFr ? "Compte verifie" : "Verified account"}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:p-6 shadow-[0_14px_40px_rgba(0,0,0,0.28)]">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-300">
+              {isFr ? "Pourquoi devenir partenaire ?" : "Why become a partner?"}
+            </h3>
+            <p className="mt-2 text-xs text-zinc-400">
+              {isFr
+                ? "Debloque des outils professionnels pour vendre et livrer plus efficacement."
+                : "Unlock professional tools to sell and deliver more efficiently."}
+            </p>
+            <ul className="mt-4 space-y-2">
+              {[
+                isFr ? "Plus de visibilite" : "More visibility",
+                isFr ? "Revenus et paiements securises" : "Revenue and secure payouts",
+                isFr ? "Outils pro et dashboard" : "Pro tools and dashboard",
+                isFr ? "Support prioritaire" : "Priority support",
+                isFr ? "Badge de confiance verifie" : "Verified trust badge",
+              ].map((item) => (
+                <li
+                  key={item}
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950/45 px-3 py-2 text-xs text-zinc-200 transition-all duration-200 ease-out motion-reduce:transition-none hover:bg-zinc-800/30"
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-200">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                      <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
           </section>
         </div>
       </div>
@@ -831,172 +991,34 @@ export default function ProfilePanel() {
         title={t("kyc.title")}
         subtitle={t("kyc.subtitle")}
       >
-        {kycStatus && (
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs ${
-              kycStatus === "APPROVED"
-                ? "bg-emerald-400/20 text-emerald-200"
-                : kycStatus === "REJECTED"
-                ? "bg-rose-400/20 text-rose-200"
-                : "bg-amber-400/20 text-amber-200"
-            }`}
-          >
-            {t(`kyc.status.${kycStatus.toLowerCase()}`)}
-          </span>
-        )}
-
-        {kycStatus === "REJECTED" && kycSubmission?.reviewReason ? (
-          <div className="mt-3 rounded-2xl border border-rose-400/30 bg-rose-400/10 p-4 text-xs text-rose-100">
-            <p className="font-semibold">{isFr ? "Motif de refus" : "Rejection reason"}</p>
-            <p className="mt-1 text-rose-50/90">{kycSubmission.reviewReason}</p>
-          </div>
-        ) : null}
-
-        {kycApproved ? (
-          <div className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-xs text-emerald-100">
-            {t("kyc.approvedNote")}
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-3">
-            <p className="text-xs text-zinc-500">{t("kyc.note")}</p>
-            <div className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white">
-              <p>
-                {t("kyc.selectedRole")}: <span className="font-semibold">{selectedRole}</span>
-              </p>
-              <p className="mt-1 text-xs text-zinc-400">
-                {isFr ? "Type" : "Type"}: {kycRequirement?.kycType ?? "-"} - {isFr ? "Niveau" : "Level"}: {kycRequirement?.kycLevel ?? "-"}
-              </p>
-            </div>
-
-            {kycRequirementLoading ? (
-              <p className="text-xs text-zinc-500">{isFr ? "Chargement des exigences..." : "Loading requirements..."}</p>
-            ) : null}
-
-            {requiredFields.length > 0 ? (
-              <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-100">
-                  {isFr ? "Documents requis pour ce role" : "Required documents for this role"}
-                </p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-amber-50">
-                  {requiredFields.map((field) => (
-                    <li key={`required-${field}`}>{fieldLabels[field]}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {optionalFields.length > 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/50 px-4 py-3">
-                <p className="text-xs font-semibold text-zinc-200">
-                  {isFr ? "Documents optionnels" : "Optional documents"}
-                </p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-zinc-400">
-                  {optionalFields.map((field) => (
-                    <li key={`optional-${field}`}>{fieldLabels[field]}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {missingRequiredFields.includes("phoneVerified") ? (
-              <p className="text-xs text-rose-300">
-                {isFr
-                  ? "Numero de telephone requis: ajoute ton numero sur ton profil."
-                  : "Phone number required: add your phone number on your profile."}
-              </p>
-            ) : null}
-
-            {visibleKycFields.map((field) => {
-              const isUploadField = KYC_UPLOAD_FIELDS.has(field);
-              const value = (kyc as Record<string, string>)[field] ?? "";
-              const isRequired = requiredFields.includes(field);
-
-              return (
-                <div key={field} className="grid gap-2">
-                  {field === "addressCountry" ? (
-                    <select
-                      className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-                      value={value}
-                      onChange={(e) =>
-                        setKyc((prev) => ({ ...prev, [field]: e.target.value }))
-                      }
-                    >
-                      {COUNTRIES.map((country) => (
-                        <option key={country.code} value={country.code}>
-                          {`${getCountryFlag(country.code)} ${country.name}`.trim()}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-                      placeholder={`${fieldLabels[field]}${isRequired ? " *" : ""}`}
-                      value={value}
-                      onChange={(e) =>
-                        setKyc((prev) => ({ ...prev, [field]: e.target.value }))
-                      }
-                    />
-                  )}
-                  {kycPreviews[field] ? (
-                    <div className="overflow-hidden rounded-2xl border border-white/10">
-                      <img
-                        src={kycPreviews[field]}
-                        alt="Preview"
-                        className="h-28 w-full object-cover"
-                      />
-                    </div>
-                  ) : null}
-                  {isUploadField ? (
-                    <div className="flex flex-wrap gap-2">
-                      <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 px-4 py-2 text-[11px] text-zinc-300">
-                        {kycUploadingField === field ? t("kyc.uploading") : t("kyc.upload")}
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            uploadField(field as keyof typeof kyc, file);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-                      {value ? (
-                        <button
-                          type="button"
-                          onClick={() => clearField(field as keyof typeof kyc)}
-                          className="rounded-xl border border-white/15 px-4 py-2 text-[11px] text-white"
-                        >
-                          {t("kyc.remove")}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-
-            <textarea
-              className="rounded-xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-white outline-none"
-              placeholder={t("kyc.fields.notes")}
-              value={kyc.notes}
-              onChange={(e) =>
-                setKyc((prev) => ({ ...prev, notes: e.target.value }))
-              }
-            />
-          </div>
-        )}
-
-        {!kycApproved && (
-          <button
-            type="button"
-            onClick={submitKyc}
-            disabled={!canSubmitKyc}
-            className="mt-6 rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-          >
-            {kycLoading ? t("kyc.loading") : t("kyc.submit")}
-          </button>
-        )}
+        <KycWizard
+          key={selectedRole}
+          isFr={isFr}
+          selectedRole={selectedRole}
+          kycStatus={kycStatus}
+          kycSubmission={kycSubmission}
+          requirement={kycRequirement}
+          requirementLoading={kycRequirementLoading}
+          fieldLabels={fieldLabels as Record<string, string>}
+          uploadFields={KYC_UPLOAD_FIELDS as Set<string>}
+          countries={COUNTRIES}
+          getCountryFlag={getCountryFlag}
+          profilePhone={profile.phone}
+          values={kyc as Record<string, string>}
+          previews={kycPreviews}
+          uploadingField={kycUploadingField}
+          loading={kycLoading}
+          onChangeField={(field, value) =>
+            setKyc((prev) => ({ ...prev, [field]: value }))
+          }
+          onUploadField={(field, file) =>
+            uploadField(field as keyof typeof kyc, file)
+          }
+          onClearField={(field) =>
+            clearField(field as keyof typeof kyc)
+          }
+          onSubmit={submitKyc}
+        />
       </KycFlowPanel>
     </>
   );
