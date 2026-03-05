@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import ChatPanel from "@/components/messages/ChatPanel";
 import OpsDetailsPanel from "@/components/messages/OpsDetailsPanel";
+import InquiryChatThread from "@/components/messages/InquiryChatThread";
+import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
 
 type TiakConversationSummary = {
   id: string;
@@ -32,22 +35,82 @@ type TiakConversationSummary = {
   }>;
 };
 
+type InquiryOfferItem = {
+  id: string;
+  amountCents: number;
+  currency: string;
+  quantity: number;
+  note?: string | null;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELED" | "EXPIRED";
+  createdAt: string;
+  resolvedAt?: string | null;
+  buyerId: string;
+  buyer?: { id: string; name?: string | null; email?: string | null } | null;
+};
+
+type InquiryConversationSummary = {
+  id: string;
+  serviceType: "SHOP";
+  title: string;
+  counterpart: string;
+  preview: string;
+  updatedAt: string | Date;
+  unread: boolean;
+  status: "OPEN" | "CLOSED";
+  href: string;
+  isSeller: boolean;
+  sellerName?: string;
+  product: {
+    id: string;
+    slug: string;
+    title: string;
+    type: "PREORDER" | "DROPSHIP" | "LOCAL";
+    currency: string;
+  };
+  productImageUrl: string | null;
+  productImageAlt: string;
+  messagesCount: number;
+  offersCount: number;
+  lastActivityAt: string | Date;
+  initialOffers: InquiryOfferItem[];
+};
+
 type Props = {
   locale: string;
   meId: string;
   conversations: TiakConversationSummary[];
+  inquiryConversations: InquiryConversationSummary[];
   initialSelectedId: string | null;
 };
 
 type QuickFilter = "ALL" | "UNREAD" | "OPEN" | "CLOSED";
+type ServiceType = "ALL" | "TIAK" | "SHOP" | "PRESTA" | "GP" | "IMMO" | "CARS";
 
-const CLOSED_STATUSES = new Set(["COMPLETED", "CANCELED", "REJECTED"]);
+type UnifiedConversation = {
+  id: string;
+  sourceId: string;
+  kind: "TIAK" | "SHOP";
+  serviceType: Exclude<ServiceType, "ALL">;
+  title: string;
+  counterpart: string;
+  preview: string;
+  updatedAt: string | Date;
+  unreadCount: number;
+  statusRaw: string;
+  statusLabel: string;
+  isClosed: boolean;
+  href?: string;
+};
+
+const CLOSED_TIAK_STATUSES = new Set(["COMPLETED", "CANCELED", "REJECTED"]);
 const SYSTEM_NOTES = new Set([
   "Courier assigned",
   "Courier accepted assignment",
   "Courier declined assignment",
   "Assignment expired",
 ]);
+
+const SERVICE_TABS: ServiceType[] = ["ALL", "TIAK", "SHOP", "PRESTA", "GP", "IMMO", "CARS"];
 
 function toArea(value: string) {
   return value.split(",")[0]?.trim() || value;
@@ -63,7 +126,7 @@ function parseRatingNote(note: string | null) {
   return { rating, comment };
 }
 
-function formatStatus(status: string, locale: string) {
+function formatTiakStatus(status: string, locale: string) {
   const isFr = locale === "fr";
   const fr: Record<string, string> = {
     REQUESTED: "Ouverte",
@@ -88,6 +151,12 @@ function formatStatus(status: string, locale: string) {
   };
 
   return isFr ? (fr[status] ?? status) : (en[status] ?? status);
+}
+
+function formatInquiryStatus(status: "OPEN" | "CLOSED", locale: string) {
+  const isFr = locale === "fr";
+  if (status === "OPEN") return isFr ? "Ouverte" : "Open";
+  return isFr ? "Fermee" : "Closed";
 }
 
 function previewText(params: {
@@ -132,22 +201,72 @@ function previewText(params: {
   return status;
 }
 
+function serviceLabel(service: ServiceType, isFr: boolean) {
+  const labelsFr: Record<ServiceType, string> = {
+    ALL: "Tous",
+    TIAK: "Tiak",
+    SHOP: "Shop",
+    PRESTA: "Presta",
+    GP: "GP",
+    IMMO: "Immo",
+    CARS: "Cars",
+  };
+
+  const labelsEn: Record<ServiceType, string> = {
+    ALL: "All",
+    TIAK: "Tiak",
+    SHOP: "Shop",
+    PRESTA: "Presta",
+    GP: "GP",
+    IMMO: "Immo",
+    CARS: "Cars",
+  };
+
+  return isFr ? labelsFr[service] : labelsEn[service];
+}
+
+function serviceChipClasses(service: Exclude<ServiceType, "ALL">) {
+  switch (service) {
+    case "TIAK":
+      return "bg-emerald-400/15 border border-emerald-300/25 text-emerald-200";
+    case "SHOP":
+      return "bg-sky-400/15 border border-sky-300/25 text-sky-200";
+    case "PRESTA":
+      return "bg-violet-400/15 border border-violet-300/25 text-violet-200";
+    case "GP":
+      return "bg-amber-400/15 border border-amber-300/25 text-amber-200";
+    case "IMMO":
+      return "bg-cyan-400/15 border border-cyan-300/25 text-cyan-200";
+    case "CARS":
+      return "bg-rose-400/15 border border-rose-300/25 text-rose-200";
+    default:
+      return "bg-zinc-400/15 border border-zinc-300/25 text-zinc-200";
+  }
+}
+
 export default function ConversationsList({
   locale,
   meId,
   conversations,
+  inquiryConversations,
   initialSelectedId,
 }: Props) {
   const isFr = locale === "fr";
-  const [selectedId, setSelectedId] = useState<string | null>(
+
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
     initialSelectedId && conversations.some((entry) => entry.id === initialSelectedId)
-      ? initialSelectedId
-      : (conversations[0]?.id ?? null)
+      ? `tiak:${initialSelectedId}`
+      : inquiryConversations[0]
+        ? `shop:${inquiryConversations[0].id}`
+        : conversations[0]
+          ? `tiak:${conversations[0].id}`
+          : null
   );
   const [query, setQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
+  const [serviceFilter, setServiceFilter] = useState<ServiceType>("ALL");
   const [visibleCount, setVisibleCount] = useState(20);
-  const [manuallyRead, setManuallyRead] = useState<Record<string, true>>({});
+  const [manuallyReadTiak, setManuallyReadTiak] = useState<Record<string, true>>({});
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
   const [opsDrawerOpen, setOpsDrawerOpen] = useState(false);
   const [activeDelivery, setActiveDelivery] = useState<TiakDelivery | null>(null);
@@ -155,69 +274,141 @@ export default function ConversationsList({
   const [threadLoading, setThreadLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const unreadById = useMemo(() => {
+  const tiakUnreadById = useMemo(() => {
     const map = new Map<string, number>();
     for (const conversation of conversations) {
       const lastEvent = conversation.events[0];
-      const unread =
-        Boolean(lastEvent && lastEvent.actorId !== meId) && !manuallyRead[conversation.id];
+      const unread = Boolean(lastEvent && lastEvent.actorId !== meId) && !manuallyReadTiak[conversation.id];
       map.set(conversation.id, unread ? 1 : 0);
     }
     return map;
-  }, [conversations, manuallyRead, meId]);
+  }, [conversations, manuallyReadTiak, meId]);
+
+  const unifiedConversations = useMemo<UnifiedConversation[]>(() => {
+    const tiakItems = conversations.map((item) => {
+      const iAmCustomer = item.customerId === meId;
+      const counterpart = iAmCustomer
+        ? item.courier?.name || item.courier?.email || (isFr ? "Coursier" : "Courier")
+        : item.customer?.name || item.customer?.email || (isFr ? "Client" : "Customer");
+      const lastEvent = item.events[0] ?? null;
+      const preview = lastEvent
+        ? previewText({
+            locale,
+            meId,
+            status: lastEvent.status,
+            note: lastEvent.note,
+            actorId: lastEvent.actorId,
+            customerName: item.customer?.name || (isFr ? "Client" : "Customer"),
+            courierName: item.courier?.name || (isFr ? "Coursier" : "Courier"),
+          })
+        : isFr
+          ? "Aucun message"
+          : "No messages";
+
+      return {
+        id: `tiak:${item.id}`,
+        sourceId: item.id,
+        kind: "TIAK" as const,
+        serviceType: "TIAK" as const,
+        title: `${toArea(item.pickupAddress)} -> ${toArea(item.dropoffAddress)}`,
+        counterpart,
+        preview,
+        updatedAt: item.updatedAt,
+        unreadCount: tiakUnreadById.get(item.id) ?? 0,
+        statusRaw: item.status,
+        statusLabel: formatTiakStatus(item.status, locale),
+        isClosed: CLOSED_TIAK_STATUSES.has(item.status),
+      };
+    });
+
+    const inquiryItems = inquiryConversations.map((item) => ({
+      id: `shop:${item.id}`,
+      sourceId: item.id,
+      kind: "SHOP" as const,
+      serviceType: item.serviceType,
+      title: item.title,
+      counterpart: item.counterpart,
+      preview: item.preview,
+      updatedAt: item.updatedAt,
+      unreadCount: item.unread ? 1 : 0,
+      statusRaw: item.status,
+      statusLabel: formatInquiryStatus(item.status, locale),
+      isClosed: item.status === "CLOSED",
+      href: item.href,
+    }));
+
+    return [...tiakItems, ...inquiryItems].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }, [conversations, inquiryConversations, isFr, locale, meId, tiakUnreadById]);
 
   const filteredConversations = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    return conversations.filter((item) => {
-      const isUnread = (unreadById.get(item.id) ?? 0) > 0;
-      const isClosed = CLOSED_STATUSES.has(item.status);
+    return unifiedConversations.filter((item) => {
+      if (serviceFilter !== "ALL" && item.serviceType !== serviceFilter) return false;
 
-      if (quickFilter === "UNREAD" && !isUnread) return false;
-      if (quickFilter === "OPEN" && isClosed) return false;
-      if (quickFilter === "CLOSED" && !isClosed) return false;
+      if (quickFilter === "UNREAD" && item.unreadCount === 0) return false;
+      if (quickFilter === "OPEN" && item.isClosed) return false;
+      if (quickFilter === "CLOSED" && !item.isClosed) return false;
 
       if (!q) return true;
 
-      const counterpart =
-        item.customerId === meId
-          ? item.courier?.name || item.courier?.email || ""
-          : item.customer?.name || item.customer?.email || "";
-
-      const haystack = [
-        toArea(item.pickupAddress),
-        toArea(item.dropoffAddress),
-        counterpart,
-        item.id,
-      ]
-        .join(" ")
-        .toLowerCase();
-
+      const haystack = [item.title, item.counterpart, item.preview, item.sourceId].join(" ").toLowerCase();
       return haystack.includes(q);
     });
-  }, [conversations, meId, query, quickFilter, unreadById]);
-
-  const selectedConversation = useMemo(
-    () => conversations.find((entry) => entry.id === selectedId) ?? null,
-    [conversations, selectedId]
-  );
+  }, [query, quickFilter, serviceFilter, unifiedConversations]);
 
   useEffect(() => {
-    if (!selectedId || !conversations.some((entry) => entry.id === selectedId)) {
-      setSelectedId(conversations[0]?.id ?? null);
+    if (!selectedConversationId || !filteredConversations.some((entry) => entry.id === selectedConversationId)) {
+      setSelectedConversationId(filteredConversations[0]?.id ?? null);
     }
-  }, [conversations, selectedId]);
+  }, [filteredConversations, selectedConversationId]);
+
+  const selectedConversation = useMemo(
+    () => filteredConversations.find((entry) => entry.id === selectedConversationId) ?? null,
+    [filteredConversations, selectedConversationId]
+  );
+
+  const selectedTiakConversation = useMemo(
+    () =>
+      selectedConversation?.kind === "TIAK"
+        ? conversations.find((entry) => entry.id === selectedConversation.sourceId) ?? null
+        : null,
+    [conversations, selectedConversation]
+  );
+
+  const selectedShopInquiryId = useMemo(
+    () => (selectedConversation?.kind === "SHOP" ? selectedConversation.sourceId : null),
+    [selectedConversation]
+  );
+  const selectedShopConversation = useMemo(
+    () =>
+      selectedShopInquiryId
+        ? inquiryConversations.find((entry) => entry.id === selectedShopInquiryId) ?? null
+        : null,
+    [inquiryConversations, selectedShopInquiryId]
+  );
+
+
+  useEffect(() => {
+    if (selectedConversation?.kind === "TIAK") return;
+    setOpsDrawerOpen(false);
+    setActiveDelivery(null);
+    setActiveEvents([]);
+    setThreadLoading(false);
+  }, [selectedConversation?.kind]);
 
   const visibleConversations = filteredConversations.slice(0, visibleCount);
 
-  const unreadCount = useMemo(
-    () => Array.from(unreadById.values()).reduce((sum, value) => sum + value, 0),
-    [unreadById]
+  const totalUnreadCount = useMemo(
+    () => unifiedConversations.reduce((sum, item) => sum + item.unreadCount, 0),
+    [unifiedConversations]
   );
 
   const markCurrentAsRead = () => {
-    if (!selectedId) return;
-    setManuallyRead((current) => ({ ...current, [selectedId]: true }));
+    if (!selectedTiakConversation?.id) return;
+    setManuallyReadTiak((current) => ({ ...current, [selectedTiakConversation.id]: true }));
   };
 
   const filterChipClasses = (value: QuickFilter) =>
@@ -227,9 +418,84 @@ export default function ConversationsList({
         : "border-white/15 bg-zinc-900/65 text-zinc-300 hover:border-white/35"
     }`;
 
+  const serviceTabClasses = (service: ServiceType) =>
+    `shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+      serviceFilter === service
+        ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
+        : "border-white/15 bg-zinc-900/65 text-zinc-300 hover:border-white/35"
+    }`;
+
+  const activeServiceLabel = serviceLabel(serviceFilter, isFr);
+
+  const shopSidebar = selectedShopConversation ? (
+    <div className="space-y-4">
+      <aside className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
+          {selectedShopConversation.productImageUrl ? (
+            <img
+              src={selectedShopConversation.productImageUrl}
+              alt={selectedShopConversation.productImageAlt}
+              className="h-44 w-full object-cover"
+            />
+          ) : (
+            <div className="grid h-44 place-items-center text-xs text-zinc-500">
+              {isFr ? "Image indisponible" : "Image unavailable"}
+            </div>
+          )}
+        </div>
+
+        <p className="mt-4 text-sm font-semibold text-white">{selectedShopConversation.product.title}</p>
+
+        <div className="mt-3 space-y-2 text-xs text-zinc-400">
+          <p>{isFr ? "Messages" : "Messages"}: {selectedShopConversation.messagesCount}</p>
+          <p>{isFr ? "Offres" : "Offers"}: {selectedShopConversation.offersCount}</p>
+          <p>{isFr ? "Statut" : "Status"}: {selectedShopConversation.status === "OPEN" ? (isFr ? "Ouverte" : "Open") : (isFr ? "Fermee" : "Closed")}</p>
+          <p>{isFr ? "Derniere activite" : "Last activity"}: {new Date(selectedShopConversation.lastActivityAt).toLocaleString(locale)}</p>
+        </div>
+
+        <div className="mt-4">
+          <Link
+            href={`/shop/${selectedShopConversation.product.slug}`}
+            className="inline-flex rounded-full border border-emerald-300/40 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition hover:border-emerald-300/70"
+          >
+            {isFr ? "Voir le produit" : "View product"}
+          </Link>
+        </div>
+      </aside>
+
+      <InquiryOffersPanel
+        locale={locale}
+        inquiryId={selectedShopConversation.id}
+        meId={meId}
+        isSeller={selectedShopConversation.isSeller}
+        product={selectedShopConversation.product}
+        sellerName={selectedShopConversation.sellerName}
+        initialOffers={selectedShopConversation.initialOffers}
+      />
+    </div>
+  ) : null;
+
   const listPanel = (
     <aside className="rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
       <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
+        <div className="mb-3 overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
+            {SERVICE_TABS.map((service) => (
+              <button
+                key={service}
+                type="button"
+                onClick={() => {
+                  setServiceFilter(service);
+                  setVisibleCount(20);
+                }}
+                className={serviceTabClasses(service)}
+              >
+                {serviceLabel(service, isFr)}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="relative block">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -261,7 +527,7 @@ export default function ConversationsList({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setQuickFilter("UNREAD")} className={filterChipClasses("UNREAD")}>
             {isFr ? "Non lus" : "Unread"}
-            {unreadCount > 0 ? <span className="ml-1 text-emerald-200">{unreadCount}</span> : null}
+            {totalUnreadCount > 0 ? <span className="ml-1 text-emerald-200">{totalUnreadCount}</span> : null}
           </button>
           <button type="button" onClick={() => setQuickFilter("OPEN")} className={filterChipClasses("OPEN")}>
             {isFr ? "Ouvertes" : "Open"}
@@ -276,73 +542,85 @@ export default function ConversationsList({
       </div>
 
       <div className="mt-3 max-h-[68vh] overflow-y-auto pr-1">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{isFr ? "Conversations" : "Conversations"}</p>
+          <span className="rounded-full border border-white/10 bg-zinc-950/70 px-2 py-0.5 text-[10px] text-zinc-300">
+            {activeServiceLabel} ({filteredConversations.length})
+          </span>
+        </div>
+
         <div className="space-y-2">
           {visibleConversations.map((item) => {
-            const isSelected = item.id === selectedId;
-            const isUnread = (unreadById.get(item.id) ?? 0) > 0;
-            const iAmCustomer = item.customerId === meId;
-            const counterpart = iAmCustomer
-              ? item.courier?.name || item.courier?.email || (isFr ? "Coursier" : "Courier")
-              : item.customer?.name || item.customer?.email || (isFr ? "Client" : "Customer");
-            const lastEvent = item.events[0] ?? null;
-            const preview = lastEvent
-              ? previewText({
-                  locale,
-                  meId,
-                  status: lastEvent.status,
-                  note: lastEvent.note,
-                  actorId: lastEvent.actorId,
-                  customerName: item.customer?.name || (isFr ? "Client" : "Customer"),
-                  courierName: item.courier?.name || (isFr ? "Coursier" : "Courier"),
-                })
-              : isFr
-                ? "Aucun message"
-                : "No messages";
+            const isSelected = item.id === selectedConversationId;
+
+            const rowClasses = `group block w-full rounded-xl border px-3 py-2 text-left transition-all duration-200 ease-out motion-reduce:transform-none ${
+              isSelected
+                ? "border-emerald-300/50 bg-zinc-800/40 shadow-[0_0_20px_rgba(16,185,129,0.14)]"
+                : "border-white/10 bg-zinc-950/70 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_6px_20px_rgba(0,0,0,0.35)]"
+            }`;
+
+            const content = (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${serviceChipClasses(item.serviceType)}`}>
+                        {serviceLabel(item.serviceType, isFr)}
+                      </span>
+                      <p className="truncate text-sm font-semibold text-white">{item.title}</p>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-zinc-400">{item.counterpart}</p>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                    {item.unreadCount > 0 ? <span className="h-2 w-2 rounded-full bg-emerald-300" /> : null}
+                    <span>
+                      {new Date(item.updatedAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className={`min-w-0 truncate text-xs ${item.unreadCount > 0 ? "text-zinc-200" : "text-zinc-500"}`}>
+                    {item.preview}
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300">
+                      {item.statusLabel}
+                    </span>
+                    {item.unreadCount > 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-950">
+                        {item.unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            );
 
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => {
-                  setSelectedId(item.id);
+                  setSelectedConversationId(item.id);
                   setMobileView("chat");
                 }}
-                className={`group w-full rounded-xl border px-3 py-2 text-left transition-all duration-200 ease-out motion-reduce:transform-none ${
-                  isSelected
-                    ? "border-emerald-300/50 bg-zinc-800/40 shadow-[0_0_20px_rgba(16,185,129,0.14)]"
-                    : "border-white/10 bg-zinc-950/70 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_6px_20px_rgba(0,0,0,0.35)]"
-                }`}
+                className={rowClasses}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-white">
-                    {toArea(item.pickupAddress)} -&gt; {toArea(item.dropoffAddress)}
-                  </p>
-                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
-                    {isUnread ? <span className="h-2 w-2 rounded-full bg-emerald-300" /> : null}
-                    <span>{new Date(item.updatedAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                  </div>
-                </div>
-
-                <p className="mt-0.5 truncate text-[11px] text-zinc-400">{counterpart}</p>
-                <p className={`mt-1 truncate text-xs ${isUnread ? "text-zinc-200" : "text-zinc-500"}`}>{preview}</p>
-
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300">
-                    {formatStatus(item.status, locale)}
-                  </span>
-                  {isUnread ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-950">
-                      1
-                    </span>
-                  ) : null}
-                </div>
+                {content}
               </button>
             );
           })}
 
           {visibleConversations.length === 0 ? (
             <div className="rounded-xl border border-white/10 bg-zinc-950/70 p-4 text-xs text-zinc-500">
-              {isFr ? "Aucune conversation avec ces filtres." : "No conversations for this filter."}
+              {isFr
+                ? `Aucune conversation ${activeServiceLabel} pour le moment.`
+                : `No ${activeServiceLabel} conversations for now.`}
             </div>
           ) : null}
         </div>
@@ -364,54 +642,75 @@ export default function ConversationsList({
     <section className="mb-6 rounded-3xl border border-white/10 bg-zinc-900/60 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-white">
-          {isFr ? "Conversations TIAK" : "TIAK conversations"}
+          {isFr ? "Conversations" : "Conversations"}
         </h2>
         <span className="rounded-full border border-white/15 bg-zinc-950/70 px-2 py-0.5 text-[11px] text-zinc-300">
-          {conversations.length}
+          {unifiedConversations.length}
         </span>
       </div>
 
-      <div className="hidden gap-4 lg:grid xl:grid-cols-[320px_minmax(0,1fr)_320px] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className={`hidden gap-4 lg:grid ${selectedConversation?.kind === "TIAK" ? "lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px]" : "lg:grid-cols-[320px_minmax(0,1fr)]"}`}>
         {listPanel}
 
-        <ChatPanel
-          locale={locale}
-          meId={meId}
-          deliveryId={selectedConversation?.id ?? null}
-          onThreadStateChange={(state) => {
-            setActiveDelivery(state.delivery);
-            setActiveEvents(state.events);
-            setThreadLoading(state.loading);
-          }}
-          onOpenOps={() => setOpsDrawerOpen(true)}
-          onMarkRead={markCurrentAsRead}
-          onBackToList={undefined}
-          refreshNonce={refreshNonce}
-        />
-
-        <div className="hidden xl:block">
-          <OpsDetailsPanel
+        {selectedConversation?.kind === "TIAK" ? (
+          <ChatPanel
             locale={locale}
-            mode="sidebar"
-            open
-            loading={threadLoading}
-            delivery={activeDelivery}
-            events={activeEvents}
-            onRefresh={() => {
-              setRefreshNonce((current) => current + 1);
+            meId={meId}
+            deliveryId={selectedTiakConversation?.id ?? null}
+            onThreadStateChange={(state) => {
+              setActiveDelivery(state.delivery);
+              setActiveEvents(state.events);
+              setThreadLoading(state.loading);
             }}
+            onOpenOps={() => setOpsDrawerOpen(true)}
+            onMarkRead={markCurrentAsRead}
+            onBackToList={undefined}
+            refreshNonce={refreshNonce}
           />
-        </div>
+        ) : selectedConversation?.kind === "SHOP" && selectedShopInquiryId && selectedShopConversation ? (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <InquiryChatThread
+              key={selectedShopInquiryId}
+              locale={locale}
+              inquiryId={selectedShopInquiryId}
+              meId={meId}
+              initialMessages={[]}
+            />
+            {shopSidebar}
+          </div>
+        ) : (
+          <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4">
+            <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed border-white/15 bg-zinc-950/60 text-center text-sm text-zinc-400">
+              <p>{isFr ? "Selectionne une conversation." : "Select a conversation."}</p>
+            </div>
+          </section>
+        )}
+
+        {selectedConversation?.kind === "TIAK" ? (
+          <div className="hidden xl:block">
+            <OpsDetailsPanel
+              locale={locale}
+              mode="sidebar"
+              open
+              loading={threadLoading}
+              delivery={activeDelivery}
+              events={activeEvents}
+              onRefresh={() => {
+                setRefreshNonce((current) => current + 1);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-4 lg:hidden">
         {mobileView === "list" ? (
           listPanel
-        ) : (
+        ) : selectedConversation?.kind === "TIAK" ? (
           <ChatPanel
             locale={locale}
             meId={meId}
-            deliveryId={selectedConversation?.id ?? null}
+            deliveryId={selectedTiakConversation?.id ?? null}
             onThreadStateChange={(state) => {
               setActiveDelivery(state.delivery);
               setActiveEvents(state.events);
@@ -422,6 +721,20 @@ export default function ConversationsList({
             onBackToList={() => setMobileView("list")}
             refreshNonce={refreshNonce}
           />
+        ) : selectedConversation?.kind === "SHOP" && selectedShopInquiryId && selectedShopConversation ? (
+          <div className="space-y-4">
+            <InquiryChatThread
+              key={`mobile-${selectedShopInquiryId}`}
+              locale={locale}
+              inquiryId={selectedShopInquiryId}
+              meId={meId}
+              initialMessages={[]}
+              onBackToList={() => setMobileView("list")}
+            />
+            {shopSidebar}
+          </div>
+        ) : (
+          listPanel
         )}
       </div>
 

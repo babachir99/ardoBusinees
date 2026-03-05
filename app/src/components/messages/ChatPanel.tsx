@@ -429,11 +429,11 @@ export default function ChatPanel({
         </div>
       </header>
 
-      <div className="relative mt-3">
+      <div className="relative mt-3 flex h-[58vh] flex-col rounded-xl border border-white/10 bg-zinc-950/70">
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="h-[58vh] overflow-y-auto rounded-xl border border-white/10 bg-zinc-950/70 p-3"
+          className="flex-1 overflow-y-auto p-3"
         >
           {loading ? (
             <div className="space-y-2">
@@ -509,81 +509,93 @@ export default function ChatPanel({
           <button
             type="button"
             onClick={jumpToBottom}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[11px] font-semibold text-emerald-100"
+            className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[11px] font-semibold text-emerald-100"
           >
             {isFr ? "Nouveaux messages" : "New messages"}
           </button>
         ) : null}
-      </div>
 
-      <form onSubmit={sendMessage} className="mt-3 rounded-xl border border-white/10 bg-zinc-950/65 p-2">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                if ((draft.trim().length > 0 || attachmentUrl) && !sending) {
-                  const form = event.currentTarget.form;
-                  if (form) {
-                    form.requestSubmit();
+        <form onSubmit={sendMessage} className="border-t border-white/10 bg-zinc-950/90 p-2">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  if ((draft.trim().length > 0 || attachmentUrl) && !sending) {
+                    const form = event.currentTarget.form;
+                    if (form) {
+                      form.requestSubmit();
+                    }
                   }
                 }
-              }
-            }}
-            rows={2}
-            placeholder={isFr ? "Ecris ton message..." : "Write your message..."}
-            className="min-h-[46px] w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (!file) return;
-              void uploadAttachment(file);
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingAttachment || sending}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-white/20 px-3 text-xs font-semibold text-zinc-200 transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {uploadingAttachment ? (isFr ? "Upload..." : "Upload...") : isFr ? "Joindre" : "Attach"}
-          </button>
-          <button
-            type="submit"
-            disabled={sending || (draft.trim().length === 0 && !attachmentUrl)}
-            className="inline-flex h-10 items-center justify-center rounded-full bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label={isFr ? "Envoyer" : "Send"}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path d="M22 2 11 13" />
-              <path d="m22 2-7 20-4-9-9-4 20-7Z" />
-            </svg>
-          </button>
-        </div>
-        {attachmentUrl ? (
-          <div className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
-            <a href={attachmentUrl} target="_blank" rel="noreferrer" className="truncate text-emerald-300 underline">
-              {isFr ? "Piece jointe prete" : "Attachment ready"}
-            </a>
-            <button
-              type="button"
-              onClick={() => setAttachmentUrl(null)}
-              className="rounded-full border border-white/20 px-2 py-0.5 text-[10px]"
-            >
-              {isFr ? "Retirer" : "Remove"}
-            </button>
+              }}
+              rows={2}
+              placeholder={isFr ? "Ecris ton message..." : "Write your message..."}
+              className="min-h-[46px] w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                void uploadAttachment(file);
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAttachment || sending}
+                aria-label={isFr ? "Joindre un fichier" : "Attach a file"}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-800/70 bg-neutral-900/40 text-neutral-300 transition-all duration-200 ease-out hover:border-emerald-400/20 hover:bg-neutral-800/40 hover:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="sr-only">{isFr ? "Joindre" : "Attach"}</span>
+                {uploadingAttachment ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 animate-spin">
+                    <path d="M12 3a9 9 0 1 0 9 9" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <path d="m21.44 11.05-8.49 8.49a6 6 0 0 1-8.49-8.49l8.49-8.49a4 4 0 1 1 5.66 5.66l-8.5 8.5a2 2 0 0 1-2.82-2.83l7.78-7.78" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="submit"
+                disabled={sending || (draft.trim().length === 0 && !attachmentUrl)}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label={isFr ? "Envoyer" : "Send"}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M22 2 11 13" />
+                  <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+                </svg>
+              </button>
+            </div>
           </div>
-        ) : null}
-        {attachmentError ? <p className="mt-1 text-xs text-rose-300">{attachmentError}</p> : null}
-        {sendError ? <p className="mt-1 text-xs text-rose-300">{sendError}</p> : null}
-      </form>
+          {attachmentUrl ? (
+            <div className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
+              <a href={attachmentUrl} target="_blank" rel="noreferrer" className="truncate text-emerald-300 underline">
+                {isFr ? "Piece jointe prete" : "Attachment ready"}
+              </a>
+              <button
+                type="button"
+                onClick={() => setAttachmentUrl(null)}
+                className="rounded-full border border-white/20 px-2 py-0.5 text-[10px]"
+              >
+                {isFr ? "Retirer" : "Remove"}
+              </button>
+            </div>
+          ) : null}
+          {attachmentError ? <p className="mt-1 text-xs text-rose-300">{attachmentError}</p> : null}
+          {sendError ? <p className="mt-1 text-xs text-rose-300">{sendError}</p> : null}
+        </form>
+      </div>
     </section>
   );
 }

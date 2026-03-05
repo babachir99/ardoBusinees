@@ -476,11 +476,12 @@ export default function ProductActionCardClient({
                   placeholder={labels.chatPlaceholder}
                   className="w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-xs text-white"
                 />
-                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-white/20 px-3 py-2 text-xs text-zinc-200 transition hover:border-white/40">
+                <label className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-neutral-800/70 bg-neutral-900/40 text-neutral-300 transition-all duration-200 ease-out hover:border-emerald-400/20 hover:bg-neutral-800/40 hover:text-neutral-100 focus-within:ring-2 focus-within:ring-emerald-400/40">
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
                     className="hidden"
+                    aria-label={isFr ? "Joindre un fichier" : "Attach a file"}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
@@ -488,7 +489,16 @@ export default function ProductActionCardClient({
                       event.currentTarget.value = "";
                     }}
                   />
-                  {uploadingMessageAttachment ? (isFr ? "Upload..." : "Upload...") : isFr ? "Joindre" : "Attach"}
+                  <span className="sr-only">{isFr ? "Joindre" : "Attach"}</span>
+                  {uploadingMessageAttachment ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 animate-spin">
+                      <path d="M12 3a9 9 0 1 0 9 9" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                      <path d="m21.44 11.05-8.49 8.49a6 6 0 0 1-8.49-8.49l8.49-8.49a4 4 0 1 1 5.66 5.66l-8.5 8.5a2 2 0 0 1-2.82-2.83l7.78-7.78" />
+                    </svg>
+                  )}
                 </label>
                 <button
                   type="button"

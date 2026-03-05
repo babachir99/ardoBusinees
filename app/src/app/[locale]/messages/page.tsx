@@ -53,6 +53,8 @@ export default async function MessagesPage({
             id: true,
             title: true,
             slug: true,
+            type: true,
+            currency: true,
             images: {
               orderBy: { position: "asc" },
               take: 1,
@@ -74,6 +76,13 @@ export default async function MessagesPage({
             body: true,
             senderId: true,
             createdAt: true,
+          },
+        },
+        offers: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          include: {
+            buyer: { select: { id: true, name: true, email: true } },
           },
         },
         _count: {
@@ -151,6 +160,63 @@ export default async function MessagesPage({
     { key: "closed", label: isFr ? "Fermees" : "Closed" },
   ] as const;
 
+  const inquiryConversations = inquiries.map((item) => {
+    const iAmBuyer = item.buyerId === session.user.id;
+    const counterpart = iAmBuyer
+      ? item.seller?.displayName || (isFr ? "Vendeur" : "Seller")
+      : item.buyer?.name || item.buyer?.email || (isFr ? "Client" : "Customer");
+
+    const lastMessage = item.messages[0];
+    const parsedLastMessage = lastMessage ? parseMessageBody(lastMessage.body) : null;
+    const preview =
+      parsedLastMessage?.body ||
+      (parsedLastMessage?.attachmentUrl
+        ? isFr
+          ? "Piece jointe"
+          : "Attachment"
+        : isFr
+        ? "Aucun message pour le moment."
+        : "No messages yet.");
+
+    return {
+      id: item.id,
+      serviceType: "SHOP" as const,
+      title: item.product.title,
+      counterpart,
+      preview,
+      updatedAt: item.lastMessageAt,
+      unread: unreadByInquiryId.get(item.id) ?? false,
+      status: item.status,
+      href: `/messages/${item.id}`,
+      isSeller: item.seller?.userId === session.user.id,
+      sellerName: item.seller?.displayName ?? undefined,
+      product: {
+        id: item.product.id,
+        slug: item.product.slug,
+        title: item.product.title,
+        type: item.product.type,
+        currency: item.product.currency,
+      },
+      productImageUrl: item.product.images[0]?.url ?? null,
+      productImageAlt: item.product.images[0]?.alt ?? item.product.title,
+      messagesCount: item._count.messages,
+      offersCount: item._count.offers,
+      lastActivityAt: item.lastMessageAt,
+      initialOffers: item.offers.map((offer) => ({
+        id: offer.id,
+        amountCents: offer.amountCents,
+        currency: offer.currency,
+        quantity: offer.quantity,
+        note: offer.note,
+        status: offer.status,
+        createdAt: offer.createdAt.toISOString(),
+        resolvedAt: offer.resolvedAt ? offer.resolvedAt.toISOString() : null,
+        buyerId: offer.buyerId,
+        buyer: offer.buyer,
+      })),
+    };
+  });
+
   const activeThreadsCount = inquiries.length + tiakConversations.length;
 
   const activeTiakDeliveryId =
@@ -211,102 +277,19 @@ export default async function MessagesPage({
           })}
         </div>
 
-        {tiakConversations.length > 0 ? (
+        {tiakConversations.length > 0 || inquiryConversations.length > 0 ? (
           <ConversationsList
             locale={locale}
             meId={session.user.id}
             conversations={tiakConversations}
+            inquiryConversations={inquiryConversations}
             initialSelectedId={activeTiakDeliveryId}
           />
-        ) : null}
-
-        {inquiries.length === 0 && tiakConversations.length === 0 ? (
+        ) : (
           <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8 text-center text-zinc-400">
             {isFr ? "Aucune discussion pour le moment." : "No conversation yet."}
           </div>
-        ) : inquiries.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {inquiries.map((item) => {
-              const iAmBuyer = item.buyerId === session.user.id;
-              const counterpart = iAmBuyer
-                ? item.seller?.displayName || (isFr ? "Vendeur" : "Seller")
-                : item.buyer?.name || item.buyer?.email || (isFr ? "Client" : "Customer");
-
-              const lastMessage = item.messages[0];
-              const parsedLastMessage = lastMessage ? parseMessageBody(lastMessage.body) : null;
-              const unread = unreadByInquiryId.get(item.id) ?? false;
-
-              return (
-                <Link
-                  key={item.id}
-                  href={`/messages/${item.id}`}
-                  className={`rounded-3xl border bg-zinc-900/70 p-4 transition ${
-                    unread
-                      ? "border-emerald-300/50 shadow-[0_0_24px_rgba(16,185,129,0.08)]"
-                      : "border-white/10 hover:border-emerald-300/50"
-                  }`}
-                >
-                  <div className="flex gap-4">
-                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
-                      {item.product.images[0]?.url ? (
-                        <img
-                          src={item.product.images[0].url}
-                          alt={item.product.images[0].alt ?? item.product.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="grid h-full w-full place-items-center text-[10px] text-zinc-600">
-                          {isFr ? "Pas d'image" : "No image"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-white">{item.product.title}</p>
-                        {unread ? (
-                          <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
-                            {isFr ? "Nouveau" : "New"}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <p className="mt-1 text-xs text-zinc-400">
-                        {isFr ? "Avec" : "With"}: {counterpart}
-                      </p>
-
-                      <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-zinc-200" : "text-zinc-500"}`}>
-                        {parsedLastMessage?.body || (parsedLastMessage?.attachmentUrl ? (isFr ? "Piece jointe" : "Attachment") : (isFr ? "Aucun message pour le moment." : "No messages yet."))}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
-                        <span className="rounded-full border border-white/10 px-2 py-0.5">
-                          {isFr ? "Messages" : "Messages"}: {item._count.messages}
-                        </span>
-                        <span className="rounded-full border border-white/10 px-2 py-0.5">
-                          {isFr ? "Offres" : "Offers"}: {item._count.offers}
-                        </span>
-                        <span className="rounded-full border border-white/10 px-2 py-0.5">
-                          {item.status === "OPEN"
-                            ? isFr
-                              ? "Ouverte"
-                              : "Open"
-                            : isFr
-                              ? "Fermee"
-                              : "Closed"}
-                        </span>
-                      </div>
-
-                      <p className="mt-2 text-[11px] text-zinc-500">
-                        {new Date(item.lastMessageAt).toLocaleString(locale)}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
+        )}
       </main>
       <Footer />
     </div>
