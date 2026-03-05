@@ -4,120 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Footer from "@/components/layout/Footer";
-import TiakConversationThread from "@/components/messages/TiakConversationThread";
+import ConversationsList from "@/components/messages/ConversationsList";
 import type { Prisma } from "@prisma/client";
-
-function tiakStatusLabel(status: string, isFr: boolean) {
-  const fr: Record<string, string> = {
-    REQUESTED: "En attente",
-    ASSIGNED: "Assignee",
-    ACCEPTED: "Acceptee",
-    PICKED_UP: "Recuperee",
-    DELIVERED: "Livree",
-    COMPLETED: "Terminee",
-    CANCELED: "Annulee",
-    REJECTED: "Rejetee",
-  };
-
-  const en: Record<string, string> = {
-    REQUESTED: "Requested",
-    ASSIGNED: "Assigned",
-    ACCEPTED: "Accepted",
-    PICKED_UP: "Picked up",
-    DELIVERED: "Delivered",
-    COMPLETED: "Completed",
-    CANCELED: "Canceled",
-    REJECTED: "Rejected",
-  };
-
-  return isFr ? (fr[status] ?? status) : (en[status] ?? status);
-}
-
-function parseRatingNote(note: string | null) {
-  if (!note) return null;
-  const match = /^RATING:(\d)(?:\|(.*))?$/i.exec(note.trim());
-  if (!match) return null;
-  const rating = Number(match[1]);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return null;
-  const comment = typeof match[2] === "string" ? match[2].trim() : "";
-  return { rating, comment };
-}
-
-const TIAK_SYSTEM_NOTES = new Set([
-  "Courier assigned",
-  "Courier accepted assignment",
-  "Courier declined assignment",
-  "Assignment expired",
-]);
-
-function isTiakSystemNote(note: string | null) {
-  if (!note) return false;
-  return TIAK_SYSTEM_NOTES.has(note.trim());
-}
-
-function tiakEventPreview(params: {
-  isFr: boolean;
-  status: string;
-  note: string | null;
-  actorId: string | null;
-  viewerId: string;
-  customerName: string;
-  courierName: string;
-}) {
-  const { isFr, status, note, actorId, viewerId, customerName, courierName } = params;
-  const ratingInfo = parseRatingNote(note);
-
-  if (ratingInfo) {
-    return isFr
-      ? `Note ${ratingInfo.rating}/5${ratingInfo.comment ? ` - ${ratingInfo.comment}` : ""}`
-      : `Rating ${ratingInfo.rating}/5${ratingInfo.comment ? ` - ${ratingInfo.comment}` : ""}`;
-  }
-
-  if (note && note.trim().length > 0 && !isTiakSystemNote(note)) return note;
-
-  if (status === "ASSIGNED") {
-    if (viewerId && actorId && viewerId !== actorId && viewerId !== "") {
-      return isFr
-        ? `${customerName} veut que vous livriez son colis. Acceptez-vous ?`
-        : `${customerName} wants you to deliver the parcel. Do you accept?`;
-    }
-    return isFr
-      ? `Votre demande est assignee a ${courierName}.`
-      : `Your request has been assigned to ${courierName}.`;
-  }
-
-  if (status === "ACCEPTED") {
-    return isFr
-      ? `${courierName} a accepte la course.`
-      : `${courierName} accepted the delivery.`;
-  }
-
-  if (status === "PICKED_UP") {
-    return isFr
-      ? `${courierName} a recupere le colis.`
-      : `${courierName} picked up the parcel.`;
-  }
-
-  if (status === "DELIVERED") {
-    return isFr
-      ? `${courierName} a marque la livraison comme terminee.`
-      : `${courierName} marked delivery as completed.`;
-  }
-
-  if (status === "COMPLETED") {
-    return isFr ? "Livraison confirmee." : "Delivery confirmed.";
-  }
-
-  if (status === "REJECTED") {
-    return isFr ? "Assignation refusee." : "Assignment declined.";
-  }
-
-  if (status === "CANCELED") {
-    return isFr ? "Course annulee." : "Delivery canceled.";
-  }
-
-  return tiakStatusLabel(status, isFr);
-}
 
 export default async function MessagesPage({
   params,
@@ -136,7 +24,8 @@ export default async function MessagesPage({
 
   const statusParam = String(resolvedSearchParams?.status ?? "all").toLowerCase();
   const statusFilter = statusParam === "open" || statusParam === "closed" ? statusParam : "all";
-  const requestedDeliveryId = typeof resolvedSearchParams?.deliveryId === "string" ? resolvedSearchParams.deliveryId : null;
+  const requestedDeliveryId =
+    typeof resolvedSearchParams?.deliveryId === "string" ? resolvedSearchParams.deliveryId : null;
 
   const sellerProfile = await prisma.sellerProfile.findUnique({
     where: { userId: session.user.id },
@@ -144,10 +33,7 @@ export default async function MessagesPage({
   });
 
   const where: Prisma.ProductInquiryWhereInput = {
-    OR: [
-      { buyerId: session.user.id },
-      ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : []),
-    ],
+    OR: [{ buyerId: session.user.id }, ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : [])],
     ...(statusFilter === "all"
       ? {}
       : {
@@ -202,13 +88,12 @@ export default async function MessagesPage({
         OR: [{ customerId: session.user.id }, { courierId: session.user.id }],
       },
       orderBy: [{ updatedAt: "desc" }],
-      take: 40,
+      take: 80,
       select: {
         id: true,
         status: true,
         pickupAddress: true,
         dropoffAddress: true,
-        createdAt: true,
         updatedAt: true,
         customerId: true,
         courierId: true,
@@ -247,8 +132,8 @@ export default async function MessagesPage({
     const lastReadAt = isBuyer
       ? inquiry.buyerLastReadAt
       : isSeller
-      ? inquiry.sellerLastReadAt
-      : null;
+        ? inquiry.sellerLastReadAt
+        : null;
 
     const unread = !lastReadAt || lastMessage.createdAt.getTime() > new Date(lastReadAt).getTime();
     unreadByInquiryId.set(inquiry.id, unread);
@@ -273,24 +158,22 @@ export default async function MessagesPage({
       : (tiakConversations[0]?.id ?? null);
 
   const buildMessagesHref = (nextStatus: string, deliveryId?: string | null) => {
-    const params = new URLSearchParams();
-    if (nextStatus !== "all") params.set("status", nextStatus);
-    if (deliveryId) params.set("deliveryId", deliveryId);
-    const query = params.toString();
-    return query ? `/messages?${query}` : "/messages";
+    const query = new URLSearchParams();
+    if (nextStatus !== "all") query.set("status", nextStatus);
+    if (deliveryId) query.set("deliveryId", deliveryId);
+    const value = query.toString();
+    return value ? `/messages?${value}` : "/messages";
   };
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 pb-16 pt-10">
+      <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-8 sm:px-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
               {isFr ? "Espace client" : "Customer area"}
             </p>
-            <h1 className="mt-1 text-3xl font-semibold">
-              {isFr ? "Messagerie" : "Messages"}
-            </h1>
+            <h1 className="mt-1 text-3xl font-semibold">{isFr ? "Messagerie" : "Messages"}</h1>
             <p className="mt-2 text-sm text-zinc-400">
               {isFr
                 ? `Discussions actives: ${activeThreadsCount} - Non lus: ${inquiryUnreadCount + tiakUnreadCount}`
@@ -328,102 +211,12 @@ export default async function MessagesPage({
         </div>
 
         {tiakConversations.length > 0 ? (
-          <section className="mb-6 rounded-3xl border border-white/10 bg-zinc-900/60 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-white">
-                {isFr ? "Conversations TIAK" : "TIAK conversations"}
-              </h2>
-              <span className="rounded-full border border-white/15 bg-zinc-950/70 px-2 py-0.5 text-[11px] text-zinc-300">
-                {tiakConversations.length}
-              </span>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-              <div className="space-y-3">
-                {tiakConversations.map((item) => {
-                  const iAmCustomer = item.customerId === session.user.id;
-                  const counterpart = iAmCustomer
-                    ? item.courier?.name || item.courier?.email || (isFr ? "Coursier" : "Courier")
-                    : item.customer?.name || item.customer?.email || (isFr ? "Client" : "Customer");
-                  const lastEvent = item.events[0];
-                  const unread = Boolean(lastEvent && lastEvent.actorId !== session.user.id);
-                  const pickupArea = item.pickupAddress.split(",")[0]?.trim() || item.pickupAddress;
-                  const dropoffArea = item.dropoffAddress.split(",")[0]?.trim() || item.dropoffAddress;
-                  const selected = item.id === activeTiakDeliveryId;
-
-                  return (
-                    <Link
-                      key={item.id}
-                      href={buildMessagesHref(statusFilter, item.id)}
-                      className={`block rounded-2xl border bg-zinc-950/70 p-4 transition ${
-                        selected
-                          ? "border-emerald-300/70 shadow-[0_0_26px_rgba(16,185,129,0.14)]"
-                          : unread
-                            ? "border-emerald-300/45"
-                            : "border-white/10 hover:border-emerald-300/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-white">
-                          {pickupArea} -&gt; {dropoffArea}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {selected ? (
-                            <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
-                              {isFr ? "Ouvert" : "Open"}
-                            </span>
-                          ) : null}
-                          {unread ? (
-                            <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
-                              {isFr ? "Nouveau" : "New"}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <p className="mt-1 text-xs text-zinc-400">
-                        {isFr ? "Avec" : "With"}: {counterpart}
-                      </p>
-
-                      <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-zinc-200" : "text-zinc-500"}`}>
-                        {lastEvent
-                          ? tiakEventPreview({
-                              isFr,
-                              status: lastEvent.status,
-                              note: lastEvent.note,
-                              actorId: lastEvent.actorId,
-                              viewerId: session.user.id,
-                              customerName: item.customer?.name || (isFr ? "Client" : "Customer"),
-                              courierName: item.courier?.name || (isFr ? "Coursier" : "Courier"),
-                            })
-                          : isFr
-                            ? "Aucun message pour le moment."
-                            : "No messages yet."}
-                      </p>
-
-                      <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
-                        <span className="rounded-full border border-white/10 px-2 py-0.5">
-                          {tiakStatusLabel(item.status, isFr)}
-                        </span>
-                      </div>
-
-                      <p className="mt-2 text-[11px] text-zinc-500">
-                        {new Date(item.updatedAt).toLocaleString(locale)}
-                      </p>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {activeTiakDeliveryId ? (
-                <TiakConversationThread
-                  locale={locale}
-                  meId={session.user.id}
-                  deliveryId={activeTiakDeliveryId}
-                />
-              ) : null}
-            </div>
-          </section>
+          <ConversationsList
+            locale={locale}
+            meId={session.user.id}
+            conversations={tiakConversations}
+            initialSelectedId={activeTiakDeliveryId}
+          />
         ) : null}
 
         {inquiries.length === 0 && tiakConversations.length === 0 ? (
@@ -469,11 +262,11 @@ export default async function MessagesPage({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <p className="truncate text-sm font-semibold text-white">{item.product.title}</p>
-                        {unread && (
+                        {unread ? (
                           <span className="shrink-0 rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-semibold text-zinc-950">
                             {isFr ? "Nouveau" : "New"}
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <p className="mt-1 text-xs text-zinc-400">
@@ -497,8 +290,8 @@ export default async function MessagesPage({
                               ? "Ouverte"
                               : "Open"
                             : isFr
-                            ? "Fermee"
-                            : "Closed"}
+                              ? "Fermee"
+                              : "Closed"}
                         </span>
                       </div>
 

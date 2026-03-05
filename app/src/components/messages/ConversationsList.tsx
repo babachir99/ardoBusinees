@@ -10,7 +10,7 @@ type TiakConversationSummary = {
   status: string;
   pickupAddress: string;
   dropoffAddress: string;
-  updatedAt: string;
+  updatedAt: string | Date;
   customerId: string;
   courierId: string | null;
   customer: {
@@ -27,7 +27,7 @@ type TiakConversationSummary = {
     id: string;
     status: string;
     note: string | null;
-    createdAt: string;
+    createdAt: string | Date;
     actorId: string;
   }>;
 };
@@ -153,6 +153,7 @@ export default function ConversationsList({
   const [activeDelivery, setActiveDelivery] = useState<TiakDelivery | null>(null);
   const [activeEvents, setActiveEvents] = useState<TiakDeliveryEvent[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const unreadById = useMemo(() => {
     const map = new Map<string, number>();
@@ -385,6 +386,7 @@ export default function ConversationsList({
           onOpenOps={() => setOpsDrawerOpen(true)}
           onMarkRead={markCurrentAsRead}
           onBackToList={undefined}
+          refreshNonce={refreshNonce}
         />
 
         <div className="hidden xl:block">
@@ -396,7 +398,7 @@ export default function ConversationsList({
             delivery={activeDelivery}
             events={activeEvents}
             onRefresh={() => {
-              setSelectedId((current) => current);
+              setRefreshNonce((current) => current + 1);
             }}
           />
         </div>
@@ -418,6 +420,7 @@ export default function ConversationsList({
             onOpenOps={() => setOpsDrawerOpen(true)}
             onMarkRead={markCurrentAsRead}
             onBackToList={() => setMobileView("list")}
+            refreshNonce={refreshNonce}
           />
         )}
       </div>
@@ -431,7 +434,7 @@ export default function ConversationsList({
         events={activeEvents}
         onClose={() => setOpsDrawerOpen(false)}
         onRefresh={() => {
-          setSelectedId((current) => current);
+          setRefreshNonce((current) => current + 1);
         }}
       />
     </section>
