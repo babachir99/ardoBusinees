@@ -225,6 +225,25 @@ function serviceLabel(service: ServiceType, isFr: boolean) {
   return isFr ? labelsFr[service] : labelsEn[service];
 }
 
+function serviceIcon(service: Exclude<ServiceType, "ALL">) {
+  switch (service) {
+    case "TIAK":
+      return "\u{1F6F5}";
+    case "SHOP":
+      return "\u{1F4E6}";
+    case "PRESTA":
+      return "\u{1F9D1}\u200D\u{1F527}";
+    case "GP":
+      return "\u{2708}\u{FE0F}";
+    case "IMMO":
+      return "\u{1F3E0}";
+    case "CARS":
+      return "\u{1F697}";
+    default:
+      return "\u{1F4AC}";
+  }
+}
+
 function serviceChipClasses(service: Exclude<ServiceType, "ALL">) {
   switch (service) {
     case "TIAK":
@@ -419,10 +438,10 @@ export default function ConversationsList({
     }`;
 
   const serviceTabClasses = (service: ServiceType) =>
-    `shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+    `rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
       serviceFilter === service
-        ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-100"
-        : "border-white/15 bg-zinc-900/65 text-zinc-300 hover:border-white/35"
+        ? "bg-emerald-500/15 border-emerald-400/40 text-emerald-300"
+        : "bg-neutral-900/50 border-neutral-800 text-neutral-300 hover:bg-neutral-800"
     }`;
 
   const activeServiceLabel = serviceLabel(serviceFilter, isFr);
@@ -478,22 +497,20 @@ export default function ConversationsList({
   const listPanel = (
     <aside className="rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
       <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
-        <div className="mb-3 overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-2">
-            {SERVICE_TABS.map((service) => (
-              <button
-                key={service}
-                type="button"
-                onClick={() => {
-                  setServiceFilter(service);
-                  setVisibleCount(20);
-                }}
-                className={serviceTabClasses(service)}
-              >
-                {serviceLabel(service, isFr)}
-              </button>
-            ))}
-          </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {SERVICE_TABS.map((service) => (
+            <button
+              key={service}
+              type="button"
+              onClick={() => {
+                setServiceFilter(service);
+                setVisibleCount(20);
+              }}
+              className={serviceTabClasses(service)}
+            >
+              {serviceLabel(service, isFr)}
+            </button>
+          ))}
         </div>
 
         <label className="relative block">
@@ -541,7 +558,7 @@ export default function ConversationsList({
         </div>
       </div>
 
-      <div className="mt-3 max-h-[68vh] overflow-y-auto pr-1">
+      <div className="mt-3 max-h-[70vh] overflow-y-auto pr-1">
         <div className="mb-2 flex items-center justify-between px-1">
           <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{isFr ? "Conversations" : "Conversations"}</p>
           <span className="rounded-full border border-white/10 bg-zinc-950/70 px-2 py-0.5 text-[10px] text-zinc-300">
@@ -553,53 +570,11 @@ export default function ConversationsList({
           {visibleConversations.map((item) => {
             const isSelected = item.id === selectedConversationId;
 
-            const rowClasses = `group block w-full rounded-xl border px-3 py-2 text-left transition-all duration-200 ease-out motion-reduce:transform-none ${
+            const rowClasses = `group block w-full rounded-xl border px-3 py-2.5 text-left transition ${
               isSelected
-                ? "border-emerald-300/50 bg-zinc-800/40 shadow-[0_0_20px_rgba(16,185,129,0.14)]"
-                : "border-white/10 bg-zinc-950/70 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_6px_20px_rgba(0,0,0,0.35)]"
+                ? "bg-neutral-800/50 border-emerald-400/30"
+                : "border-white/10 bg-zinc-950/70 hover:bg-neutral-800/40"
             }`;
-
-            const content = (
-              <>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${serviceChipClasses(item.serviceType)}`}>
-                        {serviceLabel(item.serviceType, isFr)}
-                      </span>
-                      <p className="truncate text-sm font-semibold text-white">{item.title}</p>
-                    </div>
-                    <p className="mt-0.5 truncate text-[11px] text-zinc-400">{item.counterpart}</p>
-                  </div>
-
-                  <div className="flex items-center gap-1 text-[10px] text-zinc-500">
-                    {item.unreadCount > 0 ? <span className="h-2 w-2 rounded-full bg-emerald-300" /> : null}
-                    <span>
-                      {new Date(item.updatedAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className={`min-w-0 truncate text-xs ${item.unreadCount > 0 ? "text-zinc-200" : "text-zinc-500"}`}>
-                    {item.preview}
-                  </p>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300">
-                      {item.statusLabel}
-                    </span>
-                    {item.unreadCount > 0 ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-950">
-                        {item.unreadCount}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </>
-            );
 
             return (
               <button
@@ -611,7 +586,37 @@ export default function ConversationsList({
                 }}
                 className={rowClasses}
               >
-                {content}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${serviceChipClasses(item.serviceType)}`}>
+                      <span aria-hidden>{serviceIcon(item.serviceType)}</span>
+                      <span>{serviceLabel(item.serviceType, isFr)}</span>
+                    </span>
+                    <p className="truncate text-sm font-semibold text-white">{item.title}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {new Date(item.updatedAt).toLocaleTimeString(locale === "fr" ? "fr-FR" : "en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+
+                <p className="mt-1 truncate text-xs text-zinc-400">
+                  {item.counterpart} {" \u2022 "} {item.preview}
+                </p>
+
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <span className="inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300">
+                    {item.statusLabel}
+                  </span>
+                  {item.unreadCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-950">
+                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-950/80" />
+                      {item.unreadCount}
+                    </span>
+                  ) : null}
+                </div>
               </button>
             );
           })}

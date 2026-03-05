@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 
 type Props = {
@@ -48,97 +47,81 @@ function formatAmount(priceCents: number | null, currency: string) {
 
 function OpsPanelContent({ locale, loading, delivery, events, onRefresh }: Omit<Props, "mode" | "open" | "onClose">) {
   const isFr = locale === "fr";
-  const [collapsed, setCollapsed] = useState(false);
 
-  const reachedStatuses = useMemo(() => {
-    const reached = new Set<string>();
-    for (const event of events) {
-      reached.add(event.status);
-    }
-    if (delivery?.status) reached.add(delivery.status);
-    return reached;
-  }, [delivery?.status, events]);
+  const reachedStatuses = new Set<string>();
+  for (const event of events) {
+    reachedStatuses.add(event.status);
+  }
+  if (delivery?.status) {
+    reachedStatuses.add(delivery.status);
+  }
 
   return (
     <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
-      <button
-        type="button"
-        onClick={() => setCollapsed((current) => !current)}
-        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-left"
-      >
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">{isFr ? "Details course" : "Delivery ops"}</p>
-          <p className="mt-1 text-sm font-semibold text-white">{delivery ? statusLabel(delivery.status, locale) : "-"}</p>
-        </div>
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className={`h-4 w-4 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none ${collapsed ? "rotate-180" : ""}`}
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-950/80 px-3 py-2">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">{isFr ? "Centre Ops" : "Ops center"}</p>
+        <p className="mt-1 text-sm font-semibold text-white">{delivery ? statusLabel(delivery.status, locale) : "-"}</p>
+      </div>
 
-      {!collapsed ? (
-        <div className="mt-3 space-y-3">
-          {loading ? (
-            <div className="space-y-2">
-              <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />
-              <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />
+      <div className="mt-3 space-y-3">
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />
+            <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />
+          </div>
+        ) : !delivery ? (
+          <div className="rounded-xl border border-white/10 bg-zinc-950/65 p-3 text-xs text-zinc-500">
+            {isFr ? "Selectionne une conversation." : "Select a conversation."}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/65 px-3 py-2 text-xs text-zinc-300">
+            <div className="space-y-1 border-b border-neutral-800 pb-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{isFr ? "Course" : "Delivery"}</p>
+              <p><span className="text-zinc-500">ID:</span> #{delivery.id.slice(0, 10)}</p>
+              <p><span className="text-zinc-500">{isFr ? "Prix" : "Price"}:</span> {formatAmount(delivery.priceCents, delivery.currency)}</p>
+              <p><span className="text-zinc-500">{isFr ? "Paiement" : "Payment"}:</span> {delivery.paymentMethod ?? "-"}</p>
             </div>
-          ) : !delivery ? (
-            <div className="rounded-xl border border-white/10 bg-zinc-950/65 p-3 text-xs text-zinc-500">
-              {isFr ? "Selectionne une conversation." : "Select a conversation."}
+
+            <div className="mt-2 space-y-1 border-b border-neutral-800 pb-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{isFr ? "Participants" : "Participants"}</p>
+              <p><span className="text-zinc-500">{isFr ? "Client" : "Customer"}:</span> {delivery.customer?.name ?? "-"}</p>
+              <p><span className="text-zinc-500">{isFr ? "Livreur" : "Courier"}:</span> {delivery.courier?.name ?? "-"}</p>
             </div>
-          ) : (
-            <>
-              <div className="rounded-xl border border-white/10 bg-zinc-950/65 p-3 text-xs text-zinc-300">
-                <p><span className="text-zinc-500">ID:</span> #{delivery.id.slice(0, 10)}</p>
-                <p className="mt-1"><span className="text-zinc-500">{isFr ? "Prix" : "Price"}:</span> {formatAmount(delivery.priceCents, delivery.currency)}</p>
-                <p className="mt-1"><span className="text-zinc-500">{isFr ? "Paiement" : "Payment"}:</span> {delivery.paymentMethod ?? "-"}</p>
-                <p className="mt-1"><span className="text-zinc-500">{isFr ? "Client" : "Customer"}:</span> {delivery.customer?.name ?? "-"}</p>
-                <p className="mt-1"><span className="text-zinc-500">{isFr ? "Coursier" : "Courier"}:</span> {delivery.courier?.name ?? "-"}</p>
-              </div>
 
-              <div className="rounded-xl border border-white/10 bg-zinc-950/65 p-3">
-                <p className="text-xs font-semibold text-zinc-200">{isFr ? "Timeline" : "Timeline"}</p>
-                <div className="mt-2 space-y-2">
-                  {STATUS_FLOW.map((status, index) => {
-                    const done = reachedStatuses.has(status);
-                    const isCurrent = delivery.status === status;
-                    return (
-                      <div key={status} className="flex items-center gap-2 text-xs">
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${done ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100" : "border-white/20 text-zinc-500"}`}>
-                          {done ? "✓" : index + 1}
-                        </span>
-                        <span className={isCurrent ? "text-white" : "text-zinc-400"}>{statusLabel(status, locale)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="mt-2 space-y-2 border-b border-neutral-800 pb-2">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{isFr ? "Statut" : "Status"}</p>
+              {STATUS_FLOW.map((status, index) => {
+                const reached = reachedStatuses.has(status);
+                const current = delivery.status === status;
+                return (
+                  <div key={status} className="flex items-center gap-2">
+                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] ${reached ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100" : "border-white/20 text-zinc-500"}`}>
+                      {reached ? "OK" : index + 1}
+                    </span>
+                    <span className={current ? "text-white" : "text-zinc-400"}>{statusLabel(status, locale)}</span>
+                  </div>
+                );
+              })}
+            </div>
 
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={`/stores/jontaado-tiak-tiak?deliveryId=${encodeURIComponent(delivery.id)}`}
-                  className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/60"
-                >
-                  {isFr ? "Ouvrir ops" : "Open ops"}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => onRefresh?.()}
-                  className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-200 transition hover:border-white/40"
-                >
-                  {isFr ? "Rafraichir" : "Refresh"}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href={`/stores/jontaado-tiak-tiak?deliveryId=${encodeURIComponent(delivery.id)}`}
+                className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/60"
+              >
+                {isFr ? "Ouvrir ops" : "Open ops"}
+              </a>
+              <button
+                type="button"
+                onClick={() => onRefresh?.()}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-zinc-200 transition hover:border-white/40"
+              >
+                {isFr ? "Rafraichir" : "Refresh"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

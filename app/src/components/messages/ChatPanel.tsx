@@ -383,7 +383,7 @@ export default function ChatPanel({
 
   return (
     <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
-      <header className="sticky top-0 z-10 rounded-xl border border-white/10 bg-zinc-950/95 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 z-10 rounded-t-xl border-b border-neutral-800 bg-neutral-950/80 px-3 py-2 backdrop-blur">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">
@@ -463,7 +463,7 @@ export default function ChatPanel({
 
                     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                       <article
-                        className={`max-w-[85%] rounded-2xl border px-3 py-2 text-xs transition-opacity ${
+                        className={`max-w-[85%] rounded-2xl border px-3 py-2 text-xs transition-opacity motion-safe:animate-[fadeIn_0.2s_ease] ${
                           mine
                             ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-50"
                             : "border-white/10 bg-zinc-900 text-zinc-100"
@@ -515,8 +515,8 @@ export default function ChatPanel({
           </button>
         ) : null}
 
-        <form onSubmit={sendMessage} className="border-t border-white/10 bg-zinc-950/90 p-2">
-          <div className="flex items-end gap-2">
+        <form onSubmit={sendMessage} className="border-t border-neutral-800 bg-neutral-950/90 p-2">
+          <div className="flex items-center gap-2">
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -533,7 +533,7 @@ export default function ChatPanel({
               }}
               rows={2}
               placeholder={isFr ? "Ecris ton message..." : "Write your message..."}
-              className="min-h-[46px] w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
+              className="min-h-[46px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
             />
             <input
               ref={fileInputRef}
@@ -568,7 +568,7 @@ export default function ChatPanel({
               <button
                 type="submit"
                 disabled={sending || (draft.trim().length === 0 && !attachmentUrl)}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-400 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label={isFr ? "Envoyer" : "Send"}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -596,6 +596,12 @@ export default function ChatPanel({
           {sendError ? <p className="mt-1 text-xs text-rose-300">{sendError}</p> : null}
         </form>
       </div>
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </section>
   );
 }
