@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,11 @@ import {
 } from "@/lib/messagePolicy";
 import { isEitherBlocked } from "@/lib/trust-blocks";
 import { NotificationService } from "@/lib/notifications/NotificationService";
+import {
+  normalizeMessageAttachmentUrl,
+  parseMessageBody,
+  serializeMessageBody,
+} from "@/lib/message-attachments";
 
 export async function POST(
   request: NextRequest,
@@ -38,9 +43,10 @@ export async function POST(
 
   const body = await request.json().catch(() => null);
   const message = String(body?.message ?? "").trim();
+  const attachmentUrl = normalizeMessageAttachmentUrl((body as { attachmentUrl?: unknown } | null)?.attachmentUrl);
 
-  if (!message) {
-    return NextResponse.json({ error: "message is required" }, { status: 400 });
+  if (!message && !attachmentUrl) {
+    return NextResponse.json({ error: "message or attachment is required" }, { status: 400 });
   }
 
   if (message.length > 1200) {
@@ -50,7 +56,7 @@ export async function POST(
   const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("fr")
     ? "fr"
     : "en";
-  const violation = getMessagePolicyViolation(message);
+  const violation = message ? getMessagePolicyViolation(message) : null;
   if (violation) {
     return NextResponse.json(
       { error: getMessagePolicyErrorMessage(locale) },
@@ -125,7 +131,7 @@ export async function POST(
       data: {
         inquiryId: inquiry.id,
         senderId: session.user.id,
-        body: message,
+        body: serializeMessageBody(message, attachmentUrl),
       },
       include: {
         sender: {
@@ -146,10 +152,13 @@ export async function POST(
     dedupeKey: `contact_ack:inquiry:${result.inquiryId}:user:${session.user.id}`,
   }).catch(() => null);
 
+  const parsed = parseMessageBody(result.message.body);
+
   return NextResponse.json(
     {
       id: result.message.id,
-      body: result.message.body,
+      body: parsed.body,
+      attachmentUrl: parsed.attachmentUrl,
       createdAt: result.message.createdAt,
       senderId: result.message.senderId,
       sender: result.message.sender,
@@ -157,7 +166,3 @@ export async function POST(
     { status: 201 }
   );
 }
-
-
-
-

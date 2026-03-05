@@ -1,4 +1,4 @@
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
@@ -7,6 +7,7 @@ import Footer from "@/components/layout/Footer";
 import InquiryChatThread from "@/components/messages/InquiryChatThread";
 import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
+import { parseMessageBody } from "@/lib/message-attachments";
 
 export default async function MessageDetailPage({
   params,
@@ -131,13 +132,17 @@ export default async function MessageDetailPage({
             locale={locale}
             inquiryId={inquiry.id}
             meId={session.user.id}
-            initialMessages={inquiry.messages.map((message) => ({
-              id: message.id,
-              body: message.body,
-              createdAt: message.createdAt.toISOString(),
-              senderId: message.senderId,
-              sender: message.sender,
-            }))}
+            initialMessages={inquiry.messages.map((message) => {
+              const parsed = parseMessageBody(message.body);
+              return {
+                id: message.id,
+                body: parsed.body,
+                attachmentUrl: parsed.attachmentUrl,
+                createdAt: message.createdAt.toISOString(),
+                senderId: message.senderId,
+                sender: message.sender,
+              };
+            })}
           />
 
           <div className="space-y-6">

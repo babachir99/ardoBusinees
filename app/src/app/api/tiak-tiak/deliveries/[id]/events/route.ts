@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeMessageAttachmentUrl } from "@/lib/message-attachments";
 
 function hasTiakDelegates() {
   const runtimePrisma = prisma as unknown as {
@@ -18,16 +19,7 @@ function normalizeString(value: unknown) {
 }
 
 function normalizeProofUrl(value: unknown) {
-  const proofUrl = normalizeString(value);
-  if (!proofUrl) return null;
-  if (
-    proofUrl.startsWith("/uploads/") ||
-    proofUrl.startsWith("http://") ||
-    proofUrl.startsWith("https://")
-  ) {
-    return proofUrl.slice(0, 500);
-  }
-  return null;
+  return normalizeMessageAttachmentUrl(value);
 }
 
 function normalizeRating(value: unknown) {
@@ -154,10 +146,6 @@ export async function POST(
 
   if (!isAdmin && !isAssignedCourier && !isCustomer) {
     return NextResponse.json({ error: "Only delivery participants can add events" }, { status: 403 });
-  }
-
-  if (proofUrl && !isAdmin && !isAssignedCourier) {
-    return NextResponse.json({ error: "Only assigned courier or admin can add proof" }, { status: 403 });
   }
 
   if (!effectiveNote && !proofUrl) {

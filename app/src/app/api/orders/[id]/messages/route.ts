@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +7,11 @@ import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
 } from "@/lib/messagePolicy";
+import {
+  normalizeMessageAttachmentUrl,
+  parseMessageBody,
+  serializeMessageBody,
+} from "@/lib/message-attachments";
 
 export async function GET(
   _request: NextRequest,
@@ -53,7 +58,16 @@ export async function GET(
     },
   });
 
-  return NextResponse.json(messages);
+  return NextResponse.json(
+    messages.map((message) => {
+      const parsed = parseMessageBody(message.body);
+      return {
+        ...message,
+        body: parsed.body,
+        attachmentUrl: parsed.attachmentUrl,
+      };
+    })
+  );
 }
 
 export async function POST(
@@ -72,8 +86,10 @@ export async function POST(
   }
 
   const message = String(body.message ?? "").trim();
-  if (!message) {
-    return NextResponse.json({ error: "message is required" }, { status: 400 });
+  const attachmentUrl = normalizeMessageAttachmentUrl((body as { attachmentUrl?: unknown }).attachmentUrl);
+
+  if (!message && !attachmentUrl) {
+    return NextResponse.json({ error: "message or attachment is required" }, { status: 400 });
   }
 
   if (message.length > 1200) {
@@ -83,7 +99,7 @@ export async function POST(
   const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("fr")
     ? "fr"
     : "en";
-  const violation = getMessagePolicyViolation(message);
+  const violation = message ? getMessagePolicyViolation(message) : null;
   if (violation) {
     return NextResponse.json(
       { error: getMessagePolicyErrorMessage(locale) },
@@ -119,9 +135,10 @@ export async function POST(
       orderId: order.id,
       senderId: session.user.id,
       senderRole: session.user.role as UserRole,
-      body: message,
+      body: serializeMessageBody(message, attachmentUrl),
     },
   });
 
-  return NextResponse.json(created, { status: 201 });
+  const parsed = parseMessageBody(created.body);
+  return NextResponse.json({ ...created, body: parsed.body, attachmentUrl: parsed.attachmentUrl }, { status: 201 });
 }

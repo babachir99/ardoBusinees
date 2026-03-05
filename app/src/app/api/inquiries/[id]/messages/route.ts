@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,11 @@ import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
 } from "@/lib/messagePolicy";
+import {
+  normalizeMessageAttachmentUrl,
+  parseMessageBody,
+  serializeMessageBody,
+} from "@/lib/message-attachments";
 
 function getAccessWhere(
   userId: string,
@@ -75,13 +80,17 @@ export async function GET(
     id: inquiry.id,
     status: inquiry.status,
     lastMessageAt: inquiry.lastMessageAt,
-    messages: inquiry.messages.map((message) => ({
-      id: message.id,
-      body: message.body,
-      createdAt: message.createdAt,
-      senderId: message.senderId,
-      sender: message.sender,
-    })),
+    messages: inquiry.messages.map((message) => {
+      const parsed = parseMessageBody(message.body);
+      return {
+        id: message.id,
+        body: parsed.body,
+        attachmentUrl: parsed.attachmentUrl,
+        createdAt: message.createdAt,
+        senderId: message.senderId,
+        sender: message.sender,
+      };
+    }),
   });
 }
 
@@ -98,9 +107,10 @@ export async function POST(
 
   const body = await request.json().catch(() => null);
   const message = String(body?.message ?? "").trim();
+  const attachmentUrl = normalizeMessageAttachmentUrl((body as { attachmentUrl?: unknown } | null)?.attachmentUrl);
 
-  if (!message) {
-    return NextResponse.json({ error: "message is required" }, { status: 400 });
+  if (!message && !attachmentUrl) {
+    return NextResponse.json({ error: "message or attachment is required" }, { status: 400 });
   }
 
   if (message.length > 1200) {
@@ -110,7 +120,7 @@ export async function POST(
   const locale = request.headers.get("accept-language")?.toLowerCase().startsWith("fr")
     ? "fr"
     : "en";
-  const violation = getMessagePolicyViolation(message);
+  const violation = message ? getMessagePolicyViolation(message) : null;
   if (violation) {
     return NextResponse.json(
       { error: getMessagePolicyErrorMessage(locale) },
@@ -162,7 +172,7 @@ export async function POST(
       data: {
         inquiryId: inquiry.id,
         senderId: session.user.id,
-        body: message,
+        body: serializeMessageBody(message, attachmentUrl),
       },
       include: {
         sender: {
@@ -172,10 +182,13 @@ export async function POST(
     });
   });
 
+  const parsed = parseMessageBody(created.body);
+
   return NextResponse.json(
     {
       id: created.id,
-      body: created.body,
+      body: parsed.body,
+      attachmentUrl: parsed.attachmentUrl,
       createdAt: created.createdAt,
       senderId: created.senderId,
       sender: created.sender,
@@ -183,7 +196,3 @@ export async function POST(
     { status: 201 }
   );
 }
-
-
-
-

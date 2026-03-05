@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/format";
 type InquiryMessage = {
   id: string;
   body: string;
+  attachmentUrl?: string | null;
   createdAt: string;
   senderId: string;
   sender?: { id: string; name?: string | null; email?: string | null; role?: string | null } | null;
@@ -73,7 +74,9 @@ export default function ProductActionCardClient({
   const [payload, setPayload] = useState<InquiryPayload | null>(null);
 
   const [messageDraft, setMessageDraft] = useState("");
+  const [messageAttachmentUrl, setMessageAttachmentUrl] = useState<string | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [uploadingMessageAttachment, setUploadingMessageAttachment] = useState(false);
   const [contactTemplateLoaded, setContactTemplateLoaded] = useState(false);
 
   const [offerAmount, setOfferAmount] = useState("");
@@ -234,9 +237,29 @@ export default function ProductActionCardClient({
     payload?.productTitle,
   ]);
 
+  const uploadMessageAttachment = async (file: File) => {
+    setUploadingMessageAttachment(true);
+    setError(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || typeof data?.url !== "string") {
+        throw new Error(data?.error || "Upload failed");
+      }
+      setMessageAttachmentUrl(data.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingMessageAttachment(false);
+    }
+  };
+
   const sendMessage = async () => {
     const message = messageDraft.trim();
-    if (!message) return;
+    if (!message && !messageAttachmentUrl) return;
 
     setSendingMessage(true);
     setError(null);
@@ -245,7 +268,7 @@ export default function ProductActionCardClient({
       const res = await fetch(`/api/products/${productId}/inquiry/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, attachmentUrl: messageAttachmentUrl }),
       });
 
       if (!res.ok) {
@@ -255,6 +278,7 @@ export default function ProductActionCardClient({
 
       const created = (await res.json()) as InquiryMessage;
       setMessageDraft("");
+      setMessageAttachmentUrl(null);
       setPayload((current) => {
         if (!current) return current;
         return {
@@ -427,7 +451,17 @@ export default function ProductActionCardClient({
                           <p className="text-[10px] text-zinc-500">
                             {new Date(msg.createdAt).toLocaleString(locale)}
                           </p>
-                          <p className="mt-1 whitespace-pre-wrap">{msg.body}</p>
+                          {msg.body ? <p className="mt-1 whitespace-pre-wrap">{msg.body}</p> : null}
+                          {msg.attachmentUrl ? (
+                            <a
+                              href={msg.attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex text-[11px] text-emerald-300 underline"
+                            >
+                              {isFr ? "Voir la piece jointe" : "Open attachment"}
+                            </a>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -435,22 +469,50 @@ export default function ProductActionCardClient({
                 )}
               </div>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <input
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
                   placeholder={labels.chatPlaceholder}
                   className="w-full rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-xs text-white"
                 />
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-white/20 px-3 py-2 text-xs text-zinc-200 transition hover:border-white/40">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      void uploadMessageAttachment(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  {uploadingMessageAttachment ? (isFr ? "Upload..." : "Upload...") : isFr ? "Joindre" : "Attach"}
+                </label>
                 <button
                   type="button"
                   onClick={sendMessage}
-                  disabled={sendingMessage}
+                  disabled={sendingMessage || (!messageDraft.trim() && !messageAttachmentUrl)}
                   className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60"
                 >
                   {labels.send}
                 </button>
               </div>
+              {messageAttachmentUrl ? (
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-300">
+                  <a href={messageAttachmentUrl} target="_blank" rel="noreferrer" className="truncate text-emerald-300 underline">
+                    {isFr ? "Piece jointe prete" : "Attachment ready"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setMessageAttachmentUrl(null)}
+                    className="rounded-full border border-white/20 px-2 py-0.5 text-[10px]"
+                  >
+                    {isFr ? "Retirer" : "Remove"}
+                  </button>
+                </div>
+              ) : null}
             </>
           )}
         </div>

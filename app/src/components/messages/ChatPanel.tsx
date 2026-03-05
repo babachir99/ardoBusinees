@@ -97,6 +97,10 @@ function eventNarrative(params: {
     return event.note;
   }
 
+  if (!event.note && event.proofUrl) {
+    return isFr ? "Piece jointe partagee." : "Attachment shared.";
+  }
+
   if (event.status === "ASSIGNED") {
     return meId === delivery.courierId
       ? isFr
@@ -174,12 +178,16 @@ export default function ChatPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [showJumpButton, setShowJumpButton] = useState(false);
   const [lastRenderedEventId, setLastRenderedEventId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const wasNearBottomRef = useRef(true);
 
   const loadThread = useCallback(
@@ -304,21 +312,45 @@ export default function ChatPanel({
     }
   };
 
+  const uploadAttachment = async (file: File) => {
+    setUploadingAttachment(true);
+    setAttachmentError(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: form });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || typeof data?.url !== "string") {
+        throw new Error(toErrorMessage(data, isFr ? "Upload impossible." : "Upload failed."));
+      }
+      setAttachmentUrl(data.url);
+    } catch (uploadFailure) {
+      setAttachmentError(uploadFailure instanceof Error ? uploadFailure.message : isFr ? "Upload impossible." : "Upload failed.");
+    } finally {
+      setUploadingAttachment(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!deliveryId) return;
 
     const message = draft.trim();
-    if (!message || sending) return;
+    if ((!message && !attachmentUrl) || sending) return;
 
     setSending(true);
     setSendError(null);
+    setAttachmentError(null);
 
     try {
       const response = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: message }),
+        body: JSON.stringify({ note: message, proofUrl: attachmentUrl }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -329,6 +361,7 @@ export default function ChatPanel({
       }
 
       setDraft("");
+      setAttachmentUrl(null);
       wasNearBottomRef.current = true;
       await loadThread(true);
     } catch (sendFailure) {
@@ -449,6 +482,16 @@ export default function ChatPanel({
                         <p className="mt-1 whitespace-pre-wrap break-words">
                           {delivery ? eventNarrative({ locale, event, delivery, meId }) : event.note || event.status}
                         </p>
+                        {event.proofUrl ? (
+                          <a
+                            href={event.proofUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-flex text-[11px] text-emerald-300 underline"
+                          >
+                            {isFr ? "Voir la piece jointe" : "Open attachment"}
+                          </a>
+                        ) : null}
 
                         <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-zinc-500 opacity-0 transition group-hover:opacity-100">
                           <span>{timeLabel(event.createdAt, locale)}</span>
@@ -481,7 +524,7 @@ export default function ChatPanel({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                if (draft.trim().length > 0 && !sending) {
+                if ((draft.trim().length > 0 || attachmentUrl) && !sending) {
                   const form = event.currentTarget.form;
                   if (form) {
                     form.requestSubmit();
@@ -493,9 +536,28 @@ export default function ChatPanel({
             placeholder={isFr ? "Ecris ton message..." : "Write your message..."}
             className="min-h-[46px] w-full resize-none rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              void uploadAttachment(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingAttachment || sending}
+            className="inline-flex h-10 items-center justify-center rounded-full border border-white/20 px-3 text-xs font-semibold text-zinc-200 transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {uploadingAttachment ? (isFr ? "Upload..." : "Upload...") : isFr ? "Joindre" : "Attach"}
+          </button>
           <button
             type="submit"
-            disabled={sending || draft.trim().length === 0}
+            disabled={sending || (draft.trim().length === 0 && !attachmentUrl)}
             className="inline-flex h-10 items-center justify-center rounded-full bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             aria-label={isFr ? "Envoyer" : "Send"}
           >
@@ -505,6 +567,21 @@ export default function ChatPanel({
             </svg>
           </button>
         </div>
+        {attachmentUrl ? (
+          <div className="mt-2 flex items-center gap-2 text-xs text-zinc-300">
+            <a href={attachmentUrl} target="_blank" rel="noreferrer" className="truncate text-emerald-300 underline">
+              {isFr ? "Piece jointe prete" : "Attachment ready"}
+            </a>
+            <button
+              type="button"
+              onClick={() => setAttachmentUrl(null)}
+              className="rounded-full border border-white/20 px-2 py-0.5 text-[10px]"
+            >
+              {isFr ? "Retirer" : "Remove"}
+            </button>
+          </div>
+        ) : null}
+        {attachmentError ? <p className="mt-1 text-xs text-rose-300">{attachmentError}</p> : null}
         {sendError ? <p className="mt-1 text-xs text-rose-300">{sendError}</p> : null}
       </form>
     </section>

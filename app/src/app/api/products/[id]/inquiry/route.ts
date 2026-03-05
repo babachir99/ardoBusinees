@@ -1,9 +1,10 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
 import { isEitherBlocked } from "@/lib/trust-blocks";
+import { parseMessageBody } from "@/lib/message-attachments";
 
 export async function GET(
   _request: NextRequest,
@@ -139,13 +140,17 @@ export async function GET(
         }
       : null,
     messages:
-      inquiry?.messages.map((message) => ({
-        id: message.id,
-        body: message.body,
-        createdAt: message.createdAt,
-        senderId: message.senderId,
-        sender: message.sender,
-      })) ?? [],
+      inquiry?.messages.map((message) => {
+        const parsed = parseMessageBody(message.body);
+        return {
+          id: message.id,
+          body: parsed.body,
+          attachmentUrl: parsed.attachmentUrl,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          sender: message.sender,
+        };
+      }) ?? [],
     offers:
       inquiry?.offers.map((offer) => ({
         id: offer.id,
@@ -158,7 +163,3 @@ export async function GET(
       })) ?? [],
   });
 }
-
-
-
-

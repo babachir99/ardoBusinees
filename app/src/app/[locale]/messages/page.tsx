@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import Footer from "@/components/layout/Footer";
 import ConversationsList from "@/components/messages/ConversationsList";
 import type { Prisma } from "@prisma/client";
+import { parseMessageBody } from "@/lib/message-attachments";
 
 export default async function MessagesPage({
   params,
@@ -232,6 +233,7 @@ export default async function MessagesPage({
                 : item.buyer?.name || item.buyer?.email || (isFr ? "Client" : "Customer");
 
               const lastMessage = item.messages[0];
+              const parsedLastMessage = lastMessage ? parseMessageBody(lastMessage.body) : null;
               const unread = unreadByInquiryId.get(item.id) ?? false;
 
               return (
@@ -274,7 +276,7 @@ export default async function MessagesPage({
                       </p>
 
                       <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-zinc-200" : "text-zinc-500"}`}>
-                        {lastMessage?.body || (isFr ? "Aucun message pour le moment." : "No messages yet.")}
+                        {parsedLastMessage?.body || (parsedLastMessage?.attachmentUrl ? (isFr ? "Piece jointe" : "Attachment") : (isFr ? "Aucun message pour le moment." : "No messages yet."))}
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
