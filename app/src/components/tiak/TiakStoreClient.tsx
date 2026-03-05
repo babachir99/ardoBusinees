@@ -112,6 +112,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
 
   const [selectedDelivery, setSelectedDelivery] = useState<TiakDelivery | null>(null);
+  const [deepLinkedDeliveryId, setDeepLinkedDeliveryId] = useState<string | null>(null);
   const [courierSpaceOpen, setCourierSpaceOpen] = useState(false);
   const [earningsOpen, setEarningsOpen] = useState(false);
   const [openNewMission, setOpenNewMission] = useState(false);
@@ -417,6 +418,14 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   }, [refreshPayouts]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const deliveryId = new URLSearchParams(window.location.search).get("deliveryId");
+    if (deliveryId) {
+      setDeepLinkedDeliveryId(deliveryId);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!notificationsReadKey || typeof window === "undefined") {
       setTiakNotificationsReadAt(null);
       return;
@@ -429,6 +438,20 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   useEffect(() => {
     refreshTiakNotifications();
   }, [refreshTiakNotifications]);
+
+  useEffect(() => {
+    if (!deepLinkedDeliveryId) return;
+
+    const target = [...openDeliveries, ...trackedDeliveries].find(
+      (entry) => entry.id === deepLinkedDeliveryId
+    );
+
+    if (!target) return;
+
+    setSelectedDelivery(target);
+    trackDeliveryId(target.id);
+    setDeepLinkedDeliveryId(null);
+  }, [deepLinkedDeliveryId, openDeliveries, trackedDeliveries, trackDeliveryId]);
 
   const handleDeliveryUpdated = useCallback((updated: TiakDelivery) => {
     setTrackedDeliveries((current) => upsertDelivery(current, updated));

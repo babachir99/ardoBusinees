@@ -30,6 +30,18 @@ function normalizeProofUrl(value: unknown) {
   return null;
 }
 
+function normalizeRating(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric)) return null;
+  if (numeric < 1 || numeric > 5) return null;
+  return numeric;
+}
+
+function toRatingNote(rating: number, comment: string | null) {
+  const normalizedComment = comment?.trim() || "";
+  return normalizedComment ? `RATING:${rating}|${normalizedComment}` : `RATING:${rating}`;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -117,8 +129,10 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const note = normalizeString(body.note).slice(0, 600) || null;
-  const proofUrl = normalizeProofUrl(body.proofUrl);
+  const note = normalizeString((body as { note?: unknown }).note).slice(0, 600) || null;
+  const proofUrl = normalizeProofUrl((body as { proofUrl?: unknown }).proofUrl);
+  const rating = normalizeRating((body as { rating?: unknown }).rating);
+  const effectiveNote = rating !== null ? toRatingNote(rating, note).slice(0, 600) : note;
 
   const delivery = await prisma.tiakDelivery.findUnique({
     where: { id },
@@ -136,16 +150,48 @@ export async function POST(
 
   const isAdmin = session.user.role === "ADMIN";
   const isAssignedCourier = session.user.id === delivery.courierId;
+  const isCustomer = session.user.id === delivery.customerId;
 
-  if (!isAdmin && !isAssignedCourier) {
-    return NextResponse.json({ error: "Only assigned courier or admin can add events" }, { status: 403 });
+  if (!isAdmin && !isAssignedCourier && !isCustomer) {
+    return NextResponse.json({ error: "Only delivery participants can add events" }, { status: 403 });
+  }
+
+  if (proofUrl && !isAdmin && !isAssignedCourier) {
+    return NextResponse.json({ error: "Only assigned courier or admin can add proof" }, { status: 403 });
+  }
+
+  if (!effectiveNote && !proofUrl) {
+    return NextResponse.json({ error: "Empty event payload" }, { status: 400 });
+  }
+
+  if (rating !== null) {
+    if (!isAdmin && !isCustomer) {
+      return NextResponse.json({ error: "Only customer or admin can rate delivery" }, { status: 403 });
+    }
+
+    if (delivery.status !== "COMPLETED") {
+      return NextResponse.json({ error: "Rating available only after COMPLETED" }, { status: 409 });
+    }
+
+    const alreadyRated = await prisma.tiakDeliveryEvent.findFirst({
+      where: {
+        deliveryId: delivery.id,
+        actorId: session.user.id,
+        note: { startsWith: "RATING:" },
+      },
+      select: { id: true },
+    });
+
+    if (alreadyRated) {
+      return NextResponse.json({ error: "Rating already submitted" }, { status: 409 });
+    }
   }
 
   const event = await prisma.tiakDeliveryEvent.create({
     data: {
       deliveryId: delivery.id,
       status: delivery.status,
-      note,
+      note: effectiveNote,
       proofUrl,
       actorId: session.user.id,
     },
