@@ -1,12 +1,13 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
-import PublicUserCard from "@/components/trust/PublicUserCard";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
+import PrestaFiltersBar, { type PrestaFiltersValue } from "@/components/presta/PrestaFiltersBar";
+import PrestaDetailsDrawer, { type PrestaDetailsItem } from "@/components/presta/PrestaDetailsDrawer";
 import CountryPhoneField from "@/components/forms/CountryPhoneField";
 import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
 import { getDialCode } from "@/lib/locale/country";
@@ -20,6 +21,7 @@ type PrestaService = {
   basePriceCents: number;
   currency: string;
   acceptedPaymentMethods: string[];
+  createdAt?: string | null;
   provider: {
     id: string;
     name: string | null;
@@ -98,6 +100,35 @@ function toErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function needStatusLabel(status: PrestaNeed["status"], locale: string) {
+  if (locale !== "fr") return status;
+  const labels: Record<PrestaNeed["status"], string> = {
+    OPEN: "Ouvert",
+    IN_REVIEW: "En revue",
+    ACCEPTED: "Assigne",
+    CLOSED: "Clos",
+    CANCELED: "Annule",
+  };
+  return labels[status] ?? status;
+}
+
+function needStatusClasses(status: PrestaNeed["status"]) {
+  switch (status) {
+    case "OPEN":
+      return "border-emerald-300/45 bg-emerald-300/12 text-emerald-100";
+    case "IN_REVIEW":
+      return "border-amber-300/45 bg-amber-300/12 text-amber-100";
+    case "ACCEPTED":
+      return "border-sky-300/45 bg-sky-300/12 text-sky-100";
+    case "CLOSED":
+      return "border-white/25 bg-white/8 text-zinc-200";
+    case "CANCELED":
+      return "border-rose-300/45 bg-rose-300/12 text-rose-100";
+    default:
+      return "border-white/25 bg-white/8 text-zinc-200";
+  }
+}
+
 export default function PrestaStoreClient({
   locale,
   isLoggedIn,
@@ -111,6 +142,18 @@ export default function PrestaStoreClient({
   const [needs, setNeeds] = useState<PrestaNeed[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filters, setFilters] = useState<PrestaFiltersValue>({
+    query: "",
+    city: "",
+    category: "",
+    budgetMin: "",
+    budgetMax: "",
+    sort: "recommended",
+  });
+  const [offersVisible, setOffersVisible] = useState(12);
+  const [needsVisible, setNeedsVisible] = useState(12);
+  const [showBackTop, setShowBackTop] = useState(false);
 
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -152,8 +195,10 @@ export default function PrestaStoreClient({
   const [bookingMethod, setBookingMethod] = useState("WAVE");
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [detailsItem, setDetailsItem] = useState<PrestaDetailsItem | null>(null);
 
   const isAdmin = currentUserRole === "ADMIN";
+  const isFr = locale === "fr";
 
   async function loadServices() {
     setLoading(true);
@@ -261,6 +306,19 @@ export default function PrestaStoreClient({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowBackTop(window.scrollY > 700);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    setOffersVisible(12);
+    setNeedsVisible(12);
+  }, [filters, tab]);
 
   function goToLogin() {
     const callbackUrl = encodeURIComponent(window.location.pathname + window.location.search);
@@ -475,6 +533,194 @@ export default function PrestaStoreClient({
     setBookingService(service);
   }
 
+  async function handleRefresh() {
+    if (tab === "provider") return;
+    setRefreshing(true);
+    try {
+      if (tab === "offers") {
+        await loadServices();
+      } else {
+        await loadNeeds();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const cityOptions = useMemo(() => {
+    const source =
+      tab === "offers"
+        ? services.map((service) => service.city)
+        : needs.map((need) => need.city ?? need.area);
+    return Array.from(
+      new Set(source.filter((entry): entry is string => Boolean(entry)))
+    ).sort((a, b) => a.localeCompare(b));
+  }, [tab, services, needs]);
+
+  const categoryOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        services
+          .map((service) => service.category)
+          .filter((entry): entry is string => Boolean(entry))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    const query = filters.query.trim().toLowerCase();
+    const city = filters.city.trim().toLowerCase();
+    const category = filters.category.trim().toLowerCase();
+    const budgetMin = Number(filters.budgetMin);
+    const budgetMax = Number(filters.budgetMax);
+
+    const list = services.filter((service) => {
+      if (query) {
+        const haystack = [
+          service.title,
+          service.description ?? "",
+          service.category ?? "",
+          service.city ?? "",
+          service.provider.name ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      if (city && (service.city ?? "").toLowerCase() !== city) return false;
+      if (category && (service.category ?? "").toLowerCase() !== category) return false;
+
+      if (filters.budgetMin && Number.isFinite(budgetMin) && service.basePriceCents < budgetMin) {
+        return false;
+      }
+
+      if (filters.budgetMax && Number.isFinite(budgetMax) && service.basePriceCents > budgetMax) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (filters.sort === "priceAsc") {
+      return [...list].sort((a, b) => a.basePriceCents - b.basePriceCents);
+    }
+
+    if (filters.sort === "priceDesc") {
+      return [...list].sort((a, b) => b.basePriceCents - a.basePriceCents);
+    }
+
+    if (filters.sort === "newest") {
+      return [...list].sort((a, b) => {
+        const right = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const left = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        return right - left;
+      });
+    }
+
+    return list;
+  }, [filters, services]);
+
+  const filteredNeeds = useMemo(() => {
+    const query = filters.query.trim().toLowerCase();
+    const city = filters.city.trim().toLowerCase();
+    const budgetMin = Number(filters.budgetMin);
+    const budgetMax = Number(filters.budgetMax);
+
+    const list = needs.filter((need) => {
+      if (query) {
+        const haystack = [
+          need.title,
+          need.description,
+          need.city ?? "",
+          need.area ?? "",
+          need.customer?.name ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      if (city) {
+        const cityMatch =
+          (need.city ?? "").toLowerCase() === city || (need.area ?? "").toLowerCase() === city;
+        if (!cityMatch) return false;
+      }
+
+      if (filters.budgetMin && Number.isFinite(budgetMin) && (need.budgetCents ?? 0) < budgetMin) {
+        return false;
+      }
+
+      if (filters.budgetMax && Number.isFinite(budgetMax) && (need.budgetCents ?? 0) > budgetMax) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (filters.sort === "priceAsc") {
+      return [...list].sort((a, b) => (a.budgetCents ?? 0) - (b.budgetCents ?? 0));
+    }
+
+    if (filters.sort === "priceDesc") {
+      return [...list].sort((a, b) => (b.budgetCents ?? 0) - (a.budgetCents ?? 0));
+    }
+
+    if (filters.sort === "newest") {
+      return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return list;
+  }, [filters, needs]);
+
+  const visibleServices = useMemo(
+    () => filteredServices.slice(0, offersVisible),
+    [filteredServices, offersVisible]
+  );
+  const visibleNeeds = useMemo(() => filteredNeeds.slice(0, needsVisible), [filteredNeeds, needsVisible]);
+
+  const shouldShowServiceEmpty = !loading && tab === "offers" && filteredServices.length === 0;
+  const shouldShowNeedEmpty = !loading && tab === "needs" && filteredNeeds.length === 0;
+
+  const openServiceDetails = (service: PrestaService) => {
+    setDetailsItem({
+      kind: "offer",
+      id: service.id,
+      title: service.title,
+      description: service.description,
+      category: service.category,
+      city: service.city,
+      createdAt: formatDateLabel(service.createdAt ?? null, locale),
+      statusLabel:
+        service.contactUnlockStatusHint === "BLOCKED_USER"
+          ? isFr
+            ? "Interaction bloquee"
+            : "Interaction blocked"
+          : isFr
+            ? "Disponible"
+            : "Available",
+      priceLabel: formatAmount(service.basePriceCents, service.currency),
+      providerName: service.provider.name ?? (isFr ? "Prestataire" : "Provider"),
+      paymentMethods: service.acceptedPaymentMethods,
+    });
+  };
+
+  const openNeedDetails = (need: PrestaNeed) => {
+    setDetailsItem({
+      kind: "need",
+      id: need.id,
+      title: need.title,
+      description: need.description,
+      city: need.city,
+      area: need.area,
+      createdAt: formatDateLabel(need.createdAt, locale),
+      preferredDate: formatDateLabel(need.preferredDate, locale),
+      statusLabel: needStatusLabel(need.status, locale),
+      budgetLabel: formatAmount(need.budgetCents, need.currency),
+      customerName: need.customer?.name ?? (isFr ? "Client" : "Customer"),
+    });
+  };
+
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3">
@@ -511,16 +757,36 @@ export default function PrestaStoreClient({
         </div>
       </section>
 
+      {tab !== "provider" ? (
+        <PrestaFiltersBar
+          locale={locale}
+          value={filters}
+          cities={cityOptions}
+          categories={tab === "offers" ? categoryOptions : []}
+          onChange={(next) => setFilters((current) => ({ ...current, ...next }))}
+          onReset={() =>
+            setFilters({
+              query: "",
+              city: "",
+              category: "",
+              budgetMin: "",
+              budgetMax: "",
+              sort: "recommended",
+            })
+          }
+        />
+      ) : null}
+
       {tab === "offers" && canPublish && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <h2 className="text-base font-semibold text-white">Creer un service</h2>
+          <h2 className="text-base font-semibold text-white">{isFr ? "Creer un service" : "Create a service"}</h2>
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateService}>
             <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Titre
+              {isFr ? "Titre" : "Title"}
               <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={formTitle} onChange={(event) => setFormTitle(event.target.value)} required />
             </label>
             <label className="flex flex-col gap-1 text-xs text-zinc-300">
-              Prix (cents)
+              {isFr ? "Prix" : "Price"}
               <input type="number" min={1} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={formPrice} onChange={(event) => setFormPrice(event.target.value)} required />
             </label>
             <label className="md:col-span-2 flex flex-col gap-1 text-xs text-zinc-300">
@@ -536,7 +802,7 @@ export default function PrestaStoreClient({
               </select>
             </label>
             <div className="flex flex-col gap-1 text-xs text-zinc-300">
-              <span>Contact (optionnel)</span>
+              <span>{isFr ? "Contact (optionnel)" : "Contact (optional)"}</span>
               <CountryPhoneField
                 value={serviceContactPhone}
                 locale={locale}
@@ -553,7 +819,7 @@ export default function PrestaStoreClient({
             </div>
             <div className="md:col-span-2 flex items-center gap-3">
               <button type="submit" disabled={submittingService} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                {submittingService ? "Envoi..." : "Publier"}
+                {submittingService ? (isFr ? "Envoi..." : "Sending...") : isFr ? "Publier" : "Publish"}
               </button>
               {formError && <p className="text-sm text-rose-300">{formError}</p>}
               {formSuccess && <p className="text-sm text-emerald-300">{formSuccess}</p>}
@@ -564,22 +830,29 @@ export default function PrestaStoreClient({
 
       {tab === "needs" && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-white">
-              {locale === "fr" ? "Publier un besoin" : "Publish a need"}
-            </h2>
-            <button
-              type="button"
-              onClick={openNeedComposer}
-              className="rounded-lg bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
-            >
-              {locale === "fr" ? "Publier un besoin" : "Publish a need"}
-            </button>
+          <div className="rounded-2xl border border-emerald-300/25 bg-emerald-300/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {isFr ? "Besoin d'un professionnel pres de chez vous ?" : "Need a professional near you?"}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-300">
+                  {isFr ? "Publiez votre besoin et comparez rapidement les offres." : "Publish your need and compare offers quickly."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openNeedComposer}
+                className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:brightness-110"
+              >
+                {isFr ? "Creer mon besoin" : "Create my need"}
+              </button>
+            </div>
           </div>
 
           {!isLoggedIn && (
             <p className="mt-3 text-xs text-zinc-400">
-              {locale === "fr" ? "Connecte-toi pour publier un besoin." : "Sign in to publish a need."}
+              {isFr ? "Connecte-toi pour publier un besoin." : "Sign in to publish a need."}
             </p>
           )}
 
@@ -619,7 +892,7 @@ export default function PrestaStoreClient({
               </label>
               <div className="md:col-span-2 flex items-center gap-3">
                 <button type="submit" disabled={submittingNeed} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                  {submittingNeed ? "Envoi..." : locale === "fr" ? "Publier" : "Publish"}
+                  {submittingNeed ? (isFr ? "Envoi..." : "Sending...") : isFr ? "Publier" : "Publish"}
                 </button>
                 {needError && <p className="text-sm text-rose-300">{needError}</p>}
                 {needSuccess && <p className="text-sm text-emerald-300">{needSuccess}</p>}
@@ -629,206 +902,247 @@ export default function PrestaStoreClient({
         </section>
       )}
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">
             {tab === "offers"
-              ? "Services PRESTA"
+              ? isFr
+                ? "Offres PRESTA"
+                : "PRESTA offers"
               : tab === "needs"
-                ? locale === "fr"
+                ? isFr
                   ? "Besoins PRESTA"
                   : "PRESTA needs"
-                : locale === "fr"
+                : isFr
                   ? "Espace prestataire"
                   : "Provider space"}
           </h2>
-          {tab !== "provider" && (
-            <button
-              type="button"
-              onClick={() => (tab === "offers" ? loadServices() : loadNeeds())}
-              className="rounded-full border border-white/20 px-3 py-1 text-xs text-zinc-200"
-            >
-              Rafraichir
-            </button>
-          )}
+          {tab !== "provider" ? (
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-white/15 bg-zinc-950/70 px-3 py-1 text-xs text-zinc-300">
+                {tab === "offers" ? `${visibleServices.length}/${filteredServices.length}` : `${visibleNeeds.length}/${filteredNeeds.length}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-white/40"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}>
+                  <path d="M20 11a8 8 0 1 0 2.2 5.5" />
+                  <path d="M20 4v7h-7" />
+                </svg>
+                {isFr ? "Rafraichir" : "Refresh"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
-        {tab !== "provider" && loading && <p className="text-sm text-zinc-300">Chargement...</p>}
         {tab !== "provider" && error && <p className="text-sm text-rose-300">{error}</p>}
 
         {tab === "offers" ? (
           <>
-            <div className="grid gap-3 md:grid-cols-2">
-              {services.map((service) => (
-                <div key={service.id} className="space-y-2">
-                  <PublicUserCard
-                    locale={locale}
-                    userId={service.provider.id}
-                    viewerUserId={currentUserId}
-                    name={service.provider.name ?? (locale === "fr" ? "Prestataire" : "Provider")}
-                    avatarUrl={service.provider.image}
-                    roleLabel={locale === "fr" ? "Prestataire" : "Provider"}
-                    reliabilityLabel={
-                      locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"
-                    }
-                    updatedAt={null}
-                    details={[
-                      {
-                        label: locale === "fr" ? "Service" : "Service",
-                        value: service.title,
-                      },
-                      {
-                        label: locale === "fr" ? "Categorie" : "Category",
-                        value: service.category ?? "-",
-                      },
-                      {
-                        label: locale === "fr" ? "Ville" : "City",
-                        value: service.city ?? "-",
-                      },
-                    ]}
-                    onViewProfile={() => setSelectedServiceProfile(service)}
-                    viewProfileLabel={locale === "fr" ? "Voir profil" : "View profile"}
+            {loading ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="h-56 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {visibleServices.map((service) => (
+                  <article
+                    key={service.id}
+                    className="group flex h-full flex-col rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
                   >
-                    <p className="mt-2 text-sm text-zinc-300">{shortDescription(service.description) || "-"}</p>
-                    <p className="mt-2 text-sm font-semibold text-emerald-300">
-                      {formatAmount(service.basePriceCents, service.currency)}
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="line-clamp-1 text-base font-semibold text-white">{service.title}</h3>
+                      <p className="shrink-0 text-sm font-semibold text-emerald-300">
+                        {formatAmount(service.basePriceCents, service.currency)}
+                      </p>
+                    </div>
+
+                    <p className="mt-2 text-xs text-zinc-400">
+                      {(service.category ?? (isFr ? "Sans categorie" : "No category")) + " • " + (service.city ?? "-") + " • " + (isFr ? "Disponible" : "Available")}
                     </p>
 
-                    {!service.contactLocked && service.contactPhone ? (
-                      <p className="mt-1 text-xs text-zinc-300">Contact: {service.contactPhone}</p>
-                    ) : null}
+                    <p className="mt-3 line-clamp-3 text-sm text-zinc-300">
+                      {shortDescription(service.description) || (isFr ? "Aucune description." : "No description.")}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-2 py-0.5 text-emerald-100">
+                        {isFr ? "Verifie" : "Verified"}
+                      </span>
+                      <span className="rounded-full border border-sky-300/35 bg-sky-300/10 px-2 py-0.5 text-sky-100">
+                        {isFr ? "Repond vite" : "Fast reply"}
+                      </span>
+                      <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-zinc-200">
+                        {isFr ? "Note en cours" : "Rating in progress"}
+                      </span>
+                    </div>
 
                     {service.contactUnlockStatusHint === "BLOCKED_USER" ? (
-                      <p className="mt-1 text-xs text-rose-300">
-                        {locale === "fr"
+                      <p className="mt-3 text-xs text-rose-300">
+                        {isFr
                           ? "Interaction bloquee (utilisateur bloque)."
                           : "Interaction blocked (blocked user)."}
                       </p>
                     ) : null}
 
-                    <button
-                      type="button"
-                      onClick={() => openBooking({ id: service.id, title: service.title })}
-                      disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
-                      className={`mt-3 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white ${
-                        service.contactUnlockStatusHint === "BLOCKED_USER"
-                          ? "cursor-not-allowed opacity-50"
-                          : "hover:bg-white/20"
-                      }`}
-                    >
-                      {locale === "fr" ? "Reserver" : "Book"}
-                    </button>
-                  </PublicUserCard>
-                </div>
-              ))}
+                    {!service.contactLocked && service.contactPhone ? (
+                      <p className="mt-2 text-xs text-zinc-400">Contact: {service.contactPhone}</p>
+                    ) : null}
 
-              {!loading && services.length === 0 && (
-                <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-                  Aucun service pour le moment.
-                </div>
-              )}
-            </div>
-
-            <UserProfileDrawer
-              open={Boolean(selectedServiceProfile)}
-              onClose={() => setSelectedServiceProfile(null)}
-              locale={locale}
-              userId={selectedServiceProfile?.provider.id}
-              viewerUserId={currentUserId}
-              name={selectedServiceProfile?.provider.name ?? (locale === "fr" ? "Prestataire" : "Provider")}
-              avatarUrl={selectedServiceProfile?.provider.image ?? null}
-              roleLabel={locale === "fr" ? "Prestataire" : "Provider"}
-              reliabilityLabel={locale === "fr" ? "Fiabilite en progression" : "Reliability in progress"}
-              details={
-                selectedServiceProfile
-                  ? [
-                      {
-                        label: locale === "fr" ? "Service" : "Service",
-                        value: selectedServiceProfile.title,
-                      },
-                      {
-                        label: locale === "fr" ? "Categorie" : "Category",
-                        value: selectedServiceProfile.category ?? "-",
-                      },
-                      {
-                        label: locale === "fr" ? "Ville" : "City",
-                        value: selectedServiceProfile.city ?? "-",
-                      },
-                      {
-                        label: locale === "fr" ? "Paiement" : "Payment",
-                        value: selectedServiceProfile.acceptedPaymentMethods.join(", "),
-                      },
-                    ]
-                  : []
-              }
-              primaryAction={
-                selectedServiceProfile && selectedServiceProfile.contactUnlockStatusHint !== "BLOCKED_USER"
-                  ? {
-                      label: locale === "fr" ? "Reserver ce service" : "Book this service",
-                      onClick: () => {
-                        openBooking({
-                          id: selectedServiceProfile.id,
-                          title: selectedServiceProfile.title,
-                        });
-                        setSelectedServiceProfile(null);
-                      },
-                    }
-                  : undefined
-              }
-            >
-              {selectedServiceProfile?.contactUnlockStatusHint === "BLOCKED_USER" ? (
-                <p className="mt-3 text-xs text-rose-300">
-                  {locale === "fr"
-                    ? "Interaction bloquee (utilisateur bloque)."
-                    : "Interaction blocked (blocked user)."}
-                </p>
-              ) : null}
-            </UserProfileDrawer>
-          </>
-        ) : tab === "needs" ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {needs.map((need) => (
-              <article key={need.id} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-                <h3 className="text-base font-semibold text-white">{need.title}</h3>
-                <p className="mt-1 text-xs text-zinc-400">{need.customer?.name ?? "Client"}</p>
-                <p className="mt-3 text-sm text-zinc-300">{shortDescription(need.description) || "-"}</p>
-                <div className="mt-3 grid gap-1 text-xs text-zinc-400">
-                  <p>{locale === "fr" ? "Statut" : "Status"}: {need.status}</p>
-                  <p>{locale === "fr" ? "Ville" : "City"}: {need.city ?? "-"}</p>
-                  <p>{locale === "fr" ? "Zone" : "Area"}: {need.area ?? "-"}</p>
-                  <p>{locale === "fr" ? "Budget" : "Budget"}: {formatAmount(need.budgetCents, need.currency)}</p>
-                  <p>{locale === "fr" ? "Date souhaitee" : "Preferred date"}: {formatDateLabel(need.preferredDate, locale)}</p>
-                  <p>{locale === "fr" ? "Publie le" : "Published"}: {formatDateLabel(need.createdAt, locale)}</p>
-                </div>
-
-                <PrestaNeedSuggestions
-                  locale={locale}
-                  needId={need.id}
-                  isLoggedIn={isLoggedIn}
-                  onRequireLogin={goToLogin}
-                  onOpenBooking={openBooking}
-                />
-
-                {need.status === "OPEN" && (Boolean(currentUserId && currentUserId === need.customerId) || isAdmin) && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedNeedForProposals(need.id)}
-                      className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white"
-                    >
-                      {locale === "fr" ? "Voir propositions" : "View proposals"}
-                    </button>
-                  </div>
-                )}
-              </article>
-            ))}
-
-            {!loading && needs.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300 md:col-span-2">
-                {locale === "fr" ? "Aucun besoin ouvert." : "No open needs."}
+                    <div className="mt-auto flex gap-2 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => openBooking({ id: service.id, title: service.title })}
+                        disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
+                        className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${
+                          service.contactUnlockStatusHint === "BLOCKED_USER"
+                            ? "cursor-not-allowed bg-zinc-700/40 text-zinc-500"
+                            : "bg-emerald-400 text-zinc-950 hover:brightness-110"
+                        }`}
+                      >
+                        {isFr ? "Reserver" : "Book"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openServiceDetails(service)}
+                        className="rounded-full border border-white/20 px-3 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                      >
+                        {isFr ? "Details" : "Details"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
-          </div>
+
+            {shouldShowServiceEmpty ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/60 p-8 text-center">
+                <h3 className="text-lg font-semibold text-white">{isFr ? "Aucune offre trouvee" : "No offer found"}</h3>
+                <p className="mt-2 text-sm text-zinc-400">
+                  {isFr
+                    ? "Essayez d'elargir vos filtres ou creez un besoin."
+                    : "Try broadening your filters or create a need."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("needs");
+                    setShowNeedForm(true);
+                  }}
+                  className="mt-4 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-110"
+                >
+                  {isFr ? "Publier un besoin" : "Publish a need"}
+                </button>
+              </div>
+            ) : null}
+
+            {filteredServices.length > visibleServices.length ? (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setOffersVisible((current) => current + 12)}
+                  className="rounded-full border border-white/20 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                >
+                  {isFr ? "Afficher plus" : "Load more"}
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : tab === "needs" ? (
+          <>
+            {loading ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {visibleNeeds.map((need) => (
+                  <article key={need.id} className="flex h-full flex-col rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_16px_30px_rgba(0,0,0,0.35)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="line-clamp-1 text-base font-semibold text-white">{need.title}</h3>
+                      <p className="shrink-0 text-sm font-semibold text-emerald-300">{formatAmount(need.budgetCents, need.currency)}</p>
+                    </div>
+
+                    <p className="mt-2 text-xs text-zinc-400">
+                      {(need.city ?? need.area ?? "-") + " • " + (isFr ? "Date" : "Date") + ": " + formatDateLabel(need.preferredDate, locale)}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${needStatusClasses(need.status)}`}>
+                        {needStatusLabel(need.status, locale)}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 line-clamp-3 text-sm text-zinc-300">{shortDescription(need.description)}</p>
+
+                    <div className="mt-auto pt-4">
+                      <button
+                        type="button"
+                        onClick={() => openNeedDetails(need)}
+                        className="rounded-full border border-white/20 px-3 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                      >
+                        {isFr ? "Details" : "Details"}
+                      </button>
+
+                      <PrestaNeedSuggestions
+                        locale={locale}
+                        needId={need.id}
+                        isLoggedIn={isLoggedIn}
+                        onRequireLogin={goToLogin}
+                        onOpenBooking={openBooking}
+                      />
+
+                      {need.status === "OPEN" && (Boolean(currentUserId && currentUserId === need.customerId) || isAdmin) ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedNeedForProposals(need.id)}
+                          className="mt-3 rounded-full border border-white/20 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-white/40"
+                        >
+                          {isFr ? "Voir propositions" : "View proposals"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {shouldShowNeedEmpty ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/60 p-8 text-center">
+                <h3 className="text-lg font-semibold text-white">{isFr ? "Aucun besoin trouve" : "No need found"}</h3>
+                <p className="mt-2 text-sm text-zinc-400">
+                  {isFr
+                    ? "Essayez d'elargir vos filtres ou publiez une nouvelle demande."
+                    : "Try broader filters or publish a new request."}
+                </p>
+                <button
+                  type="button"
+                  onClick={openNeedComposer}
+                  className="mt-4 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-110"
+                >
+                  {isFr ? "Creer mon besoin" : "Create my need"}
+                </button>
+              </div>
+            ) : null}
+
+            {filteredNeeds.length > visibleNeeds.length ? (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNeedsVisible((current) => current + 12)}
+                  className="rounded-full border border-white/20 px-4 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                >
+                  {isFr ? "Afficher plus" : "Load more"}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="space-y-4">
             <div>
@@ -859,6 +1173,89 @@ export default function PrestaStoreClient({
           </div>
         )}
       </section>
+
+      <PrestaDetailsDrawer
+        locale={locale}
+        open={Boolean(detailsItem)}
+        item={detailsItem}
+        onClose={() => setDetailsItem(null)}
+        onBook={
+          detailsItem?.kind === "offer"
+            ? () => {
+                openBooking({ id: detailsItem.id, title: detailsItem.title });
+                setDetailsItem(null);
+              }
+            : undefined
+        }
+        onViewProfile={
+          detailsItem?.kind === "offer"
+            ? () => {
+                const service = services.find((entry) => entry.id === detailsItem.id);
+                if (service) {
+                  setSelectedServiceProfile(service);
+                }
+                setDetailsItem(null);
+              }
+            : undefined
+        }
+        onNeedPrimaryAction={detailsItem?.kind === "need" ? () => setDetailsItem(null) : undefined}
+      />
+
+      <UserProfileDrawer
+        open={Boolean(selectedServiceProfile)}
+        onClose={() => setSelectedServiceProfile(null)}
+        locale={locale}
+        userId={selectedServiceProfile?.provider.id}
+        viewerUserId={currentUserId}
+        name={selectedServiceProfile?.provider.name ?? (isFr ? "Prestataire" : "Provider")}
+        avatarUrl={selectedServiceProfile?.provider.image ?? null}
+        roleLabel={isFr ? "Prestataire" : "Provider"}
+        reliabilityLabel={isFr ? "Fiabilite en progression" : "Reliability in progress"}
+        details={
+          selectedServiceProfile
+            ? [
+                {
+                  label: isFr ? "Service" : "Service",
+                  value: selectedServiceProfile.title,
+                },
+                {
+                  label: isFr ? "Categorie" : "Category",
+                  value: selectedServiceProfile.category ?? "-",
+                },
+                {
+                  label: isFr ? "Ville" : "City",
+                  value: selectedServiceProfile.city ?? "-",
+                },
+                {
+                  label: isFr ? "Paiement" : "Payment",
+                  value: selectedServiceProfile.acceptedPaymentMethods.join(", "),
+                },
+              ]
+            : []
+        }
+        primaryAction={
+          selectedServiceProfile && selectedServiceProfile.contactUnlockStatusHint !== "BLOCKED_USER"
+            ? {
+                label: isFr ? "Reserver ce service" : "Book this service",
+                onClick: () => {
+                  openBooking({
+                    id: selectedServiceProfile.id,
+                    title: selectedServiceProfile.title,
+                  });
+                  setSelectedServiceProfile(null);
+                },
+              }
+            : undefined
+        }
+      >
+        {selectedServiceProfile?.contactUnlockStatusHint === "BLOCKED_USER" ? (
+          <p className="mt-3 text-xs text-rose-300">
+            {isFr
+              ? "Interaction bloquee (utilisateur bloque)."
+              : "Interaction blocked (blocked user)."}
+          </p>
+        ) : null}
+      </UserProfileDrawer>
 
       {selectedNeedForProposals && (
         <PrestaNeedProposalsPanel
@@ -912,6 +1309,16 @@ export default function PrestaStoreClient({
           </div>
         </div>
       )}
+
+      {showBackTop ? (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 right-6 z-40 rounded-full border border-white/20 bg-zinc-950/85 px-3 py-2 text-xs font-semibold text-zinc-200 shadow-[0_12px_24px_rgba(0,0,0,0.35)] transition hover:border-emerald-300/45 hover:text-white"
+        >
+          {isFr ? "Retour en haut" : "Back to top"}
+        </button>
+      ) : null}
     </div>
   );
 }
