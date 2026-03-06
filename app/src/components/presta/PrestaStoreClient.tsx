@@ -1,7 +1,9 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
+import PrestaNeedWizard from "@/components/presta/PrestaNeedWizard";
+import PrestaNeedPublishPopup from "@/components/presta/PrestaNeedPublishPopup";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
@@ -184,6 +186,7 @@ export default function PrestaStoreClient({
   const [needSuccess, setNeedSuccess] = useState<string | null>(null);
   const [submittingNeed, setSubmittingNeed] = useState(false);
   const [showNeedForm, setShowNeedForm] = useState(false);
+  const serviceFormRef = useRef<HTMLElement | null>(null);
   const [selectedNeedForProposals, setSelectedNeedForProposals] = useState<string | null>(null);
   const [showProviderProposalsPanel, setShowProviderProposalsPanel] = useState(false);
   const [providerPanelView, setProviderPanelView] = useState<"proposals" | "payouts">("proposals");
@@ -415,13 +418,14 @@ export default function PrestaStoreClient({
 
     const normalizedTitle = needTitle.trim();
     const normalizedDescription = needDescription.trim();
+    const finalDescription = normalizedDescription || normalizedTitle;
 
-    if (!normalizedTitle || !normalizedDescription) {
-      setNeedError(locale === "fr" ? "Titre et description obligatoires" : "Title and description are required");
+    if (!normalizedTitle) {
+      setNeedError(locale === "fr" ? "Titre obligatoire" : "Title is required");
       return;
     }
 
-    if (normalizedTitle.length > 140 || normalizedDescription.length > 3000) {
+    if (normalizedTitle.length > 140 || finalDescription.length > 3000) {
       setNeedError(locale === "fr" ? "Texte trop long" : "Text is too long");
       return;
     }
@@ -441,7 +445,7 @@ export default function PrestaStoreClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: normalizedTitle,
-          description: normalizedDescription,
+          description: finalDescription,
           city: needCity || undefined,
           area: needArea || undefined,
           budgetCents: parsedBudgetValue !== undefined ? Math.trunc(parsedBudgetValue) : undefined,
@@ -482,7 +486,20 @@ export default function PrestaStoreClient({
 
     setNeedError(null);
     setNeedSuccess(null);
-    setShowNeedForm((current) => !current);
+    if (tab !== "needs") {
+      setTab("needs");
+    }
+    setShowNeedForm(true);
+  }
+
+  function closeNeedComposer() {
+    setShowNeedForm(false);
+  }
+
+  function openServiceComposer() {
+    window.setTimeout(() => {
+      serviceFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   async function handleBookingSubmit(event: FormEvent<HTMLFormElement>) {
@@ -680,6 +697,7 @@ export default function PrestaStoreClient({
 
   const shouldShowServiceEmpty = !loading && tab === "offers" && filteredServices.length === 0;
   const shouldShowNeedEmpty = !loading && tab === "needs" && filteredNeeds.length === 0;
+  const showNeedPublishPanel = tab === "needs" && showNeedForm && isLoggedIn;
 
   const openServiceDetails = (service: PrestaService) => {
     setDetailsItem({
@@ -727,41 +745,25 @@ export default function PrestaStoreClient({
       ? [{ key: "provider" as const, label: locale === "fr" ? "Je suis prestataire" : "Provider mode" }]
       : []),
   ];
-  const activeTabIndex = Math.max(
-    0,
-    tabItems.findIndex((item) => item.key === tab)
-  );
 
   return (
     <div className="space-y-8 scroll-smooth">
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3">
-        <div className="flex w-full justify-center md:justify-start">
-          <div className="relative flex w-full items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 p-1 transition-all duration-200 md:w-fit">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-1 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition-all duration-200"
-              style={{
-                width: `calc((100% - 0.5rem) / ${tabItems.length})`,
-                left: `calc(0.25rem + ((100% - 0.5rem) / ${tabItems.length}) * ${activeTabIndex})`,
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-emerald-400 transition-all duration-300 ease-out"
-              style={{
-                width: `calc((100% - 0.5rem) / ${tabItems.length})`,
-                left: `calc(0.25rem + ((100% - 0.5rem) / ${tabItems.length}) * ${activeTabIndex})`,
-              }}
-            />
-
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3 md:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 p-1 transition-all duration-200">
             {tabItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setTab(item.key)}
-                className={`relative z-10 flex-1 cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 active:scale-95 md:flex-none ${
+                onClick={() => {
+                  setTab(item.key);
+                  if (item.key !== "needs") {
+                    setShowNeedForm(false);
+                  }
+                }}
+                className={`cursor-pointer rounded-full px-6 py-2 text-sm font-medium transition-all duration-200 active:scale-95 ${
                   tab === item.key
-                    ? "text-black"
+                    ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
                 }`}
               >
@@ -769,6 +771,34 @@ export default function PrestaStoreClient({
               </button>
             ))}
           </div>
+
+          {tab === "needs" ? (
+            <button
+              type="button"
+              onClick={openNeedComposer}
+              className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+            >
+              {isFr ? "Publier un besoin" : "Publish a need"}
+            </button>
+          ) : tab === "offers" ? (
+            canPublish ? (
+              <button
+                type="button"
+                onClick={openServiceComposer}
+                className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+              >
+                {isFr ? "Proposer un service" : "Offer a service"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openNeedComposer}
+                className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+              >
+                {isFr ? "Publier un besoin" : "Publish a need"}
+              </button>
+            )
+          ) : null}
         </div>
       </section>
 
@@ -793,16 +823,9 @@ export default function PrestaStoreClient({
       ) : null}
 
       {tab === "offers" && canPublish && (
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
+        <section ref={serviceFormRef} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
           <h2 className="text-base font-semibold text-white">{isFr ? "Creer un service" : "Create a service"}</h2>
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateService}>
-            <button
-              type="button"
-              onClick={() => undefined}
-              className="hidden"
-            >
-              noop
-            </button>
             <label className="flex flex-col gap-1 text-xs text-zinc-300">
               {isFr ? "Titre" : "Title"}
               <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={formTitle} onChange={(event) => setFormTitle(event.target.value)} required />
@@ -847,82 +870,6 @@ export default function PrestaStoreClient({
               {formSuccess && <p className="text-sm text-emerald-300">{formSuccess}</p>}
             </div>
           </form>
-        </section>
-      )}
-
-      {tab === "needs" && (
-        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  {isFr ? "Besoin d'un professionnel pres de chez vous ?" : "Need a professional near you?"}
-                </h2>
-                <p className="mt-1 text-sm text-zinc-300">
-                  {isFr
-                    ? "Publiez votre besoin et recevez des offres."
-                    : "Publish your need and receive offers quickly."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={openNeedComposer}
-                className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-600"
-              >
-                {isFr ? "Creer mon besoin" : "Create my need"}
-              </button>
-            </div>
-          </div>
-
-          {!isLoggedIn && (
-            <p className="mt-3 text-xs text-zinc-400">
-              {isFr ? "Connecte-toi pour publier un besoin." : "Sign in to publish a need."}
-            </p>
-          )}
-
-          {showNeedForm && isLoggedIn && (
-            <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateNeed}>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Titre
-                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needTitle} onChange={(event) => setNeedTitle(event.target.value)} required maxLength={140} />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Budget
-                <input type="number" min={0} className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needBudget} onChange={(event) => setNeedBudget(event.target.value)} />
-              </label>
-              <label className="md:col-span-2 flex flex-col gap-1 text-xs text-zinc-300">
-                Description
-                <textarea className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white" value={needDescription} onChange={(event) => setNeedDescription(event.target.value)} required maxLength={3000} />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Ville
-                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCity} onChange={(event) => setNeedCity(event.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Zone
-                <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needArea} onChange={(event) => setNeedArea(event.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Devise
-                <select className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needCurrency} onChange={(event) => setNeedCurrency(event.target.value)}>
-                  <option value="XOF">XOF</option>
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                {locale === "fr" ? "Date souhaitee" : "Preferred date"}
-                <input type="date" className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={needPreferredDate} onChange={(event) => setNeedPreferredDate(event.target.value)} />
-              </label>
-              <div className="md:col-span-2 flex items-center gap-3">
-                <button type="submit" disabled={submittingNeed} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                  {submittingNeed ? (isFr ? "Envoi..." : "Sending...") : isFr ? "Publier" : "Publish"}
-                </button>
-                {needError && <p className="text-sm text-rose-300">{needError}</p>}
-                {needSuccess && <p className="text-sm text-emerald-300">{needSuccess}</p>}
-              </div>
-            </form>
-          )}
         </section>
       )}
 
@@ -1049,10 +996,7 @@ export default function PrestaStoreClient({
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setTab("needs");
-                    setShowNeedForm(true);
-                  }}
+                  onClick={openNeedComposer}
                   className="mt-4 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-110"
                 >
                   {isFr ? "Publier un besoin" : "Publish a need"}
@@ -1074,6 +1018,14 @@ export default function PrestaStoreClient({
           </>
         ) : tab === "needs" ? (
           <>
+            {!isLoggedIn ? (
+              <p className="text-xs text-zinc-400">
+                {isFr
+                  ? "Connecte-toi pour publier un besoin."
+                  : "Sign in to publish a need."}
+              </p>
+            ) : null}
+
             {loading ? (
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
@@ -1197,6 +1149,36 @@ export default function PrestaStoreClient({
           </div>
         )}
       </section>
+
+      <PrestaNeedPublishPopup
+        open={showNeedPublishPanel}
+        locale={locale}
+        onClose={closeNeedComposer}
+      >
+        <PrestaNeedWizard
+          locale={locale}
+          open={showNeedForm}
+          needTitle={needTitle}
+          needDescription={needDescription}
+          needCity={needCity}
+          needArea={needArea}
+          needBudget={needBudget}
+          needCurrency={needCurrency}
+          needPreferredDate={needPreferredDate}
+          setNeedTitle={setNeedTitle}
+          setNeedDescription={setNeedDescription}
+          setNeedCity={setNeedCity}
+          setNeedArea={setNeedArea}
+          setNeedBudget={setNeedBudget}
+          setNeedCurrency={setNeedCurrency}
+          setNeedPreferredDate={setNeedPreferredDate}
+          submittingNeed={submittingNeed}
+          needError={needError}
+          needSuccess={needSuccess}
+          onSubmit={handleCreateNeed}
+          compact
+        />
+      </PrestaNeedPublishPopup>
 
       <PrestaDetailsDrawer
         locale={locale}
