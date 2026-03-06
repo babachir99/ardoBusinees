@@ -66,9 +66,9 @@ export default function PrestaFiltersBar({
   }, [isFr, value]);
 
   return (
-    <section className="sticky top-20 z-30 rounded-2xl border border-white/10 bg-zinc-900/80 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.32)] backdrop-blur">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <label className="xl:col-span-2 flex flex-col gap-1 text-xs text-zinc-400">
+    <section className="sticky top-20 z-20 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.32)]">
+      <div className="flex flex-wrap gap-4">
+        <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs text-zinc-400">
           {isFr ? "Recherche" : "Search"}
           <input
             value={value.query}
@@ -78,7 +78,7 @@ export default function PrestaFiltersBar({
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-400">
+        <label className="flex min-w-[170px] flex-col gap-1 text-xs text-zinc-400">
           {isFr ? "Ville" : "City"}
           <select
             value={value.city}
@@ -94,7 +94,7 @@ export default function PrestaFiltersBar({
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-400">
+        <label className="flex min-w-[170px] flex-col gap-1 text-xs text-zinc-400">
           {isFr ? "Categorie" : "Category"}
           <select
             value={value.category}
@@ -110,7 +110,7 @@ export default function PrestaFiltersBar({
           </select>
         </label>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid min-w-[230px] grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-xs text-zinc-400">
             {isFr ? "Budget min" : "Min budget"}
             <input
@@ -133,7 +133,7 @@ export default function PrestaFiltersBar({
           </label>
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-400">
+        <label className="flex min-w-[170px] flex-col gap-1 text-xs text-zinc-400">
           {isFr ? "Tri" : "Sort"}
           <select
             value={value.sort}

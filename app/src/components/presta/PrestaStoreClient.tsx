@@ -722,7 +722,7 @@ export default function PrestaStoreClient({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8 px-6 scroll-smooth">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3">
         <div className="inline-flex flex-wrap gap-2 rounded-full border border-white/10 bg-zinc-950/70 p-1">
           <button
@@ -942,17 +942,17 @@ export default function PrestaStoreClient({
         {tab === "offers" ? (
           <>
             {loading ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <div key={index} className="h-56 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {visibleServices.map((service) => (
                   <article
                     key={service.id}
-                    className="group flex h-full flex-col rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
+                    className="group flex h-full w-full max-w-md flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/10"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="line-clamp-1 text-base font-semibold text-white">{service.title}</h3>
@@ -965,7 +965,7 @@ export default function PrestaStoreClient({
                       {(service.category ?? (isFr ? "Sans categorie" : "No category")) + " • " + (service.city ?? "-") + " • " + (isFr ? "Disponible" : "Available")}
                     </p>
 
-                    <p className="mt-3 line-clamp-3 text-sm text-zinc-300">
+                    <p className="mt-3 line-clamp-2 text-sm text-zinc-300">
                       {shortDescription(service.description) || (isFr ? "Aucune description." : "No description.")}
                     </p>
 
@@ -998,10 +998,10 @@ export default function PrestaStoreClient({
                         type="button"
                         onClick={() => openBooking({ id: service.id, title: service.title })}
                         disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
-                        className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${
+                        className={`h-10 flex-1 rounded-xl text-sm font-medium transition active:scale-95 ${
                           service.contactUnlockStatusHint === "BLOCKED_USER"
                             ? "cursor-not-allowed bg-zinc-700/40 text-zinc-500"
-                            : "bg-emerald-400 text-zinc-950 hover:brightness-110"
+                            : "bg-emerald-500 text-black hover:bg-emerald-600"
                         }`}
                       >
                         {isFr ? "Reserver" : "Book"}
@@ -1009,7 +1009,7 @@ export default function PrestaStoreClient({
                       <button
                         type="button"
                         onClick={() => openServiceDetails(service)}
-                        className="rounded-full border border-white/20 px-3 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                        className="h-10 rounded-xl border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
                       >
                         {isFr ? "Details" : "Details"}
                       </button>
@@ -1021,7 +1021,10 @@ export default function PrestaStoreClient({
 
             {shouldShowServiceEmpty ? (
               <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/60 p-8 text-center">
-                <h3 className="text-lg font-semibold text-white">{isFr ? "Aucune offre trouvee" : "No offer found"}</h3>
+                <p className="mx-auto grid h-10 w-10 place-items-center rounded-full border border-zinc-700 bg-zinc-900/70 text-zinc-300">
+                  i
+                </p>
+                <h3 className="mt-2 text-lg font-semibold text-white">{isFr ? "Aucune offre trouvee" : "No offer found"}</h3>
                 <p className="mt-2 text-sm text-zinc-400">
                   {isFr
                     ? "Essayez d'elargir vos filtres ou creez un besoin."
@@ -1055,15 +1058,15 @@ export default function PrestaStoreClient({
         ) : tab === "needs" ? (
           <>
             {loading ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <div key={index} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {visibleNeeds.map((need) => (
-                  <article key={need.id} className="flex h-full flex-col rounded-2xl border border-white/10 bg-zinc-900/70 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_16px_30px_rgba(0,0,0,0.35)]">
+                  <article key={need.id} className="flex h-full w-full max-w-md flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/10">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="line-clamp-1 text-base font-semibold text-white">{need.title}</h3>
                       <p className="shrink-0 text-sm font-semibold text-emerald-300">{formatAmount(need.budgetCents, need.currency)}</p>
@@ -1079,13 +1082,13 @@ export default function PrestaStoreClient({
                       </span>
                     </div>
 
-                    <p className="mt-3 line-clamp-3 text-sm text-zinc-300">{shortDescription(need.description)}</p>
+                    <p className="mt-3 line-clamp-2 text-sm text-zinc-300">{shortDescription(need.description)}</p>
 
                     <div className="mt-auto pt-4">
                       <button
                         type="button"
                         onClick={() => openNeedDetails(need)}
-                        className="rounded-full border border-white/20 px-3 py-2 text-sm text-zinc-200 transition hover:border-white/40"
+                        className="h-10 rounded-xl border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
                       >
                         {isFr ? "Details" : "Details"}
                       </button>
@@ -1115,7 +1118,10 @@ export default function PrestaStoreClient({
 
             {shouldShowNeedEmpty ? (
               <div className="rounded-2xl border border-dashed border-white/15 bg-zinc-900/60 p-8 text-center">
-                <h3 className="text-lg font-semibold text-white">{isFr ? "Aucun besoin trouve" : "No need found"}</h3>
+                <p className="mx-auto grid h-10 w-10 place-items-center rounded-full border border-zinc-700 bg-zinc-900/70 text-zinc-300">
+                  i
+                </p>
+                <h3 className="mt-2 text-lg font-semibold text-white">{isFr ? "Aucun besoin trouve" : "No need found"}</h3>
                 <p className="mt-2 text-sm text-zinc-400">
                   {isFr
                     ? "Essayez d'elargir vos filtres ou publiez une nouvelle demande."

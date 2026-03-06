@@ -83,11 +83,11 @@ export default function PrestaDetailsDrawer({
       <button
         type="button"
         aria-label={isFr ? "Fermer les details" : "Close details"}
-        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
 
-      <aside className="absolute right-0 top-0 h-full w-full max-w-[520px] border-l border-white/10 bg-zinc-950/95 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+      <aside className="absolute right-0 top-0 h-full w-[420px] max-w-[95vw] overflow-y-auto border-l border-zinc-800 bg-zinc-950 p-6 shadow-[0_18px_50px_rgba(0,0,0,0.45)] transition-transform duration-300 ease-out">
         <div className="flex h-full flex-col">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -147,6 +147,15 @@ export default function PrestaDetailsDrawer({
                   {sectionTitle(isFr ? "Client" : "Customer")}
                   <p className="mt-2 text-sm text-zinc-200">{item.customerName}</p>
                 </section>
+
+                <section className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4">
+                  {sectionTitle(isFr ? "Matching prestataires" : "Matching providers")}
+                  <p className="mt-2 text-xs text-zinc-400">
+                    {isFr
+                      ? "Utilisez \"Voir services\" pour comparer les prestataires disponibles."
+                      : "Use \"View services\" to compare available providers."}
+                  </p>
+                </section>
               </>
             )}
           </div>
@@ -175,7 +184,7 @@ export default function PrestaDetailsDrawer({
                 onClick={onNeedPrimaryAction}
                 className="rounded-full border border-emerald-300/35 bg-emerald-300/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/65"
               >
-                {isFr ? "Voir services" : "View services"}
+                {isFr ? "Proposer service" : "Propose service"}
               </button>
             )}
           </div>

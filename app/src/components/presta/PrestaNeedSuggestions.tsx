@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type MatchingService = {
   id: string;
@@ -53,12 +53,13 @@ export default function PrestaNeedSuggestions({
   onRequireLogin,
   onOpenBooking,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const isFr = locale === "fr";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [services, setServices] = useState<MatchingService[]>([]);
   const [providerRatings, setProviderRatings] = useState<Record<string, ProviderRating>>({});
+  const [showAll, setShowAll] = useState(false);
   const loadingProviderIdsRef = useRef<Set<string>>(new Set());
 
   async function loadProviderRatings(list: MatchingService[]) {
@@ -145,13 +146,10 @@ export default function PrestaNeedSuggestions({
     }
   }
 
-  async function toggleOpen() {
-    const next = !open;
-    setOpen(next);
-    if (next && services.length === 0) {
-      await loadSuggestions();
-    }
-  }
+  useEffect(() => {
+    void loadSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needId]);
 
   async function handleAction(service: MatchingService) {
     if (!isLoggedIn) {
@@ -175,117 +173,109 @@ export default function PrestaNeedSuggestions({
     if (!response.ok) {
       const code = typeof data?.error === "string" ? data.error : "";
       if (code === "ALREADY_PROPOSED") {
-        setFeedback(locale === "fr" ? "Tu as deja propose." : "Already proposed.");
+        setFeedback(isFr ? "Tu as deja propose." : "Already proposed.");
       } else if (code === "NEED_NOT_OPEN") {
-        setFeedback(locale === "fr" ? "Ce besoin n'est plus ouvert." : "This need is no longer open.");
+        setFeedback(isFr ? "Ce besoin n'est plus ouvert." : "This need is no longer open.");
       } else {
-        setFeedback(toErrorMessage(data, locale === "fr" ? "Echec de la proposition" : "Proposal failed"));
+        setFeedback(toErrorMessage(data, isFr ? "Echec de la proposition" : "Proposal failed"));
       }
       return;
     }
 
-    setFeedback(locale === "fr" ? "Proposition envoyee." : "Proposal sent.");
+    setFeedback(isFr ? "Proposition envoyee." : "Proposal sent.");
     await loadSuggestions();
   }
 
+  const visibleServices = showAll ? services : services.slice(0, 3);
+
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/45 p-3">
+    <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
-          {locale === "fr" ? "Matching prestataires" : "Provider matching"}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          {isFr ? "Matching prestataires" : "Provider matching"}
         </p>
         <button
           type="button"
-          onClick={toggleOpen}
-          className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-emerald-300/50 hover:text-white"
+          onClick={() => void loadSuggestions()}
+          className="rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500"
         >
-          {open
-            ? locale === "fr"
-              ? "Masquer"
-              : "Hide"
-            : locale === "fr"
-              ? "Voir prestataires"
-              : "View providers"}
+          {isFr ? "Refresh" : "Refresh"}
         </button>
       </div>
 
-      {open ? (
-        <div className="mt-3 space-y-2">
-          {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="h-24 animate-pulse rounded-xl border border-white/10 bg-zinc-900/60" />
-              ))}
-            </div>
-          ) : null}
+      <div className="mt-3 space-y-2">
+        {loading ? (
+          <>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-24 animate-pulse rounded-xl bg-zinc-800" />
+            ))}
+          </>
+        ) : null}
 
-          {error ? <p className="text-xs text-rose-300">{error}</p> : null}
+        {!loading && error ? <p className="text-xs text-rose-300">{error}</p> : null}
 
-          {!loading && !error
-            ? services.map((service) => (
-                <article
-                  key={service.id}
-                  className="rounded-xl border border-white/10 bg-zinc-900/70 p-3 text-xs transition hover:border-emerald-300/35"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{service.title}</p>
-                      <p className="truncate text-zinc-400">
-                        {service.provider.name ?? (locale === "fr" ? "Prestataire" : "Provider")}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-sm font-semibold text-emerald-300">
-                      {formatAmount(service.basePriceCents, service.currency)}
+        {!loading && !error
+          ? visibleServices.map((service) => (
+              <article
+                key={service.id}
+                className="rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">{service.title}</p>
+                    <p className="truncate text-xs text-zinc-400">
+                      {service.provider.name ?? (isFr ? "Prestataire" : "Provider")}
                     </p>
                   </div>
+                  <p className="shrink-0 text-sm font-semibold text-emerald-400">
+                    {formatAmount(service.basePriceCents, service.currency)}
+                  </p>
+                </div>
 
-                  <p className="mt-2 line-clamp-2 text-zinc-300">{service.description || "-"}</p>
+                {service.provider?.id && providerRatings[service.provider.id]?.count > 0 ? (
+                  <p className="mt-2 inline-flex rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300">
+                    {"\u2605"} {providerRatings[service.provider.id].avgRating?.toFixed(1) ?? "0.0"} (
+                    {providerRatings[service.provider.id].count})
+                  </p>
+                ) : null}
 
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-zinc-300">
-                      {service.city ?? "-"}
-                    </span>
-                    {service.provider?.id && providerRatings[service.provider.id]?.count > 0 ? (
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-200">
-                        {"\u2605"} {providerRatings[service.provider.id].avgRating?.toFixed(1) ?? "0.0"} ({providerRatings[service.provider.id].count})
-                      </span>
-                    ) : null}
-                    {service.alreadyProposed ? (
-                      <span className="rounded-full border border-amber-300/45 bg-amber-300/15 px-2 py-0.5 text-[11px] text-amber-100">
-                        {locale === "fr" ? "Deja propose" : "Already proposed"}
-                      </span>
-                    ) : null}
-                  </div>
+                <button
+                  type="button"
+                  disabled={service.alreadyProposed}
+                  onClick={() => void handleAction(service)}
+                  className="mt-3 rounded-lg bg-emerald-500 px-3 py-1 text-sm font-medium text-black transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {service.canPropose
+                    ? isFr
+                      ? "Proposer"
+                      : "Propose"
+                    : isFr
+                      ? "Reserver"
+                      : "Reserve"}
+                </button>
+              </article>
+            ))
+          : null}
 
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={service.alreadyProposed}
-                      onClick={() => handleAction(service)}
-                      className="rounded-full bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      {service.canPropose
-                        ? locale === "fr"
-                          ? "Proposer service"
-                          : "Propose service"
-                        : locale === "fr"
-                          ? "Reserver"
-                          : "Book"}
-                    </button>
-                  </div>
-                </article>
-              ))
-            : null}
+        {!loading && !error && services.length === 0 ? (
+          <p className="text-xs text-zinc-400">
+            {isFr ? "Aucun prestataire disponible." : "No provider available."}
+          </p>
+        ) : null}
+      </div>
 
-          {!loading && !error && services.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/15 bg-zinc-900/40 p-3 text-xs text-zinc-400">
-              {locale === "fr" ? "Aucun prestataire correspondant." : "No matching providers."}
-            </p>
-          ) : null}
-
-          {feedback ? <p className="text-xs text-zinc-300">{feedback}</p> : null}
-        </div>
+      {services.length > 3 && !showAll ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-3 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500"
+        >
+          {isFr ? "Voir tous les prestataires" : "View all providers"}
+        </button>
       ) : null}
+
+      {feedback ? <p className="mt-2 text-xs text-zinc-300">{feedback}</p> : null}
     </div>
   );
 }
+
