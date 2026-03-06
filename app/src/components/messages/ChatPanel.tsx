@@ -382,8 +382,8 @@ export default function ChatPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
-      <header className="sticky top-0 z-10 rounded-t-xl border-b border-neutral-800 bg-neutral-950/80 px-3 py-2 backdrop-blur">
+    <section className="flex h-[70vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
+      <header className="sticky top-0 z-10 shrink-0 rounded-t-xl border-b border-neutral-800 bg-neutral-950/80 px-3 py-2 backdrop-blur">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">
@@ -429,11 +429,11 @@ export default function ChatPanel({
         </div>
       </header>
 
-      <div className="relative mt-3 flex h-[58vh] flex-col rounded-xl border border-white/10 bg-zinc-950/70">
+      <div className="relative mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-950/70">
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto p-3"
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
         >
           {loading ? (
             <div className="space-y-2">
@@ -509,13 +509,13 @@ export default function ChatPanel({
           <button
             type="button"
             onClick={jumpToBottom}
-            className="absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[11px] font-semibold text-emerald-100"
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[11px] font-semibold text-emerald-100"
           >
-            {isFr ? "Nouveaux messages" : "New messages"}
+            {isFr ? "Nouveaux messages \u2193" : "New messages \u2193"}
           </button>
         ) : null}
 
-        <form onSubmit={sendMessage} className="border-t border-neutral-800 bg-neutral-950/90 p-2">
+        <form onSubmit={sendMessage} className="sticky bottom-0 z-10 shrink-0 border-t border-neutral-800 bg-neutral-950/80 p-3 backdrop-blur">
           <div className="flex items-center gap-2">
             <textarea
               value={draft}
@@ -533,7 +533,7 @@ export default function ChatPanel({
               }}
               rows={2}
               placeholder={isFr ? "Ecris ton message..." : "Write your message..."}
-              className="min-h-[46px] w-full resize-none rounded-xl border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
+              className="min-h-[46px] flex-1 resize-none rounded-xl border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/45 focus:ring-2 focus:ring-emerald-300/25"
             />
             <input
               ref={fileInputRef}
