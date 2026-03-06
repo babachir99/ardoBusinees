@@ -989,7 +989,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
                   }}
                   className="h-10 rounded-xl border border-white/20 px-3 text-xs font-semibold text-zinc-200 transition hover:border-white/45"
                 >
-                  {locale === "fr" ? "Reset" : "Reset"}
+                  {locale === "fr" ? "Reinitialiser" : "Reset"}
                 </button>
               ) : (
                 <div className="hidden h-10 md:block" />

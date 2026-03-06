@@ -47,7 +47,7 @@ const REQUIREMENTS_BY_ROLE: Record<KycRole, Omit<KycRequirement, "roleRequested"
     kycType: "INDIVIDUAL",
     kycLevel: "BASIC",
     requiredFields: ["phoneVerified", "addressCity", "addressCountry", "docIdUrl"],
-    optionalFields: ["proofAddressUrl"],
+    optionalFields: ["proofAddressUrl", "selfieUrl"],
   },
   TRANSPORTER: {
     kycType: "INDIVIDUAL",

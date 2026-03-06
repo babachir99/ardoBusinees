@@ -192,7 +192,7 @@ export default function PrestaFiltersBar({
               onClick={onReset}
               className="w-full rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/60"
             >
-              {isFr ? "Reset" : "Reset"}
+              {isFr ? "Reinitialiser" : "Reset"}
             </button>
           </div>
         </div>
