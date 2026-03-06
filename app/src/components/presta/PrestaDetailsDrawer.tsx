@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
 
 type OfferDetails = {
   kind: "offer";
@@ -40,6 +41,9 @@ type Props = {
   onBook?: () => void;
   onViewProfile?: () => void;
   onNeedPrimaryAction?: () => void;
+  isLoggedIn?: boolean;
+  onRequireLogin?: () => void;
+  onOpenBooking?: (service: { id: string; title: string }) => void;
 };
 
 function sectionTitle(label: string) {
@@ -54,6 +58,9 @@ export default function PrestaDetailsDrawer({
   onBook,
   onViewProfile,
   onNeedPrimaryAction,
+  isLoggedIn = false,
+  onRequireLogin,
+  onOpenBooking,
 }: Props) {
   const isFr = locale === "fr";
 
@@ -149,12 +156,25 @@ export default function PrestaDetailsDrawer({
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4">
-                  {sectionTitle(isFr ? "Matching prestataires" : "Matching providers")}
-                  <p className="mt-2 text-xs text-zinc-400">
-                    {isFr
-                      ? "Utilisez \"Voir services\" pour comparer les prestataires disponibles."
-                      : "Use \"View services\" to compare available providers."}
-                  </p>
+                  {onRequireLogin && onOpenBooking ? (
+                    <PrestaNeedSuggestions
+                      locale={locale}
+                      needId={item.id}
+                      isLoggedIn={isLoggedIn}
+                      onRequireLogin={onRequireLogin}
+                      onOpenBooking={onOpenBooking}
+                      title={isFr ? "Prestataires disponibles" : "Available providers"}
+                    />
+                  ) : (
+                    <>
+                      {sectionTitle(isFr ? "Matching prestataires" : "Matching providers")}
+                      <p className="mt-2 text-xs text-zinc-400">
+                        {isFr
+                          ? "Utilisez \"Voir services\" pour comparer les prestataires disponibles."
+                          : "Use \"View services\" to compare available providers."}
+                      </p>
+                    </>
+                  )}
                 </section>
               </>
             )}
@@ -178,7 +198,7 @@ export default function PrestaDetailsDrawer({
                   {isFr ? "Voir profil" : "View profile"}
                 </button>
               </>
-            ) : (
+            ) : onNeedPrimaryAction ? (
               <button
                 type="button"
                 onClick={onNeedPrimaryAction}
@@ -186,7 +206,7 @@ export default function PrestaDetailsDrawer({
               >
                 {isFr ? "Proposer service" : "Propose service"}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </aside>

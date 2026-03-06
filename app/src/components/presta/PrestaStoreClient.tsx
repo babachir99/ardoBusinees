@@ -2,7 +2,6 @@
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
-import PrestaNeedSuggestions from "@/components/presta/PrestaNeedSuggestions";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
@@ -115,17 +114,17 @@ function needStatusLabel(status: PrestaNeed["status"], locale: string) {
 function needStatusClasses(status: PrestaNeed["status"]) {
   switch (status) {
     case "OPEN":
-      return "border-emerald-300/45 bg-emerald-300/12 text-emerald-100";
+      return "bg-emerald-500/10 text-emerald-400";
     case "IN_REVIEW":
-      return "border-amber-300/45 bg-amber-300/12 text-amber-100";
+      return "bg-amber-500/10 text-amber-300";
     case "ACCEPTED":
-      return "border-sky-300/45 bg-sky-300/12 text-sky-100";
+      return "bg-sky-500/10 text-sky-300";
     case "CLOSED":
-      return "border-white/25 bg-white/8 text-zinc-200";
+      return "bg-zinc-700/40 text-zinc-200";
     case "CANCELED":
-      return "border-rose-300/45 bg-rose-300/12 text-rose-100";
+      return "bg-rose-500/10 text-rose-300";
     default:
-      return "border-white/25 bg-white/8 text-zinc-200";
+      return "bg-zinc-700/40 text-zinc-200";
   }
 }
 
@@ -721,39 +720,55 @@ export default function PrestaStoreClient({
     });
   };
 
+  const tabItems: Array<{ key: "offers" | "needs" | "provider"; label: string }> = [
+    { key: "offers", label: locale === "fr" ? "Offres" : "Offers" },
+    { key: "needs", label: locale === "fr" ? "Besoins" : "Needs" },
+    ...(canPublish
+      ? [{ key: "provider" as const, label: locale === "fr" ? "Je suis prestataire" : "Provider mode" }]
+      : []),
+  ];
+  const activeTabIndex = Math.max(
+    0,
+    tabItems.findIndex((item) => item.key === tab)
+  );
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 scroll-smooth">
+    <div className="space-y-8 scroll-smooth">
       <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-3">
-        <div className="inline-flex flex-wrap gap-2 rounded-full border border-white/10 bg-zinc-950/70 p-1">
-          <button
-            type="button"
-            onClick={() => setTab("offers")}
-            className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-              tab === "offers" ? "bg-emerald-400 text-zinc-950" : "text-zinc-300"
-            }`}
-          >
-            {locale === "fr" ? "Offres" : "Offers"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("needs")}
-            className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-              tab === "needs" ? "bg-emerald-400 text-zinc-950" : "text-zinc-300"
-            }`}
-          >
-            {locale === "fr" ? "Besoins" : "Needs"}
-          </button>
-          {canPublish && (
-            <button
-              type="button"
-              onClick={() => setTab("provider")}
-              className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-                tab === "provider" ? "bg-emerald-400 text-zinc-950" : "text-zinc-300"
-              }`}
-            >
-              {locale === "fr" ? "Je suis prestataire" : "Provider mode"}
-            </button>
-          )}
+        <div className="flex w-full justify-center md:justify-start">
+          <div className="relative flex w-full items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 p-1 transition-all duration-200 md:w-fit">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-1 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition-all duration-200"
+              style={{
+                width: `calc((100% - 0.5rem) / ${tabItems.length})`,
+                left: `calc(0.25rem + ((100% - 0.5rem) / ${tabItems.length}) * ${activeTabIndex})`,
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-emerald-400 transition-all duration-300 ease-out"
+              style={{
+                width: `calc((100% - 0.5rem) / ${tabItems.length})`,
+                left: `calc(0.25rem + ((100% - 0.5rem) / ${tabItems.length}) * ${activeTabIndex})`,
+              }}
+            />
+
+            {tabItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTab(item.key)}
+                className={`relative z-10 flex-1 cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 active:scale-95 md:flex-none ${
+                  tab === item.key
+                    ? "text-black"
+                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -781,6 +796,13 @@ export default function PrestaStoreClient({
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
           <h2 className="text-base font-semibold text-white">{isFr ? "Creer un service" : "Create a service"}</h2>
           <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleCreateService}>
+            <button
+              type="button"
+              onClick={() => undefined}
+              className="hidden"
+            >
+              noop
+            </button>
             <label className="flex flex-col gap-1 text-xs text-zinc-300">
               {isFr ? "Titre" : "Title"}
               <input className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={formTitle} onChange={(event) => setFormTitle(event.target.value)} required />
@@ -830,20 +852,22 @@ export default function PrestaStoreClient({
 
       {tab === "needs" && (
         <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-          <div className="rounded-2xl border border-emerald-300/25 bg-emerald-300/10 p-4">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-white">
                   {isFr ? "Besoin d'un professionnel pres de chez vous ?" : "Need a professional near you?"}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-300">
-                  {isFr ? "Publiez votre besoin et comparez rapidement les offres." : "Publish your need and compare offers quickly."}
+                  {isFr
+                    ? "Publiez votre besoin et recevez des offres."
+                    : "Publish your need and receive offers quickly."}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={openNeedComposer}
-                className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:brightness-110"
+                className="rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-emerald-600"
               >
                 {isFr ? "Creer mon besoin" : "Create my need"}
               </button>
@@ -942,63 +966,56 @@ export default function PrestaStoreClient({
         {tab === "offers" ? (
           <>
             {loading ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="h-56 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
+                  <div key={index} className="h-28 animate-pulse rounded-lg bg-zinc-800" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {visibleServices.map((service) => (
                   <article
                     key={service.id}
-                    className="group flex h-full w-full max-w-md flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/10"
+                    className="group flex h-full flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-emerald-500/30"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="line-clamp-1 text-base font-semibold text-white">{service.title}</h3>
-                      <p className="shrink-0 text-sm font-semibold text-emerald-300">
+                      <h3 className="truncate text-base font-semibold text-white">{service.title}</h3>
+                      <p className="shrink-0 text-sm font-semibold text-emerald-400">
                         {formatAmount(service.basePriceCents, service.currency)}
                       </p>
                     </div>
 
-                    <p className="mt-2 text-xs text-zinc-400">
-                      {(service.category ?? (isFr ? "Sans categorie" : "No category")) + " • " + (service.city ?? "-") + " • " + (isFr ? "Disponible" : "Available")}
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {(service.category ?? (isFr ? "Sans categorie" : "No category")) + " | " + (service.city ?? "-")}
                     </p>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-zinc-300">
+                    <p className="mt-2 line-clamp-1 text-sm text-zinc-400">
                       {shortDescription(service.description) || (isFr ? "Aucune description." : "No description.")}
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                      <span className="rounded-full border border-emerald-300/35 bg-emerald-300/12 px-2 py-0.5 text-emerald-100">
+                      <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-200">
                         {isFr ? "Verifie" : "Verified"}
                       </span>
-                      <span className="rounded-full border border-sky-300/35 bg-sky-300/10 px-2 py-0.5 text-sky-100">
+                      <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-200">
                         {isFr ? "Repond vite" : "Fast reply"}
-                      </span>
-                      <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-zinc-200">
-                        {isFr ? "Note en cours" : "Rating in progress"}
                       </span>
                     </div>
 
                     {service.contactUnlockStatusHint === "BLOCKED_USER" ? (
-                      <p className="mt-3 text-xs text-rose-300">
+                      <p className="mt-2 text-xs text-rose-300">
                         {isFr
                           ? "Interaction bloquee (utilisateur bloque)."
                           : "Interaction blocked (blocked user)."}
                       </p>
                     ) : null}
 
-                    {!service.contactLocked && service.contactPhone ? (
-                      <p className="mt-2 text-xs text-zinc-400">Contact: {service.contactPhone}</p>
-                    ) : null}
-
-                    <div className="mt-auto flex gap-2 pt-4">
+                    <div className="mt-4 flex gap-2">
                       <button
                         type="button"
                         onClick={() => openBooking({ id: service.id, title: service.title })}
                         disabled={service.contactUnlockStatusHint === "BLOCKED_USER"}
-                        className={`h-10 flex-1 rounded-xl text-sm font-medium transition active:scale-95 ${
+                        className={`h-9 rounded-lg px-4 text-sm font-medium transition active:scale-95 ${
                           service.contactUnlockStatusHint === "BLOCKED_USER"
                             ? "cursor-not-allowed bg-zinc-700/40 text-zinc-500"
                             : "bg-emerald-500 text-black hover:bg-emerald-600"
@@ -1009,7 +1026,7 @@ export default function PrestaStoreClient({
                       <button
                         type="button"
                         onClick={() => openServiceDetails(service)}
-                        className="h-10 rounded-xl border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
+                        className="h-9 rounded-lg border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
                       >
                         {isFr ? "Details" : "Details"}
                       </button>
@@ -1058,48 +1075,49 @@ export default function PrestaStoreClient({
         ) : tab === "needs" ? (
           <>
             {loading ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-zinc-900/60" />
+                  <div key={index} className="h-28 animate-pulse rounded-lg bg-zinc-800" />
                 ))}
               </div>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {visibleNeeds.map((need) => (
-                  <article key={need.id} className="flex h-full w-full max-w-md flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-xl hover:shadow-emerald-500/10">
+                  <article key={need.id} className="flex h-full flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-emerald-500/30">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="line-clamp-1 text-base font-semibold text-white">{need.title}</h3>
-                      <p className="shrink-0 text-sm font-semibold text-emerald-300">{formatAmount(need.budgetCents, need.currency)}</p>
+                      <p className="shrink-0 text-sm font-semibold text-emerald-400">{formatAmount(need.budgetCents, need.currency)}</p>
                     </div>
 
-                    <p className="mt-2 text-xs text-zinc-400">
-                      {(need.city ?? need.area ?? "-") + " • " + (isFr ? "Date" : "Date") + ": " + formatDateLabel(need.preferredDate, locale)}
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {(need.city ?? need.area ?? "-") + " | " + formatDateLabel(need.preferredDate, locale)}
                     </p>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${needStatusClasses(need.status)}`}>
+                      <span className={`rounded-full px-2 py-1 text-xs ${needStatusClasses(need.status)}`}>
                         {needStatusLabel(need.status, locale)}
                       </span>
                     </div>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-zinc-300">{shortDescription(need.description)}</p>
+                    <p className="mt-2 line-clamp-1 text-sm text-zinc-400">{shortDescription(need.description)}</p>
 
                     <div className="mt-auto pt-4">
-                      <button
-                        type="button"
-                        onClick={() => openNeedDetails(need)}
-                        className="h-10 rounded-xl border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
-                      >
-                        {isFr ? "Details" : "Details"}
-                      </button>
-
-                      <PrestaNeedSuggestions
-                        locale={locale}
-                        needId={need.id}
-                        isLoggedIn={isLoggedIn}
-                        onRequireLogin={goToLogin}
-                        onOpenBooking={openBooking}
-                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openNeedDetails(need)}
+                          className="h-9 rounded-lg bg-emerald-500 px-4 text-sm font-medium text-black transition hover:bg-emerald-600 active:scale-95"
+                        >
+                          {isFr ? "Voir prestataires" : "View providers"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNeedDetails(need)}
+                          className="h-9 rounded-lg border border-zinc-700 px-4 text-sm text-zinc-200 transition hover:border-zinc-500 active:scale-95"
+                        >
+                          {isFr ? "Details" : "Details"}
+                        </button>
+                      </div>
 
                       {need.status === "OPEN" && (Boolean(currentUserId && currentUserId === need.customerId) || isAdmin) ? (
                         <button
@@ -1185,6 +1203,9 @@ export default function PrestaStoreClient({
         open={Boolean(detailsItem)}
         item={detailsItem}
         onClose={() => setDetailsItem(null)}
+        isLoggedIn={isLoggedIn}
+        onRequireLogin={goToLogin}
+        onOpenBooking={openBooking}
         onBook={
           detailsItem?.kind === "offer"
             ? () => {
@@ -1204,7 +1225,16 @@ export default function PrestaStoreClient({
               }
             : undefined
         }
-        onNeedPrimaryAction={detailsItem?.kind === "need" ? () => setDetailsItem(null) : undefined}
+        onNeedPrimaryAction={
+          detailsItem?.kind === "need" &&
+          needs.find((entry) => entry.id === detailsItem.id)?.status === "OPEN" &&
+          (isAdmin || needs.find((entry) => entry.id === detailsItem.id)?.customerId === currentUserId)
+            ? () => {
+                setSelectedNeedForProposals(detailsItem.id);
+                setDetailsItem(null);
+              }
+            : undefined
+        }
       />
 
       <UserProfileDrawer

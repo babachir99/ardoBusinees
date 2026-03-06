@@ -33,6 +33,7 @@ type Props = {
   isLoggedIn: boolean;
   onRequireLogin: () => void;
   onOpenBooking: (service: { id: string; title: string }) => void;
+  title?: string;
 };
 
 function formatAmount(value: number, currency: string) {
@@ -52,6 +53,7 @@ export default function PrestaNeedSuggestions({
   isLoggedIn,
   onRequireLogin,
   onOpenBooking,
+  title,
 }: Props) {
   const isFr = locale === "fr";
   const [loading, setLoading] = useState(false);
@@ -189,17 +191,17 @@ export default function PrestaNeedSuggestions({
   const visibleServices = showAll ? services : services.slice(0, 3);
 
   return (
-    <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-          {isFr ? "Matching prestataires" : "Provider matching"}
+          {title ?? (isFr ? "Prestataires disponibles" : "Available providers")}
         </p>
         <button
           type="button"
           onClick={() => void loadSuggestions()}
           className="rounded-full border border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500"
         >
-          {isFr ? "Refresh" : "Refresh"}
+          {isFr ? "Rafraichir" : "Refresh"}
         </button>
       </div>
 
@@ -207,7 +209,7 @@ export default function PrestaNeedSuggestions({
         {loading ? (
           <>
             {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="h-24 animate-pulse rounded-xl bg-zinc-800" />
+              <div key={index} className="h-28 animate-pulse rounded-lg bg-zinc-800" />
             ))}
           </>
         ) : null}
@@ -218,7 +220,7 @@ export default function PrestaNeedSuggestions({
           ? visibleServices.map((service) => (
               <article
                 key={service.id}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -268,7 +270,7 @@ export default function PrestaNeedSuggestions({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-3 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500"
+          className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500"
         >
           {isFr ? "Voir tous les prestataires" : "View all providers"}
         </button>
@@ -278,4 +280,3 @@ export default function PrestaNeedSuggestions({
     </div>
   );
 }
-
