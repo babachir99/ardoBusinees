@@ -67,6 +67,11 @@ function normalizeRoleKey(role: string): string {
   return role;
 }
 
+function mapPartnerRoleToKycRole(role: string): string {
+  if (role === "PRESTA_PROVIDER") return "SELLER";
+  return role;
+}
+
 type Favorite = {
   id: string;
   productId: string;
@@ -187,6 +192,7 @@ export default function ProfilePanel() {
   const [kycRequirementLoading, setKycRequirementLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selectedRoleForKyc = mapPartnerRoleToKycRole(selectedRole);
 
   const load = async () => {
     setLoading(true);
@@ -309,7 +315,7 @@ export default function ProfilePanel() {
       setKycRequirementLoading(true);
 
       try {
-        const params = new URLSearchParams({ role: selectedRole });
+        const params = new URLSearchParams({ role: selectedRoleForKyc });
         const response = await fetch(`/api/kyc/requirements?${params.toString()}`, {
           cache: "no-store",
         });
@@ -335,7 +341,7 @@ export default function ProfilePanel() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRole]);
+  }, [selectedRoleForKyc]);
 
   const save = async () => {
     return;
@@ -418,7 +424,7 @@ export default function ProfilePanel() {
 
   const chooseRole = (role: string) => {
     setSelectedRole(role);
-    setKyc((prev) => ({ ...prev, targetRole: role }));
+    setKyc((prev) => ({ ...prev, targetRole: mapPartnerRoleToKycRole(role) }));
   };
 
   if (loading) {
@@ -455,10 +461,17 @@ export default function ProfilePanel() {
   const roleOptions: Array<{ key: string; label: string; description: string }> = [
     {
       key: "SELLER",
-      label: isFr ? "Vendeur" : "Seller",
+      label: isFr ? "Vendeur SHOP" : "Shop Seller",
       description: isFr
         ? "Compte particulier avec verification basique + piece d'identite (CNI ou passeport)."
         : "Individual seller account with basic verification + identity document (ID card or passport).",
+    },
+    {
+      key: "PRESTA_PROVIDER",
+      label: isFr ? "Prestataire PRESTA" : "PRESTA Provider",
+      description: isFr
+        ? "Propose des services et recois des reservations sur PRESTA."
+        : "Offer services and receive bookings on PRESTA.",
     },
     {
       key: "GP_CARRIER",
@@ -547,7 +560,7 @@ export default function ProfilePanel() {
 
   const openKycFlow = () => {
     if (!selectedRole) return;
-    setKyc((prev) => ({ ...prev, targetRole: selectedRole }));
+    setKyc((prev) => ({ ...prev, targetRole: selectedRoleForKyc }));
     setShowKycForm(true);
   };
 
@@ -994,7 +1007,7 @@ export default function ProfilePanel() {
         <KycWizard
           key={selectedRole}
           isFr={isFr}
-          selectedRole={selectedRole}
+          selectedRole={selectedRoleForKyc}
           kycStatus={kycStatus}
           kycSubmission={kycSubmission}
           requirement={kycRequirement}

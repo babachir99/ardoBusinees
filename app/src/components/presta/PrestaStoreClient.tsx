@@ -327,6 +327,14 @@ export default function PrestaStoreClient({
     window.location.href = `/${locale}/login?callbackUrl=${callbackUrl}`;
   }
 
+  function goToBecomeProvider() {
+    if (!isLoggedIn) {
+      goToLogin();
+      return;
+    }
+    window.location.href = `/${locale}/profile`;
+  }
+
   function togglePaymentMethod(method: string) {
     setFormMethods((current) => {
       if (current.includes(method)) {
@@ -772,24 +780,8 @@ export default function PrestaStoreClient({
             ))}
           </div>
 
-          {tab === "needs" ? (
-            <button
-              type="button"
-              onClick={openNeedComposer}
-              className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
-            >
-              {isFr ? "Publier un besoin" : "Publish a need"}
-            </button>
-          ) : tab === "offers" ? (
-            canPublish ? (
-              <button
-                type="button"
-                onClick={openServiceComposer}
-                className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
-              >
-                {isFr ? "Proposer un service" : "Offer a service"}
-              </button>
-            ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {tab === "needs" ? (
               <button
                 type="button"
                 onClick={openNeedComposer}
@@ -797,8 +789,36 @@ export default function PrestaStoreClient({
               >
                 {isFr ? "Publier un besoin" : "Publish a need"}
               </button>
-            )
-          ) : null}
+            ) : tab === "offers" ? (
+              canPublish ? (
+                <button
+                  type="button"
+                  onClick={openServiceComposer}
+                  className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+                >
+                  {isFr ? "Proposer un service" : "Offer a service"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openNeedComposer}
+                  className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+                >
+                  {isFr ? "Publier un besoin" : "Publish a need"}
+                </button>
+              )
+            ) : null}
+
+            {!canPublish && tab !== "provider" ? (
+              <button
+                type="button"
+                onClick={goToBecomeProvider}
+                className="rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-emerald-400/40 hover:text-white active:scale-95"
+              >
+                {isFr ? "Devenir prestataire" : "Become provider"}
+              </button>
+            ) : null}
+          </div>
         </div>
       </section>
 
