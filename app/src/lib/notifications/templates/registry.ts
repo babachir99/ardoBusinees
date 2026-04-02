@@ -99,6 +99,10 @@ const TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
     "Mise a jour livraison {{orderId}}",
     "Nouveau statut pour {{orderId}}: {{trackingStep}}. ETA: {{eta}}. Suivi: {{link}}"
   ),
+  gp_thread_message: buildSimpleTemplate(
+    "Nouveau message GP {{shipmentCode}}",
+    "{{actorName}} a partage un message sur l'envoi {{shipmentCode}}.\n{{messagePreview}}\nVoir le fil: {{link}}"
+  ),
   delivery_reminder: buildSimpleTemplate(
     "Rappel livraison {{orderId}}",
     "Rappel: votre livraison {{orderId}} est attendue bientot. Suivi: {{link}}"

@@ -1,0 +1,56 @@
+=postgresql://marketplace_user:bachir@localhost:5432/marketplace_v1?schema=marketplace : Le terme ®
+=postgresql://marketplace_user:bachir@localhost:5432/marketplace_v1?schema=marketplace¯ n'est pas reconnu comme nom 
+d'applet de commande, fonction, fichier de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un 
+chemin d'accŠs existe, v‚rifiez que le chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 1
++ ='postgresql://marketplace_user:bachir@localhost:5432/marketplace_v1? ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=postgresql://m...ema=marketplace:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=http://127.0.0.1:3001 : Le terme ®=http://127.0.0.1:3001¯ n'est pas reconnu comme nom d'applet de commande, fonction, 
+fichier de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un chemin d'accŠs existe, v‚rifiez que 
+le chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 91
++ ... /marketplace_v1?schema=marketplace'; ='http://127.0.0.1:3001'; ='127. ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=http://127.0.0.1:3001:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=127.0.0.1,localhost : Le terme ®=127.0.0.1,localhost¯ n'est pas reconnu comme nom d'applet de commande, fonction, 
+fichier de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un chemin d'accŠs existe, v‚rifiez que 
+le chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 117
++ ... arketplace'; ='http://127.0.0.1:3001'; ='127.0.0.1,localhost'; ='http ...
++                                            ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=127.0.0.1,localhost:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=http://127.0.0.1:3001 : Le terme ®=http://127.0.0.1:3001¯ n'est pas reconnu comme nom d'applet de commande, fonction, 
+fichier de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un chemin d'accŠs existe, v‚rifiez que 
+le chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 141
++ ... 0.0.1:3001'; ='127.0.0.1,localhost'; ='http://127.0.0.1:3001'; ='http ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=http://127.0.0.1:3001:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=http://127.0.0.1:3001 : Le terme ®=http://127.0.0.1:3001¯ n'est pas reconnu comme nom d'applet de commande, fonction, 
+fichier de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un chemin d'accŠs existe, v‚rifiez que 
+le chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 167
++ ... ocalhost'; ='http://127.0.0.1:3001'; ='http://127.0.0.1:3001'; ='code ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=http://127.0.0.1:3001:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=codex-local-token : Le terme ®=codex-local-token¯ n'est pas reconnu comme nom d'applet de commande, fonction, fichier 
+de script ou programme ex‚cutable. V‚rifiez l'orthographe du nom, ou si un chemin d'accŠs existe, v‚rifiez que le 
+chemin d'accŠs est correct et r‚essayez.
+Au caractŠre Ligne:1 : 193
++ ... 7.0.0.1:3001'; ='http://127.0.0.1:3001'; ='codex-local-token'; npm ru ...
++                                              ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=codex-local-token:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+â¨¯ Unable to acquire lock at C:\dev\ardoBusinees\app\.next\dev\lock, is another instance of next dev running?

@@ -50,6 +50,21 @@ function normalizeProofType(value: unknown) {
   return text.slice(0, 100);
 }
 
+function summarizeThreadMessage(params: {
+  note: string | null;
+  proofUrl: string | null;
+  proofType: string | null;
+}) {
+  const { note, proofUrl, proofType } = params;
+  if (note) {
+    return note.replace(/\s+/g, " ").trim().slice(0, 180);
+  }
+  if (proofUrl) {
+    return proofType?.startsWith("image/") ? "Photo partagee." : "Piece jointe partagee.";
+  }
+  return "Nouveau message.";
+}
+
 function isAllowedRole(role: string | undefined) {
   return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER", "CUSTOMER"].includes(role ?? "");
 }
@@ -347,7 +362,21 @@ export async function POST(
     return respond(errorResponse(400, "INVALID_PROOF_URL", "proofUrl must use internal uploads path."));
   }
 
-  if (!parsedProof.value) {
+  const wantsStatusTransition = requestedStatus.length > 0;
+
+  if (!wantsStatusTransition && !note && !parsedProof.value) {
+    auditLog({
+      correlationId,
+      actor,
+      action: "gp.timelineMessage",
+      entity: { type: "GpShipment", id },
+      outcome: "CONFLICT",
+      reason: AuditReason.INVALID_INPUT,
+    });
+    return respond(errorResponse(400, "EMPTY_MESSAGE", "Provide a note or attachment."));
+  }
+
+  if (wantsStatusTransition && !parsedProof.value) {
     auditLog({
       correlationId,
       actor,
@@ -359,7 +388,10 @@ export async function POST(
     return respond(errorResponse(400, "PROOF_REQUIRED", "proofUrl is required for tracking events."));
   }
 
-  if (!orderedStatuses.includes(requestedStatus as (typeof orderedStatuses)[number])) {
+  if (
+    wantsStatusTransition &&
+    !orderedStatuses.includes(requestedStatus as (typeof orderedStatuses)[number])
+  ) {
     auditLog({
       correlationId,
       actor,
@@ -385,6 +417,96 @@ export async function POST(
         reason: AuditReason.NOT_FOUND,
       });
       return respond(errorResponse(404, "SHIPMENT_NOT_FOUND", "Shipment not found."));
+    }
+
+    if (!wantsStatusTransition) {
+      if (!canReadTimeline({ role: session.user.role, userId: session.user.id, shipment: loaded.shipment })) {
+        auditLog({
+          correlationId,
+          actor,
+          action: "gp.timelineMessage",
+          entity: { type: "GpShipment", id: loaded.shipment.id },
+          outcome: "DENIED",
+          reason: AuditReason.FORBIDDEN,
+        });
+        return respond(errorResponse(403, "FORBIDDEN", "Only shipment participants can post messages."));
+      }
+
+      const event = await prisma.gpShipmentEvent.create({
+        data: {
+          shipmentId: loaded.shipment.id,
+          status: loaded.shipment.status as (typeof orderedStatuses)[number],
+          note,
+          proofUrl: parsedProof.value,
+          proofType,
+          actorId: session.user.id,
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          note: true,
+          proofUrl: true,
+          proofType: true,
+        },
+      });
+
+      auditLog({
+        correlationId,
+        actor,
+        action: "gp.timelineMessage",
+        entity: { type: "GpShipmentEvent", id: event.id },
+        outcome: "SUCCESS",
+        reason: AuditReason.SUCCESS,
+        metadata: { shipmentId: loaded.shipment.id, status: event.status },
+      });
+
+      const recipientIds = Array.from(
+        new Set(
+          [loaded.shipment.senderId, loaded.shipment.receiverId, loaded.shipment.transporterId].filter(
+            (value): value is string => Boolean(value) && value !== session.user.id
+          )
+        )
+      );
+      const actorName =
+        session.user.name?.trim() ||
+        session.user.email?.trim() ||
+        (session.user.role === "ADMIN" ? "Admin JONTAADO" : "Un participant");
+      const messagePreview = summarizeThreadMessage({
+        note,
+        proofUrl: parsedProof.value,
+        proofType,
+      });
+
+      for (const recipientId of recipientIds) {
+        await NotificationService.queueEmail({
+          userId: recipientId,
+          kind: "TRANSACTIONAL",
+          templateKey: "gp_thread_message",
+          payload: {
+            shipmentCode: loaded.shipment.code,
+            actorName,
+            messagePreview,
+            link: `/messages?thread=gp:${loaded.shipment.id}&service=GP`,
+          },
+          dedupeKey: `gp_thread_message:${loaded.shipment.id}:${event.id}:${recipientId}`,
+        }).catch(() => null);
+      }
+
+      return respond(
+        NextResponse.json(
+          {
+            mode: "comment",
+            shipment: {
+              id: loaded.shipment.id,
+              code: loaded.shipment.code,
+              status: loaded.shipment.status,
+            },
+            event,
+          },
+          { status: 201 }
+        )
+      );
     }
 
     if (!canWriteTimeline({ role: session.user.role, userId: session.user.id, shipment: loaded.shipment })) {
