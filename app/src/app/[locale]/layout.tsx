@@ -5,6 +5,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { CartProvider } from "@/components/cart/CartProvider";
+import InternalNavigationHeader from "@/components/layout/InternalNavigationHeader";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -54,7 +55,10 @@ export default async function LocaleLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <NextIntlClientProvider messages={messages}>
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            <InternalNavigationHeader locale={locale} />
+            {children}
+          </CartProvider>
         </NextIntlClientProvider>
       </body>
     </html>
