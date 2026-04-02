@@ -17,7 +17,7 @@ function normalizeTake(value: string | null, fallback: number, max: number) {
 }
 
 function isAllowedRole(role: string | undefined) {
-  return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER"].includes(role ?? "");
+  return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER", "CUSTOMER"].includes(role ?? "");
 }
 
 function mapBookingStatusToShipmentStatus(status: string) {
@@ -150,6 +150,20 @@ export async function GET(request: NextRequest) {
   try {
     if (mine && ["ADMIN", "TRANSPORTER", "GP_CARRIER"].includes(session.user.role ?? "")) {
       await syncShipmentsForTransporter(session.user.id);
+    } else if (mine) {
+      const relatedTransporters = await prisma.gpTripBooking.findMany({
+        where: {
+          customerId: session.user.id,
+          status: { in: [...bookingStatusesForSync] },
+        },
+        distinct: ["transporterId"],
+        select: { transporterId: true },
+        take: 50,
+      });
+
+      for (const booking of relatedTransporters) {
+        await syncShipmentsForTransporter(booking.transporterId);
+      }
     }
 
     const shipments = await runtimePrisma.gpShipment.findMany({
@@ -174,6 +188,9 @@ export async function GET(request: NextRequest) {
         toCity: true,
         weightKg: true,
         status: true,
+        senderId: true,
+        receiverId: true,
+        transporterId: true,
         updatedAt: true,
       },
     });

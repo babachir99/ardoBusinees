@@ -87,3 +87,14 @@ export type TiakPayout = {
   createdAt: string;
   deliveryId: string;
 };
+
+export type TiakLiveLocation = {
+  id: string;
+  actorId: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  heading: number | null;
+  speed: number | null;
+  createdAt: string;
+};

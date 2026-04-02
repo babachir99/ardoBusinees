@@ -7,6 +7,12 @@ import { NotificationService } from "@/lib/notifications/NotificationService";
 import { normalizeDeliveryStep } from "@/lib/notifications/delivery-step";
 
 const orderedStatuses = ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED", "DELIVERED"] as const;
+const bookingStatusByShipmentStatus = {
+  PICKED_UP: "CONFIRMED",
+  BOARDED: "CONFIRMED",
+  ARRIVED: "COMPLETED",
+  DELIVERED: "COMPLETED",
+} as const;
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -54,6 +60,7 @@ async function loadShipment(id: string) {
     gpShipment?: {
       findUnique: (args: unknown) => Promise<{
         id: string;
+        bookingId: string | null;
         code: string;
         status: string;
         senderId: string | null;
@@ -69,13 +76,14 @@ async function loadShipment(id: string) {
 
   const shipment = await runtimePrisma.gpShipment.findUnique({
     where: { id },
-    select: {
-      id: true,
-      code: true,
-      status: true,
-      senderId: true,
-      receiverId: true,
-      transporterId: true,
+      select: {
+        id: true,
+        bookingId: true,
+        code: true,
+        status: true,
+        senderId: true,
+        receiverId: true,
+        transporterId: true,
     },
   });
 
@@ -330,7 +338,7 @@ export async function POST(
       const txRuntime = tx as unknown as {
         gpShipment: {
           updateMany: (args: unknown) => Promise<{ count: number }>;
-          findUnique: (args: unknown) => Promise<{ id: string; code: string; status: string } | null>;
+          findUnique: (args: unknown) => Promise<{ id: string; code: string; status: string; bookingId: string | null } | null>;
         };
         gpShipmentEvent: {
           create: (args: unknown) => Promise<{
@@ -341,6 +349,9 @@ export async function POST(
             proofUrl: string | null;
             proofType: string | null;
           }>;
+        };
+        gpTripBooking?: {
+          update: (args: unknown) => Promise<unknown>;
         };
       };
 
@@ -358,7 +369,7 @@ export async function POST(
 
       const shipment = await txRuntime.gpShipment.findUnique({
         where: { id: loaded.shipment!.id },
-        select: { id: true, code: true, status: true },
+        select: { id: true, code: true, status: true, bookingId: true },
       });
 
       if (!shipment) {
@@ -383,6 +394,25 @@ export async function POST(
           proofType: true,
         },
       });
+
+      const mappedBookingStatus =
+        bookingStatusByShipmentStatus[
+          requestedStatus as keyof typeof bookingStatusByShipmentStatus
+        ];
+
+      if (mappedBookingStatus && shipment.bookingId && txRuntime.gpTripBooking) {
+        await txRuntime.gpTripBooking.update({
+          where: { id: shipment.bookingId },
+          data: {
+            status: mappedBookingStatus,
+            confirmedAt:
+              mappedBookingStatus === "CONFIRMED" || mappedBookingStatus === "COMPLETED"
+                ? new Date()
+                : undefined,
+            completedAt: mappedBookingStatus === "COMPLETED" ? new Date() : undefined,
+          },
+        });
+      }
 
       return { shipment, event };
     });

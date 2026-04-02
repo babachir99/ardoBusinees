@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function canAccess(role: string | undefined) {
-  return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER"].includes(role ?? "");
+  return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER", "CUSTOMER"].includes(role ?? "");
 }
 
 export default async function GpShipmentsPage({
@@ -30,8 +30,8 @@ export default async function GpShipmentsPage({
             </h1>
             <p className="mt-2 text-sm text-zinc-300">
               {locale === "fr"
-                ? "Cette page est reservee aux transporteurs GP."
-                : "This page is reserved for GP transporters."}
+                ? "Cette page est reservee aux participants GP."
+                : "This page is reserved for GP participants."}
             </p>
             <Link
               href="/stores/jontaado-gp"
@@ -77,8 +77,8 @@ export default async function GpShipmentsPage({
           </h1>
           <p className="mt-2 text-sm text-zinc-300">
             {locale === "fr"
-              ? "Suivi des shipments actifs avec timeline de tracking."
-              : "Track active shipments and view timeline events."}
+              ? "Suivi des shipments actifs avec timeline, preuves et confirmation de reception."
+              : "Track active shipments with timeline, proofs and receipt confirmation."}
           </p>
         </section>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { type TiakDelivery, type TiakDeliveryEvent } from "@/components/tiak/types";
+import { type TiakDelivery, type TiakDeliveryEvent, type TiakLiveLocation } from "@/components/tiak/types";
 
 type Props = {
   locale: string;
@@ -46,6 +46,20 @@ function toErrorMessage(data: unknown, fallback: string) {
   if (typeof record?.error === "string") return record.error;
   if (typeof record?.message === "string") return record.message;
   return fallback;
+}
+
+function buildOpenStreetMapEmbedUrl(latitude: number, longitude: number) {
+  const delta = 0.01;
+  const left = Math.max(-180, longitude - delta);
+  const right = Math.min(180, longitude + delta);
+  const top = Math.min(90, latitude + delta);
+  const bottom = Math.max(-90, latitude - delta);
+
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${latitude}%2C${longitude}`;
+}
+
+function buildOpenStreetMapHref(latitude: number, longitude: number) {
+  return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
 }
 
 function parseRatingNote(note: string | null) {
@@ -191,8 +205,14 @@ export default function TiakDeliveryDetails({
   const [ratingSending, setRatingSending] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [ratingSuccess, setRatingSuccess] = useState<string | null>(null);
+  const [liveLocation, setLiveLocation] = useState<TiakLiveLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const [sharingMessage, setSharingMessage] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const onDeliveryLoadedRef = useRef(onDeliveryLoaded);
+  const locationIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     onDeliveryLoadedRef.current = onDeliveryLoaded;
@@ -311,6 +331,200 @@ export default function TiakDeliveryDetails({
       delivery.status === "COMPLETED" &&
       !hasSubmittedRating
   );
+
+  const isAssignedCourier = Boolean(
+    delivery &&
+      currentUserId &&
+      currentUserId === delivery.courierId
+  );
+
+  const canShareLocation = Boolean(
+    open &&
+      delivery &&
+      isAssignedCourier &&
+      ["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(delivery.status)
+  );
+
+  const canViewLocation = Boolean(
+    open &&
+      delivery &&
+      currentUserId &&
+      (currentUserRole === "ADMIN" ||
+        currentUserId === delivery.customerId ||
+        currentUserId === delivery.courierId)
+  );
+
+  useEffect(() => {
+    if (canShareLocation) return;
+    setSharingLocation(false);
+  }, [canShareLocation]);
+
+  useEffect(() => {
+    if (!open || !canViewLocation) {
+      setLiveLocation(null);
+      setLocationError(null);
+      setLocationLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadLocation = async (silent = false) => {
+      if (!silent) setLocationLoading(true);
+      if (!silent) setLocationError(null);
+
+      try {
+        const response = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}/location`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => null);
+
+        if (cancelled) return;
+
+        if (!response.ok) {
+          if (!silent) {
+            setLocationError(
+              toErrorMessage(
+                data,
+                locale === "fr" ? "Position indisponible." : "Location unavailable."
+              )
+            );
+          }
+          return;
+        }
+
+        setLiveLocation(data && typeof data === "object" ? (data as TiakLiveLocation | null) : null);
+      } catch {
+        if (!silent) {
+          setLocationError(locale === "fr" ? "Position indisponible." : "Location unavailable.");
+        }
+      } finally {
+        if (!cancelled && !silent) setLocationLoading(false);
+      }
+    };
+
+    void loadLocation(false);
+
+    const shouldPoll =
+      delivery &&
+      ["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(delivery.status);
+
+    const interval = shouldPoll
+      ? window.setInterval(() => {
+          void loadLocation(true);
+        }, 15000)
+      : null;
+
+    return () => {
+      cancelled = true;
+      if (interval) window.clearInterval(interval);
+    };
+  }, [canViewLocation, delivery, deliveryId, locale, open]);
+
+  useEffect(() => {
+    if (!sharingLocation || !canShareLocation || typeof window === "undefined") return;
+    if (!("geolocation" in navigator)) {
+      setLocationError(
+        locale === "fr"
+          ? "La geolocalisation n'est pas disponible sur cet appareil."
+          : "Geolocation is not available on this device."
+      );
+      setSharingLocation(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const publishPosition = async () => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          if (cancelled) return;
+
+          try {
+            const response = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}/location`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                heading:
+                  position.coords.heading === null || Number.isNaN(position.coords.heading)
+                    ? undefined
+                    : position.coords.heading,
+                speed:
+                  position.coords.speed === null || Number.isNaN(position.coords.speed)
+                    ? undefined
+                    : position.coords.speed,
+              }),
+            });
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+              setLocationError(
+                toErrorMessage(
+                  data,
+                  locale === "fr"
+                    ? "Partage de position impossible."
+                    : "Unable to share your location."
+                )
+              );
+              return;
+            }
+
+            setLiveLocation(data as TiakLiveLocation);
+            setSharingMessage(
+              locale === "fr"
+                ? "Position partagee en direct."
+                : "Live location shared."
+            );
+            setLocationError(null);
+          } catch {
+            if (!cancelled) {
+              setLocationError(
+                locale === "fr"
+                  ? "Partage de position impossible."
+                  : "Unable to share your location."
+              );
+            }
+          }
+        },
+        (error) => {
+          if (cancelled) return;
+
+          const message =
+            error.code === error.PERMISSION_DENIED
+              ? locale === "fr"
+                ? "Autorise la geolocalisation pour partager ta position."
+                : "Allow geolocation to share your position."
+              : locale === "fr"
+                ? "Impossible de recuperer votre position."
+                : "Unable to read your location.";
+          setLocationError(message);
+          setSharingLocation(false);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 10000,
+        }
+      );
+    };
+
+    void publishPosition();
+    locationIntervalRef.current = window.setInterval(() => {
+      void publishPosition();
+    }, 20000);
+
+    return () => {
+      cancelled = true;
+      if (locationIntervalRef.current !== null) {
+        window.clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+    };
+  }, [canShareLocation, deliveryId, locale, sharingLocation]);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -443,6 +657,107 @@ export default function TiakDeliveryDetails({
                 </p>
               )}
             </section>
+
+            {(canViewLocation || canShareLocation) ? (
+              <section className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">
+                      {locale === "fr" ? "Suivi sur carte" : "Live map tracking"}
+                    </h4>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {liveLocation
+                        ? locale === "fr"
+                          ? `Derniere position connue: ${formatDate(liveLocation.createdAt)}`
+                          : `Last known position: ${formatDate(liveLocation.createdAt)}`
+                        : locale === "fr"
+                          ? "Aucune position partagee pour le moment."
+                          : "No shared location yet."}
+                    </p>
+                  </div>
+
+                  {canShareLocation ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSharingMessage(null);
+                        setLocationError(null);
+                        setSharingLocation((value) => !value);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        sharingLocation
+                          ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100"
+                          : "border-white/20 text-white hover:border-emerald-300/50"
+                      }`}
+                    >
+                      {sharingLocation
+                        ? locale === "fr"
+                          ? "Pause position"
+                          : "Pause location"
+                        : locale === "fr"
+                          ? "Partager ma position"
+                          : "Share my location"}
+                    </button>
+                  ) : null}
+                </div>
+
+                {locationLoading ? (
+                  <p className="mt-3 text-xs text-zinc-400">
+                    {locale === "fr" ? "Chargement position..." : "Loading location..."}
+                  </p>
+                ) : null}
+
+                {locationError ? (
+                  <p className="mt-3 text-xs text-rose-300">{locationError}</p>
+                ) : null}
+
+                {sharingMessage ? (
+                  <p className="mt-3 text-xs text-emerald-300">{sharingMessage}</p>
+                ) : null}
+
+                {liveLocation ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-3">
+                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
+                        <span className="text-zinc-500">Lat</span>
+                        <p className="mt-1 font-medium text-white">{liveLocation.latitude.toFixed(5)}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
+                        <span className="text-zinc-500">Lng</span>
+                        <p className="mt-1 font-medium text-white">{liveLocation.longitude.toFixed(5)}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
+                        <span className="text-zinc-500">{locale === "fr" ? "Precision" : "Accuracy"}</span>
+                        <p className="mt-1 font-medium text-white">
+                          {liveLocation.accuracy !== null
+                            ? `${Math.round(liveLocation.accuracy)} m`
+                            : "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                      <iframe
+                        title={locale === "fr" ? "Carte de suivi Tiak" : "Tiak tracking map"}
+                        src={buildOpenStreetMapEmbedUrl(liveLocation.latitude, liveLocation.longitude)}
+                        className="h-56 w-full"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+
+                    <a
+                      href={buildOpenStreetMapHref(liveLocation.latitude, liveLocation.longitude)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex text-xs font-semibold text-emerald-300 underline"
+                    >
+                      {locale === "fr" ? "Ouvrir la carte" : "Open map"}
+                    </a>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <section className="rounded-xl border border-white/10 bg-zinc-950/60 p-3">
               <h4 className="text-sm font-semibold text-white">Timeline</h4>

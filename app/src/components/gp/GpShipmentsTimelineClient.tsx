@@ -9,6 +9,9 @@ type Shipment = {
   toCity: string;
   weightKg: number;
   status: string;
+  senderId: string | null;
+  receiverId: string | null;
+  transporterId: string;
   updatedAt: string;
 };
 
@@ -26,13 +29,15 @@ type TimelinePayload = {
   events: TimelineEvent[];
 };
 
+const receiptConfirmedNote = "Receipt confirmed";
+
 type Props = {
   locale: string;
   currentUserId: string | null;
   currentUserRole: string | null;
 };
 
-const proofUploadRoles = ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER"];
+const proofUploadRoles = ["ADMIN", "TRANSPORTER", "GP_CARRIER"];
 
 function formatDate(locale: string, value: string) {
   const parsed = new Date(value);
@@ -47,6 +52,10 @@ function toErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function isReceiptConfirmedEvent(event: TimelineEvent) {
+  return event.note?.trim() === receiptConfirmedNote;
+}
+
 export default function GpShipmentsTimelineClient({ locale, currentUserId, currentUserRole }: Props) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -56,6 +65,7 @@ export default function GpShipmentsTimelineClient({ locale, currentUserId, curre
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineNotice, setTimelineNotice] = useState<string | null>(null);
   const [attachingProofId, setAttachingProofId] = useState<string | null>(null);
+  const [confirmingReceiptId, setConfirmingReceiptId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelinePayload | null>(null);
 
   const emptyLabel = useMemo(
@@ -67,6 +77,24 @@ export default function GpShipmentsTimelineClient({ locale, currentUserId, curre
     () => Boolean(currentUserRole && proofUploadRoles.includes(currentUserRole)),
     [currentUserRole]
   );
+
+  const activeShipment = useMemo(
+    () => shipments.find((shipment) => shipment.id === openTimelineId) ?? null,
+    [openTimelineId, shipments]
+  );
+
+  const receiptAlreadyConfirmed = useMemo(
+    () => Boolean(timeline?.events.some((event) => isReceiptConfirmedEvent(event))),
+    [timeline]
+  );
+
+  const canConfirmReceipt = useMemo(() => {
+    if (!activeShipment || !currentUserId) return false;
+    if (receiptAlreadyConfirmed) return false;
+    if (!["ARRIVED", "DELIVERED"].includes(activeShipment.status)) return false;
+    if (currentUserRole === "ADMIN") return true;
+    return activeShipment.senderId === currentUserId || activeShipment.receiverId === currentUserId;
+  }, [activeShipment, currentUserId, currentUserRole, receiptAlreadyConfirmed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +261,88 @@ export default function GpShipmentsTimelineClient({ locale, currentUserId, curre
     }
   }
 
+  async function confirmReceipt(shipmentId: string) {
+    setConfirmingReceiptId(shipmentId);
+    setTimelineError(null);
+    setTimelineNotice(null);
+
+    try {
+      const response = await fetch(`/api/gp/shipments/${shipmentId}/confirm`, {
+        method: "POST",
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setTimelineError(
+          toErrorMessage(
+            data,
+            locale === "fr" ? "Confirmation de reception impossible." : "Unable to confirm receipt."
+          )
+        );
+        return;
+      }
+
+      const nextShipment =
+        data && typeof data === "object" && data.shipment && typeof data.shipment === "object"
+          ? (data.shipment as { id?: unknown; status?: unknown })
+          : null;
+      const nextEvent =
+        data && typeof data === "object" && data.event && typeof data.event === "object"
+          ? (data.event as TimelineEvent)
+          : null;
+      const alreadyConfirmed =
+        data && typeof data === "object" && typeof (data as { alreadyConfirmed?: unknown }).alreadyConfirmed === "boolean"
+          ? Boolean((data as { alreadyConfirmed?: boolean }).alreadyConfirmed)
+          : false;
+
+      if (nextShipment?.id === shipmentId) {
+        const now = new Date().toISOString();
+        setShipments((current) =>
+          current.map((entry) =>
+            entry.id === shipmentId
+              ? {
+                  ...entry,
+                  status: typeof nextShipment.status === "string" ? nextShipment.status : entry.status,
+                  updatedAt: now,
+                }
+              : entry
+          )
+        );
+      }
+
+      if (nextEvent) {
+        setTimeline((current) => {
+          if (!current || current.shipment.id !== shipmentId) return current;
+          const exists = current.events.some((entry) => entry.id === nextEvent.id);
+          return {
+            shipment: {
+              ...current.shipment,
+              status:
+                nextShipment && typeof nextShipment.status === "string"
+                  ? nextShipment.status
+                  : current.shipment.status,
+            },
+            events: exists ? current.events : [...current.events, nextEvent],
+          };
+        });
+      }
+
+      setTimelineNotice(
+        alreadyConfirmed
+          ? locale === "fr"
+            ? "La reception etait deja confirmee."
+            : "Receipt was already confirmed."
+          : locale === "fr"
+            ? "Reception confirmee."
+            : "Receipt confirmed."
+      );
+    } catch {
+      setTimelineError(locale === "fr" ? "Erreur serveur." : "Server error.");
+    } finally {
+      setConfirmingReceiptId(null);
+    }
+  }
+
   return (
     <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -286,6 +396,39 @@ export default function GpShipmentsTimelineClient({ locale, currentUserId, curre
                   {timelineNotice && <p className="text-xs text-emerald-300">{timelineNotice}</p>}
                   {!timelineLoading && !timelineError && timeline && (
                     <div className="grid gap-2 text-xs text-zinc-200">
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                            {locale === "fr" ? "Statut" : "Status"}
+                          </span>
+                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-zinc-200">
+                            {timeline.shipment.status}
+                          </span>
+                          {receiptAlreadyConfirmed ? (
+                            <span className="rounded-full border border-emerald-300/40 bg-emerald-300/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
+                              {locale === "fr" ? "Reception confirmee" : "Receipt confirmed"}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {canConfirmReceipt ? (
+                          <button
+                            type="button"
+                            onClick={() => void confirmReceipt(shipment.id)}
+                            disabled={confirmingReceiptId === shipment.id}
+                            className="rounded-full border border-emerald-300/40 bg-emerald-300/10 px-3 py-1 text-[11px] font-semibold text-emerald-200 transition hover:border-emerald-300/70 disabled:opacity-60"
+                          >
+                            {confirmingReceiptId === shipment.id
+                              ? locale === "fr"
+                                ? "Confirmation..."
+                                : "Confirming..."
+                              : locale === "fr"
+                                ? "Confirmer reception"
+                                : "Confirm receipt"}
+                          </button>
+                        ) : null}
+                      </div>
+
                       {timeline.events.map((event) => (
                         <div key={event.id} className="rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
