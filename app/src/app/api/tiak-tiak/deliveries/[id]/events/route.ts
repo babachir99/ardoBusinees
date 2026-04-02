@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { decodeHistoryCursor, encodeHistoryCursor, parseThreadTake } from "@/lib/messages/history";
 import { normalizeMessageAttachmentUrl } from "@/lib/message-attachments";
+import { getPresenceForUser, serializePresence } from "@/lib/messages/presence";
 
 function hasTiakDelegates() {
   const runtimePrisma = prisma as unknown as {
@@ -35,7 +37,7 @@ function toRatingNote(rating: number, comment: string | null) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasTiakDelegates()) {
@@ -51,6 +53,10 @@ export async function GET(
   }
 
   const { id } = await params;
+  const beforeCursor = decodeHistoryCursor(request.nextUrl.searchParams.get("before"));
+  const paginated =
+    request.nextUrl.searchParams.has("take") || request.nextUrl.searchParams.has("before");
+  const take = parseThreadTake(request.nextUrl.searchParams.get("take"));
 
   const delivery = await prisma.tiakDelivery.findUnique({
     where: { id },
@@ -58,6 +64,22 @@ export async function GET(
       id: true,
       customerId: true,
       courierId: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+      courier: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
     },
   });
 
@@ -74,9 +96,48 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const events = await prisma.tiakDeliveryEvent.findMany({
-    where: { deliveryId: delivery.id },
-    orderBy: [{ createdAt: "asc" }],
+  if (!paginated) {
+    const events = await prisma.tiakDeliveryEvent.findMany({
+      where: { deliveryId: delivery.id },
+      orderBy: [{ createdAt: "asc" }],
+      select: {
+        id: true,
+        deliveryId: true,
+        status: true,
+        note: true,
+        proofUrl: true,
+        createdAt: true,
+        actorId: true,
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(events);
+  }
+
+  const rawEvents = await prisma.tiakDeliveryEvent.findMany({
+    where: {
+      deliveryId: delivery.id,
+      ...(beforeCursor
+        ? {
+            OR: [
+              { createdAt: { lt: beforeCursor.createdAt } },
+              {
+                AND: [{ createdAt: beforeCursor.createdAt }, { id: { lt: beforeCursor.id } }],
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
     select: {
       id: true,
       deliveryId: true,
@@ -96,7 +157,42 @@ export async function GET(
     },
   });
 
-  return NextResponse.json(events);
+  const hasMore = rawEvents.length > take;
+  const slice = rawEvents.slice(0, take);
+  const oldestLoaded = slice[slice.length - 1] ?? null;
+  const counterpartId =
+    session.user.id === delivery.customerId ? delivery.courier?.id ?? null : delivery.customer?.id ?? null;
+  const counterpartPresence = serializePresence(await getPresenceForUser(counterpartId));
+
+  return NextResponse.json({
+    events: slice.reverse(),
+    counterpart: counterpartId
+      ? {
+          id: counterpartId,
+          name:
+            session.user.id === delivery.customerId
+              ? delivery.courier?.name || delivery.courier?.email || null
+              : delivery.customer?.name || delivery.customer?.email || null,
+          email:
+            session.user.id === delivery.customerId
+              ? delivery.courier?.email ?? null
+              : delivery.customer?.email ?? null,
+          image:
+            session.user.id === delivery.customerId
+              ? delivery.courier?.image ?? null
+              : delivery.customer?.image ?? null,
+        }
+      : null,
+    presence: counterpartPresence,
+    pagination: {
+      hasMore,
+      nextCursor:
+        hasMore && oldestLoaded
+          ? encodeHistoryCursor({ id: oldestLoaded.id, createdAt: oldestLoaded.createdAt })
+          : null,
+      take,
+    },
+  });
 }
 
 export async function POST(

@@ -13,13 +13,13 @@ const routeCache = new Map<
     expiresAt: number;
     value: {
       waypointType: "PICKUP" | "DROPOFF" | null;
-      waypointLabel: string | null;
-      distanceMeters: number | null;
-      etaSeconds: number | null;
-      source: "osrm" | "geodesic" | "none";
-      destination: { latitude: number; longitude: number } | null;
-      refreshedAt: string;
-    } | null;
+        waypointLabel: string | null;
+        distanceMeters: number | null;
+        etaSeconds: number | null;
+        source: "osrm" | "geodesic" | "none" | "disabled";
+        destination: { latitude: number; longitude: number } | null;
+        refreshedAt: string;
+      } | null;
   }
 >();
 const GEOCODE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -195,7 +195,6 @@ async function geocodeAddress(address: string) {
   }
 
   if (!GEOCODER_ENDPOINT) {
-    geocodeCache.set(trimmed, { expiresAt: Date.now() + 60_000, value: null });
     return null;
   }
 
@@ -245,6 +244,18 @@ async function buildRouteMeta(params: {
       distanceMeters: null,
       etaSeconds: null,
       source: "none" as const,
+      destination: null,
+      refreshedAt: new Date().toISOString(),
+    };
+  }
+
+  if (!GEOCODER_ENDPOINT) {
+    return {
+      waypointType: waypoint.waypointType,
+      waypointLabel: waypoint.waypointLabel,
+      distanceMeters: null,
+      etaSeconds: null,
+      source: "disabled" as const,
       destination: null,
       refreshedAt: new Date().toISOString(),
     };

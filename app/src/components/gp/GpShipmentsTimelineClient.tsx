@@ -489,7 +489,7 @@ export default function GpShipmentsTimelineClient({
         </button>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <article className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
             {locale === "fr" ? "Actifs" : "Active"}
@@ -526,7 +526,7 @@ export default function GpShipmentsTimelineClient({
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-zinc-950/70 p-1">
+        <div className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-white/10 bg-zinc-950/70 p-1">
           {([
             { key: "ACTIVE", label: locale === "fr" ? `Actifs (${activeCount})` : `Active (${activeCount})` },
             { key: "ARCHIVED", label: locale === "fr" ? `Archives (${archivedCount})` : `Archived (${archivedCount})` },
@@ -569,7 +569,7 @@ export default function GpShipmentsTimelineClient({
       {!loading && !errorMsg && visibleShipments.length > 0 ? (
         <div className="mt-6 grid gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="rounded-2xl border border-white/10 bg-zinc-950/45 p-3 xl:sticky xl:top-24">
-            <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1 xl:max-h-[70vh]">
               {visibleShipments.map((shipment) => {
                 const active = selectedShipment?.id === shipment.id;
                 const tone = getShipmentTone(shipment.status);

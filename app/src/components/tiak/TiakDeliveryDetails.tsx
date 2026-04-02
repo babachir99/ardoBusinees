@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type TiakDelivery, type TiakDeliveryEvent, type TiakLiveLocation } from "@/components/tiak/types";
+import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 
 type Props = {
   locale: string;
@@ -144,7 +145,7 @@ function formatDuration(locale: string, seconds: number | null) {
 
 function getRouteSourceLabel(
   locale: string,
-  source: "osrm" | "geodesic" | "none" | undefined
+  source: "osrm" | "geodesic" | "none" | "disabled" | undefined
 ) {
   if (source === "osrm") {
     return locale === "fr" ? "ETA routiere" : "Route ETA";
@@ -152,6 +153,10 @@ function getRouteSourceLabel(
 
   if (source === "geodesic") {
     return locale === "fr" ? "ETA estimee" : "Estimated ETA";
+  }
+
+  if (source === "disabled") {
+    return locale === "fr" ? "Provider carte desactive" : "Map provider disabled";
   }
 
   return locale === "fr" ? "ETA indisponible" : "ETA unavailable";
@@ -589,6 +594,19 @@ export default function TiakDeliveryDetails({
     () => getRouteSourceLabel(locale, liveLocation?.route?.source),
     [liveLocation?.route?.source, locale]
   );
+  const viewerLocationPollMs = useAdaptivePolling({
+    active:
+      open &&
+      canViewLocation &&
+      Boolean(delivery && ["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(delivery.status)),
+    visibleIntervalMs: VIEWER_LOCATION_REFRESH_MS,
+    hiddenIntervalMs: 45_000,
+  });
+  const courierSharePollMs = useAdaptivePolling({
+    active: sharingLocation && canShareLocation,
+    visibleIntervalMs: SHARE_LOCATION_REFRESH_MS,
+    hiddenIntervalMs: 60_000,
+  });
 
   useEffect(() => {
     if (canShareLocation) return;
@@ -642,21 +660,17 @@ export default function TiakDeliveryDetails({
 
     void loadLocation(false);
 
-    const shouldPoll =
-      delivery &&
-      ["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(delivery.status);
-
-    const interval = shouldPoll
+    const interval = viewerLocationPollMs
       ? window.setInterval(() => {
           void loadLocation(true);
-        }, VIEWER_LOCATION_REFRESH_MS)
+        }, viewerLocationPollMs)
       : null;
 
     return () => {
       cancelled = true;
       if (interval) window.clearInterval(interval);
     };
-  }, [canViewLocation, delivery, deliveryId, locale, locationRefreshNonce, open]);
+  }, [canViewLocation, delivery, deliveryId, locale, locationRefreshNonce, open, viewerLocationPollMs]);
 
   useEffect(() => {
     if (!sharingLocation || !canShareLocation || typeof window === "undefined") return;
@@ -749,9 +763,11 @@ export default function TiakDeliveryDetails({
     };
 
     void publishPosition();
-    locationIntervalRef.current = window.setInterval(() => {
-      void publishPosition();
-    }, SHARE_LOCATION_REFRESH_MS);
+    if (courierSharePollMs) {
+      locationIntervalRef.current = window.setInterval(() => {
+        void publishPosition();
+      }, courierSharePollMs);
+    }
 
     return () => {
       cancelled = true;
@@ -760,7 +776,7 @@ export default function TiakDeliveryDetails({
         locationIntervalRef.current = null;
       }
     };
-  }, [canShareLocation, deliveryId, locale, sharingLocation]);
+  }, [canShareLocation, courierSharePollMs, deliveryId, locale, sharingLocation]);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

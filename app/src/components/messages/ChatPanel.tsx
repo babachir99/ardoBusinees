@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MessagePresenceSummary } from "@/lib/messages/presence";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 
@@ -9,6 +10,13 @@ type ThreadState = {
   events: TiakDeliveryEvent[];
   loading: boolean;
 };
+
+type Counterpart = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+} | null;
 
 type Props = {
   locale: string;
@@ -68,6 +76,34 @@ function statusLabel(status: string, locale: string) {
     REJECTED: "Rejected",
   };
   return isFr ? (fr[status] ?? status) : (en[status] ?? status);
+}
+
+function formatPresenceLabel(
+  presence: MessagePresenceSummary | null,
+  locale: string
+) {
+  const isFr = locale === "fr";
+  if (!presence?.lastSeenAt) {
+    return isFr ? "Derniere connexion inconnue" : "Last seen unavailable";
+  }
+
+  if (presence.online) {
+    return isFr ? "En ligne" : "Online";
+  }
+
+  return isFr
+    ? `Vu ${new Date(presence.lastSeenAt).toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    : `Last seen ${new Date(presence.lastSeenAt).toLocaleString("en-US", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
 }
 
 function eventNarrative(params: {
@@ -163,6 +199,8 @@ function timeLabel(value: string, locale: string) {
   });
 }
 
+type LoadMode = "replace" | "prepend" | "sync";
+
 export default function ChatPanel({
   locale,
   meId,
@@ -177,6 +215,11 @@ export default function ChatPanel({
   const [delivery, setDelivery] = useState<TiakDelivery | null>(null);
   const [events, setEvents] = useState<TiakDeliveryEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [counterpart, setCounterpart] = useState<Counterpart>(null);
+  const [presence, setPresence] = useState<MessagePresenceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
@@ -185,77 +228,143 @@ export default function ChatPanel({
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [showJumpButton, setShowJumpButton] = useState(false);
-  const [lastRenderedEventId, setLastRenderedEventId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const wasNearBottomRef = useRef(true);
+  const preserveScrollRef = useRef<{ top: number; height: number } | null>(null);
+  const eventsRef = useRef<TiakDeliveryEvent[]>([]);
   const pollIntervalMs = useAdaptivePolling({ active: Boolean(deliveryId) });
 
   const loadThread = useCallback(
-    async (silent = false) => {
+    async ({
+      silent = false,
+      before = null,
+      mode = "replace",
+    }: {
+      silent?: boolean;
+      before?: string | null;
+      mode?: LoadMode;
+    }) => {
       if (!deliveryId) {
         setDelivery(null);
         setEvents([]);
+        setCounterpart(null);
+        setPresence(null);
+        setHasMore(false);
+        setNextCursor(null);
         setError(null);
         setLoading(false);
         return;
       }
 
-      if (!silent) {
+      if (!silent && mode !== "prepend") {
         setLoading(true);
+      }
+      if (mode === "prepend") {
+        setLoadingOlder(true);
       }
 
       try {
-        const [deliveryRes, eventsRes] = await Promise.all([
-          fetch(`/api/tiak-tiak/deliveries/${deliveryId}?includeAddress=1`, { cache: "no-store" }),
-          fetch(`/api/tiak-tiak/deliveries/${deliveryId}/events`, { cache: "no-store" }),
-        ]);
-
-        const deliveryData = await deliveryRes.json().catch(() => null);
-        if (!deliveryRes.ok || !deliveryData) {
+        const deliveryRes = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}?includeAddress=1`, {
+          cache: "no-store",
+        });
+        const parsedDelivery = await deliveryRes.json().catch(() => null);
+        if (!deliveryRes.ok || !parsedDelivery) {
           throw new Error(isFr ? "Conversation indisponible." : "Conversation unavailable.");
         }
+        const deliveryData = parsedDelivery as TiakDelivery;
+        setDelivery(deliveryData);
 
-        const eventsData = await eventsRes.json().catch(() => []);
-        if (!eventsRes.ok) {
+        const search = new URLSearchParams();
+        search.set("take", "24");
+        if (before) search.set("before", before);
+
+        const eventsRes = await fetch(`/api/tiak-tiak/deliveries/${deliveryId}/events?${search.toString()}`, {
+          cache: "no-store",
+        });
+        const eventsData = await eventsRes.json().catch(() => null);
+        if (!eventsRes.ok || !eventsData || typeof eventsData !== "object") {
           throw new Error(isFr ? "Timeline indisponible." : "Timeline unavailable.");
         }
 
-        const nextEvents = Array.isArray(eventsData) ? (eventsData as TiakDeliveryEvent[]) : [];
+        const nextEvents = Array.isArray((eventsData as { events?: unknown }).events)
+          ? ((eventsData as { events: TiakDeliveryEvent[] }).events ?? [])
+          : [];
+        const nextPresence =
+          (eventsData as { presence?: unknown }).presence &&
+          typeof (eventsData as { presence?: unknown }).presence === "object"
+            ? ((eventsData as { presence: MessagePresenceSummary }).presence ?? null)
+            : null;
+        const nextCounterpart =
+          (eventsData as { counterpart?: unknown }).counterpart &&
+          typeof (eventsData as { counterpart?: unknown }).counterpart === "object"
+            ? ((eventsData as { counterpart: Counterpart }).counterpart ?? null)
+            : null;
 
-        setDelivery(deliveryData as TiakDelivery);
-        setEvents(nextEvents);
-        setError(null);
+        setCounterpart(nextCounterpart);
+        setPresence(nextPresence);
 
-        const newestId = nextEvents[nextEvents.length - 1]?.id ?? null;
-        if (newestId && newestId !== lastRenderedEventId) {
-          setLastRenderedEventId(newestId);
+        if (mode !== "sync" || eventsRef.current.length === 0) {
+          setHasMore(Boolean((eventsData as { pagination?: { hasMore?: boolean } }).pagination?.hasMore));
+          setNextCursor(
+            typeof (eventsData as { pagination?: { nextCursor?: unknown } }).pagination?.nextCursor === "string"
+              ? ((eventsData as { pagination: { nextCursor: string } }).pagination.nextCursor ?? null)
+              : null
+          );
         }
+
+        if (mode === "prepend") {
+          setEvents((current) => {
+            const seen = new Set(current.map((event) => event.id));
+            return [...nextEvents.filter((event) => !seen.has(event.id)), ...current];
+          });
+        } else if (mode === "sync") {
+          setEvents((current) => {
+            const merged = new Map(current.map((event) => [event.id, event]));
+            for (const event of nextEvents) {
+              merged.set(event.id, event);
+            }
+            return [...merged.values()].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+          });
+        } else {
+          setEvents(nextEvents);
+        }
+
+        setError(null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : isFr ? "Erreur de chargement." : "Loading error.");
       } finally {
-        if (!silent) {
+        if (!silent && mode !== "prepend") {
           setLoading(false);
+        }
+        if (mode === "prepend") {
+          setLoadingOlder(false);
         }
       }
     },
-    [deliveryId, isFr, lastRenderedEventId]
+    [deliveryId, isFr]
   );
 
   useEffect(() => {
-    void loadThread(false);
+    void loadThread({ silent: false, mode: "replace" });
   }, [loadThread, refreshNonce]);
 
   useEffect(() => {
     if (!deliveryId || pollIntervalMs === null) return;
 
     const interval = window.setInterval(() => {
-      void loadThread(true);
+      void loadThread({ silent: true, mode: "sync" });
     }, pollIntervalMs);
 
     return () => window.clearInterval(interval);
   }, [deliveryId, loadThread, pollIntervalMs]);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   useEffect(() => {
     onThreadStateChange({ delivery, events, loading });
@@ -264,6 +373,13 @@ export default function ChatPanel({
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
+
+    if (preserveScrollRef.current) {
+      const { top, height } = preserveScrollRef.current;
+      container.scrollTop = container.scrollHeight - height + top;
+      preserveScrollRef.current = null;
+      return;
+    }
 
     if (wasNearBottomRef.current) {
       container.scrollTop = container.scrollHeight;
@@ -303,6 +419,20 @@ export default function ChatPanel({
     container.scrollTop = container.scrollHeight;
     wasNearBottomRef.current = true;
     setShowJumpButton(false);
+  };
+
+  const loadOlder = async () => {
+    if (!hasMore || !nextCursor || loadingOlder) return;
+
+    const container = scrollRef.current;
+    if (container) {
+      preserveScrollRef.current = {
+        top: container.scrollTop,
+        height: container.scrollHeight,
+      };
+    }
+
+    await loadThread({ silent: true, before: nextCursor, mode: "prepend" });
   };
 
   const copyId = async () => {
@@ -365,7 +495,7 @@ export default function ChatPanel({
       setDraft("");
       setAttachmentUrl(null);
       wasNearBottomRef.current = true;
-      await loadThread(true);
+      await loadThread({ silent: true, mode: "sync" });
     } catch (sendFailure) {
       setSendError(sendFailure instanceof Error ? sendFailure.message : isFr ? "Erreur serveur." : "Server error.");
     } finally {
@@ -384,16 +514,19 @@ export default function ChatPanel({
   }
 
   return (
-    <section className="flex h-[70vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/55 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
+    <section className="flex h-[min(72vh,calc(100dvh-9rem))] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)] sm:p-4 lg:min-h-[560px]">
       <header className="sticky top-0 z-10 shrink-0 rounded-t-xl border-b border-neutral-800 bg-neutral-950/80 px-3 py-2 backdrop-blur">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-white">
               {delivery ? `${delivery.pickupArea} -> ${delivery.dropoffArea}` : "..."}
             </p>
-            <p className="mt-0.5 text-[11px] text-zinc-400">
-              {delivery ? statusLabel(delivery.status, locale) : "-"}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+              <span>{delivery ? statusLabel(delivery.status, locale) : "-"}</span>
+              <span className={`inline-flex h-2 w-2 rounded-full ${presence?.online ? "bg-emerald-400" : "bg-zinc-600"}`} aria-hidden />
+              <span className="truncate">{counterpart?.name || counterpart?.email || (isFr ? "Contact" : "Contact")}</span>
+              <span className="truncate text-zinc-500">{formatPresenceLabel(presence, locale)}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -435,8 +568,25 @@ export default function ChatPanel({
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+          className="flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
         >
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => void loadOlder()}
+              disabled={loadingOlder}
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-white/30 disabled:opacity-60"
+            >
+              {loadingOlder
+                ? isFr
+                  ? "Chargement..."
+                  : "Loading..."
+                : isFr
+                  ? "Charger des messages plus anciens"
+                  : "Load older messages"}
+            </button>
+          ) : null}
+
           {loading ? (
             <div className="space-y-2">
               <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />
@@ -513,7 +663,7 @@ export default function ChatPanel({
             onClick={jumpToBottom}
             className="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-[11px] font-semibold text-emerald-100"
           >
-            {isFr ? "Nouveaux messages \u2193" : "New messages \u2193"}
+            {isFr ? "Nouveaux messages v" : "New messages v"}
           </button>
         ) : null}
 

@@ -56,7 +56,8 @@ export default async function MessageDetailPage({
         select: { id: true, displayName: true, userId: true },
       },
       messages: {
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
+        take: 24,
         include: {
           sender: {
             select: { id: true, name: true, email: true, image: true },
@@ -134,7 +135,7 @@ export default async function MessageDetailPage({
             locale={locale}
             inquiryId={inquiry.id}
             meId={session.user.id}
-            initialMessages={inquiry.messages.map((message) => {
+            initialMessages={[...inquiry.messages].reverse().map((message) => {
               const parsed = parseMessageBody(message.body);
               return {
                 id: message.id,

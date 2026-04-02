@@ -2,80 +2,19 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useMemo, useState } from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import ChatPanel from "@/components/messages/ChatPanel";
 import OpsDetailsPanel from "@/components/messages/OpsDetailsPanel";
 import InquiryChatThread from "@/components/messages/InquiryChatThread";
 import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
-
-type TiakConversationSummary = {
-  id: string;
-  status: string;
-  pickupAddress: string;
-  dropoffAddress: string;
-  updatedAt: string | Date;
-  customerId: string;
-  courierId: string | null;
-  customer: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  } | null;
-  courier: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  } | null;
-  events: Array<{
-    id: string;
-    status: string;
-    note: string | null;
-    createdAt: string | Date;
-    actorId: string;
-  }>;
-};
-
-type InquiryOfferItem = {
-  id: string;
-  amountCents: number;
-  currency: string;
-  quantity: number;
-  note?: string | null;
-  status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELED" | "EXPIRED";
-  createdAt: string;
-  resolvedAt?: string | null;
-  buyerId: string;
-  buyer?: { id: string; name?: string | null; email?: string | null } | null;
-};
-
-type InquiryConversationSummary = {
-  id: string;
-  serviceType: "SHOP";
-  title: string;
-  counterpart: string;
-  preview: string;
-  updatedAt: string | Date;
-  unread: boolean;
-  status: "OPEN" | "CLOSED";
-  href: string;
-  isSeller: boolean;
-  sellerName?: string;
-  product: {
-    id: string;
-    slug: string;
-    title: string;
-    type: "PREORDER" | "DROPSHIP" | "LOCAL";
-    currency: string;
-  };
-  productImageUrl: string | null;
-  productImageAlt: string;
-  messagesCount: number;
-  offersCount: number;
-  lastActivityAt: string | Date;
-  initialOffers: InquiryOfferItem[];
-};
+import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
+import type {
+  InquiryConversationSummary,
+  TiakConversationSummary,
+} from "@/lib/messages/conversations";
+import type { MessagePresenceSummary } from "@/lib/messages/presence";
 
 type Props = {
   locale: string;
@@ -89,6 +28,9 @@ type Props = {
   serverConversationTake: number;
   hasMoreShopConversations: boolean;
   hasMoreTiakConversations: boolean;
+  nextShopCursor: string | null;
+  nextTiakCursor: string | null;
+  serverUnreadCount: number;
 };
 
 type QuickFilter = "ALL" | "UNREAD" | "OPEN" | "CLOSED";
@@ -107,6 +49,7 @@ type UnifiedConversation = {
   statusRaw: string;
   statusLabel: string;
   isClosed: boolean;
+  counterpartPresence: MessagePresenceSummary | null;
   href?: string;
 };
 
@@ -271,6 +214,34 @@ function serviceChipClasses(service: Exclude<ServiceType, "ALL">) {
   }
 }
 
+function formatPresenceLine(
+  presence: MessagePresenceSummary | null,
+  locale: string
+) {
+  const isFr = locale === "fr";
+  if (!presence?.lastSeenAt) {
+    return isFr ? "Derniere connexion inconnue" : "Last seen unavailable";
+  }
+
+  if (presence.online) {
+    return isFr ? "En ligne" : "Online";
+  }
+
+  return isFr
+    ? `Vu ${new Date(presence.lastSeenAt).toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    : `Last seen ${new Date(presence.lastSeenAt).toLocaleString("en-US", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+}
+
 export default function ConversationsList({
   locale,
   meId,
@@ -283,22 +254,34 @@ export default function ConversationsList({
   serverConversationTake,
   hasMoreShopConversations,
   hasMoreTiakConversations,
+  nextShopCursor,
+  nextTiakCursor,
+  serverUnreadCount,
 }: Props) {
   const isFr = locale === "fr";
-  const router = useRouter();
-  const pathname = usePathname();
-
+  const presencePingIntervalMs = useAdaptivePolling({
+    active: true,
+    visibleIntervalMs: 45000,
+    hiddenIntervalMs: 120000,
+  });
+  const [tiakConversationItems, setTiakConversationItems] = useState(conversations);
+  const [shopConversationItems, setShopConversationItems] = useState(inquiryConversations);
+  const [shopCursor, setShopCursor] = useState<string | null>(nextShopCursor);
+  const [tiakCursor, setTiakCursor] = useState<string | null>(nextTiakCursor);
+  const [shopHasMore, setShopHasMore] = useState(hasMoreShopConversations);
+  const [tiakHasMore, setTiakHasMore] = useState(hasMoreTiakConversations);
+  const [loadingMoreServer, setLoadingMoreServer] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
     initialSelectedConversationId &&
       ((initialSelectedConversationId.startsWith("tiak:") &&
-        conversations.some((entry) => `tiak:${entry.id}` === initialSelectedConversationId)) ||
+        tiakConversationItems.some((entry) => `tiak:${entry.id}` === initialSelectedConversationId)) ||
         (initialSelectedConversationId.startsWith("shop:") &&
-          inquiryConversations.some((entry) => `shop:${entry.id}` === initialSelectedConversationId)))
+          shopConversationItems.some((entry) => `shop:${entry.id}` === initialSelectedConversationId)))
       ? initialSelectedConversationId
-      : inquiryConversations[0]
-        ? `shop:${inquiryConversations[0].id}`
-        : conversations[0]
-          ? `tiak:${conversations[0].id}`
+      : shopConversationItems[0]
+        ? `shop:${shopConversationItems[0].id}`
+        : tiakConversationItems[0]
+          ? `tiak:${tiakConversationItems[0].id}`
           : null
   );
   const [query, setQuery] = useState(initialQuery);
@@ -315,16 +298,16 @@ export default function ConversationsList({
 
   const tiakUnreadById = useMemo(() => {
     const map = new Map<string, number>();
-    for (const conversation of conversations) {
+    for (const conversation of tiakConversationItems) {
       const lastEvent = conversation.events[0];
       const unread = Boolean(lastEvent && lastEvent.actorId !== meId) && !manuallyReadTiak[conversation.id];
       map.set(conversation.id, unread ? 1 : 0);
     }
     return map;
-  }, [conversations, manuallyReadTiak, meId]);
+  }, [manuallyReadTiak, meId, tiakConversationItems]);
 
   const unifiedConversations = useMemo<UnifiedConversation[]>(() => {
-    const tiakItems = conversations.map((item) => {
+    const tiakItems = tiakConversationItems.map((item) => {
       const iAmCustomer = item.customerId === meId;
       const counterpart = iAmCustomer
         ? item.courier?.name || item.courier?.email || (isFr ? "Coursier" : "Courier")
@@ -357,10 +340,11 @@ export default function ConversationsList({
         statusRaw: item.status,
         statusLabel: formatTiakStatus(item.status, locale),
         isClosed: CLOSED_TIAK_STATUSES.has(item.status),
+        counterpartPresence: item.counterpartPresence,
       };
     });
 
-    const inquiryItems = inquiryConversations.map((item) => ({
+    const inquiryItems = shopConversationItems.map((item) => ({
       id: `shop:${item.id}`,
       sourceId: item.id,
       kind: "SHOP" as const,
@@ -373,13 +357,14 @@ export default function ConversationsList({
       statusRaw: item.status,
       statusLabel: formatInquiryStatus(item.status, locale),
       isClosed: item.status === "CLOSED",
+      counterpartPresence: item.counterpartPresence,
       href: item.href,
     }));
 
     return [...tiakItems, ...inquiryItems].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }, [conversations, inquiryConversations, isFr, locale, meId, tiakUnreadById]);
+  }, [isFr, locale, meId, shopConversationItems, tiakConversationItems, tiakUnreadById]);
 
   const filteredConversations = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -421,9 +406,9 @@ export default function ConversationsList({
   const selectedTiakConversation = useMemo(
     () =>
       selectedConversation?.kind === "TIAK"
-        ? conversations.find((entry) => entry.id === selectedConversation.sourceId) ?? null
+        ? tiakConversationItems.find((entry) => entry.id === selectedConversation.sourceId) ?? null
         : null,
-    [conversations, selectedConversation]
+    [selectedConversation, tiakConversationItems]
   );
 
   const selectedShopInquiryId = useMemo(
@@ -433,9 +418,9 @@ export default function ConversationsList({
   const selectedShopConversation = useMemo(
     () =>
       selectedShopInquiryId
-        ? inquiryConversations.find((entry) => entry.id === selectedShopInquiryId) ?? null
+        ? shopConversationItems.find((entry) => entry.id === selectedShopInquiryId) ?? null
         : null,
-    [inquiryConversations, selectedShopInquiryId]
+    [selectedShopInquiryId, shopConversationItems]
   );
 
   const visibleConversations = filteredConversations.slice(0, visibleCount);
@@ -448,6 +433,34 @@ export default function ConversationsList({
     () => unifiedConversations.reduce((sum, item) => sum + item.unreadCount, 0),
     [unifiedConversations]
   );
+  const displayedUnreadCount = Math.max(serverUnreadCount, totalUnreadCount);
+
+  useEffect(() => {
+    async function pingPresence() {
+      try {
+        await fetch("/api/messages/presence", {
+          method: "POST",
+          cache: "no-store",
+        });
+      } catch {
+        return;
+      }
+    }
+
+    void pingPresence();
+
+    if (presencePingIntervalMs === null) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void pingPresence();
+    }, presencePingIntervalMs);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [presencePingIntervalMs]);
 
   const markCurrentAsRead = () => {
     if (!selectedTiakConversation?.id) return;
@@ -471,25 +484,70 @@ export default function ConversationsList({
   const activeServiceLabel = serviceLabel(serviceFilter, isFr);
   const canLoadMoreFromServer =
     serviceFilter === "ALL"
-      ? hasMoreShopConversations || hasMoreTiakConversations
+      ? shopHasMore || tiakHasMore
       : serviceFilter === "SHOP"
-        ? hasMoreShopConversations
+        ? shopHasMore
         : serviceFilter === "TIAK"
-          ? hasMoreTiakConversations
+          ? tiakHasMore
           : false;
 
-  const handleServerLoadMore = () => {
-    const queryParams: Record<string, string> = {
-      take: String(serverConversationTake + 24),
-    };
+  const handleServerLoadMore = async () => {
+    if (loadingMoreServer) return;
 
-    if (query.trim()) queryParams.q = query.trim();
-    if (serviceFilter !== "ALL") queryParams.service = serviceFilter;
-    if (quickFilter !== "ALL") queryParams.quick = quickFilter;
-    if (resolvedSelectedConversationId) queryParams.thread = resolvedSelectedConversationId;
-    if (selectedTiakConversation?.id) queryParams.deliveryId = selectedTiakConversation.id;
+    const search = new URLSearchParams();
+    search.set("locale", locale);
+    search.set("take", String(serverConversationTake));
+    if (shopCursor) search.set("shopCursor", shopCursor);
+    if (tiakCursor) search.set("tiakCursor", tiakCursor);
 
-    router.push({ pathname, query: queryParams }, { scroll: false });
+    setLoadingMoreServer(true);
+
+    try {
+      const response = await fetch(`/api/messages/conversations?${search.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || typeof data !== "object") {
+        return;
+      }
+
+      const nextShopItems = Array.isArray((data as { inquiryConversations?: unknown }).inquiryConversations)
+        ? ((data as { inquiryConversations: InquiryConversationSummary[] }).inquiryConversations ?? [])
+        : [];
+      const nextTiakItems = Array.isArray((data as { tiakConversations?: unknown }).tiakConversations)
+        ? ((data as { tiakConversations: TiakConversationSummary[] }).tiakConversations ?? [])
+        : [];
+
+      if (nextShopItems.length > 0) {
+        setShopConversationItems((current) => {
+          const seen = new Set(current.map((entry) => entry.id));
+          return [...current, ...nextShopItems.filter((entry) => !seen.has(entry.id))];
+        });
+      }
+
+      if (nextTiakItems.length > 0) {
+        setTiakConversationItems((current) => {
+          const seen = new Set(current.map((entry) => entry.id));
+          return [...current, ...nextTiakItems.filter((entry) => !seen.has(entry.id))];
+        });
+      }
+
+      setShopHasMore(Boolean((data as { hasMoreShopConversations?: unknown }).hasMoreShopConversations));
+      setTiakHasMore(Boolean((data as { hasMoreTiakConversations?: unknown }).hasMoreTiakConversations));
+      setShopCursor(
+        typeof (data as { nextShopCursor?: unknown }).nextShopCursor === "string"
+          ? ((data as { nextShopCursor: string }).nextShopCursor ?? null)
+          : null
+      );
+      setTiakCursor(
+        typeof (data as { nextTiakCursor?: unknown }).nextTiakCursor === "string"
+          ? ((data as { nextTiakCursor: string }).nextTiakCursor ?? null)
+          : null
+      );
+    } finally {
+      setLoadingMoreServer(false);
+    }
   };
 
   const shopSidebar = selectedShopConversation ? (
@@ -590,7 +648,7 @@ export default function ConversationsList({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setQuickFilter("UNREAD")} className={filterChipClasses("UNREAD")}>
             {isFr ? "Non lus" : "Unread"}
-            {totalUnreadCount > 0 ? <span className="ml-1 text-emerald-200">{totalUnreadCount}</span> : null}
+            {displayedUnreadCount > 0 ? <span className="ml-1 text-emerald-200">{displayedUnreadCount}</span> : null}
           </button>
           <button type="button" onClick={() => setQuickFilter("OPEN")} className={filterChipClasses("OPEN")}>
             {isFr ? "Ouvertes" : "Open"}
@@ -652,6 +710,16 @@ export default function ConversationsList({
                   {item.counterpart} {" \u2022 "} {item.preview}
                 </p>
 
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
+                  <span
+                    className={`inline-flex h-2 w-2 rounded-full ${
+                      item.counterpartPresence?.online ? "bg-emerald-400" : "bg-zinc-600"
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="truncate">{formatPresenceLine(item.counterpartPresence, locale)}</span>
+                </div>
+
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-300">
                     {item.statusLabel}
@@ -690,11 +758,16 @@ export default function ConversationsList({
           <button
             type="button"
             onClick={handleServerLoadMore}
+            disabled={loadingMoreServer}
             className="mt-3 w-full rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/45 hover:bg-emerald-300/15"
           >
-            {isFr
-              ? "Charger des conversations plus anciennes (+24)"
-              : "Load older conversations (+24)"}
+            {loadingMoreServer
+              ? isFr
+                ? "Chargement..."
+                : "Loading..."
+              : isFr
+                ? "Charger des conversations plus anciennes (+24)"
+                : "Load older conversations (+24)"}
           </button>
         ) : null}
       </div>

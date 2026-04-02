@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
+import type { MessagePresenceSummary } from "@/lib/messages/presence";
 
 type InquiryMessage = {
   id: string;
@@ -16,6 +17,13 @@ type InquiryMessage = {
     image?: string | null;
   } | null;
 };
+
+type Counterpart = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+} | null;
 
 type InquiryChatThreadProps = {
   locale: string;
@@ -32,6 +40,36 @@ function toErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function formatPresenceLabel(
+  presence: MessagePresenceSummary | null,
+  locale: string
+) {
+  const isFr = locale === "fr";
+  if (!presence?.lastSeenAt) {
+    return isFr ? "Derniere connexion inconnue" : "Last seen unavailable";
+  }
+
+  if (presence.online) {
+    return isFr ? "En ligne" : "Online";
+  }
+
+  return isFr
+    ? `Vu ${new Date(presence.lastSeenAt).toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    : `Last seen ${new Date(presence.lastSeenAt).toLocaleString("en-US", {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+}
+
+type LoadMode = "replace" | "prepend" | "sync";
+
 export default function InquiryChatThread({
   locale,
   inquiryId,
@@ -41,39 +79,108 @@ export default function InquiryChatThread({
 }: InquiryChatThreadProps) {
   const isFr = locale === "fr";
   const [messages, setMessages] = useState(initialMessages);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initialMessages.length === 0);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [counterpart, setCounterpart] = useState<Counterpart>(null);
+  const [presence, setPresence] = useState<MessagePresenceSummary | null>(null);
   const [draft, setDraft] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const preserveScrollRef = useRef<{ top: number; height: number } | null>(null);
+  const messagesRef = useRef<InquiryMessage[]>(initialMessages);
   const pollIntervalMs = useAdaptivePolling({ active: Boolean(inquiryId) });
+  const presencePingIntervalMs = useAdaptivePolling({
+    active: Boolean(inquiryId),
+    visibleIntervalMs: 45000,
+    hiddenIntervalMs: 120000,
+  });
 
   const loadMessages = useCallback(
-    async (silent = false) => {
-      if (!silent) {
+    async ({
+      silent = false,
+      before = null,
+      mode = "replace",
+    }: {
+      silent?: boolean;
+      before?: string | null;
+      mode?: LoadMode;
+    }) => {
+      if (!silent && mode !== "prepend") {
         setLoading(true);
+      }
+      if (mode === "prepend") {
+        setLoadingOlder(true);
       }
 
       try {
-        const res = await fetch(`/api/inquiries/${inquiryId}/messages`, { cache: "no-store" });
+        const search = new URLSearchParams();
+        search.set("take", "24");
+        if (before) search.set("before", before);
+
+        const res = await fetch(`/api/inquiries/${inquiryId}/messages?${search.toString()}`, {
+          cache: "no-store",
+        });
         const data = await res.json().catch(() => null);
         if (!res.ok) {
           throw new Error(toErrorMessage(data, isFr ? "Conversation indisponible." : "Conversation unavailable."));
         }
 
         const nextMessages = Array.isArray(data?.messages) ? (data.messages as InquiryMessage[]) : [];
-        setMessages(nextMessages);
+        const nextPresence =
+          data?.presence && typeof data.presence === "object"
+            ? (data.presence as MessagePresenceSummary)
+            : null;
+
+        setCounterpart(
+          data?.counterpart && typeof data.counterpart === "object"
+            ? (data.counterpart as Counterpart)
+            : null
+        );
+        setPresence(nextPresence);
+        if (mode !== "sync" || messagesRef.current.length === 0) {
+          setHasMore(Boolean(data?.pagination?.hasMore));
+          setNextCursor(
+            typeof data?.pagination?.nextCursor === "string" ? data.pagination.nextCursor : null
+          );
+        }
+
+        if (mode === "prepend") {
+          setMessages((current) => {
+            const seen = new Set(current.map((message) => message.id));
+            return [...nextMessages.filter((message) => !seen.has(message.id)), ...current];
+          });
+        } else if (mode === "sync") {
+          setMessages((current) => {
+            const merged = new Map(current.map((message) => [message.id, message]));
+            for (const message of nextMessages) {
+              merged.set(message.id, message);
+            }
+            return [...merged.values()].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+          });
+        } else {
+          setMessages(nextMessages);
+        }
+
         setError(null);
       } catch (err) {
         if (!silent) {
           setError(err instanceof Error ? err.message : isFr ? "Erreur de chargement." : "Loading failed.");
         }
       } finally {
-        if (!silent) {
+        if (!silent && mode !== "prepend") {
           setLoading(false);
+        }
+        if (mode === "prepend") {
+          setLoadingOlder(false);
         }
       }
     },
@@ -81,22 +188,73 @@ export default function InquiryChatThread({
   );
 
   useEffect(() => {
-    void loadMessages(false);
+    void loadMessages({ silent: false, mode: "replace" });
   }, [loadMessages]);
 
   useEffect(() => {
     if (pollIntervalMs === null) return;
 
     const interval = window.setInterval(() => {
-      void loadMessages(true);
+      void loadMessages({ silent: true, mode: "sync" });
     }, pollIntervalMs);
 
     return () => window.clearInterval(interval);
   }, [loadMessages, pollIntervalMs]);
 
   useEffect(() => {
+    async function pingPresence() {
+      try {
+        await fetch("/api/messages/presence", {
+          method: "POST",
+          cache: "no-store",
+        });
+      } catch {
+        return;
+      }
+    }
+
+    void pingPresence();
+
+    if (presencePingIntervalMs === null) return;
+
+    const interval = window.setInterval(() => {
+      void pingPresence();
+    }, presencePingIntervalMs);
+
+    return () => window.clearInterval(interval);
+  }, [presencePingIntervalMs]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    if (preserveScrollRef.current) {
+      const { top, height } = preserveScrollRef.current;
+      container.scrollTop = container.scrollHeight - height + top;
+      preserveScrollRef.current = null;
+      return;
+    }
+
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length]);
+
+  const loadOlder = async () => {
+    if (!hasMore || !nextCursor || loadingOlder) return;
+
+    const container = scrollRef.current;
+    if (container) {
+      preserveScrollRef.current = {
+        top: container.scrollTop,
+        height: container.scrollHeight,
+      };
+    }
+
+    await loadMessages({ silent: true, before: nextCursor, mode: "prepend" });
+  };
 
   const uploadAttachment = async (file: File) => {
     setUploadingAttachment(true);
@@ -158,9 +316,23 @@ export default function InquiryChatThread({
   return (
     <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">
-          {isFr ? "Conversation" : "Conversation"}
-        </p>
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">
+            {isFr ? "Conversation" : "Conversation"}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-white">
+              {counterpart?.name || counterpart?.email || (isFr ? "Contact" : "Contact")}
+            </p>
+            <span
+              className={`inline-flex h-2 w-2 rounded-full ${
+                presence?.online ? "bg-emerald-400" : "bg-zinc-600"
+              }`}
+              aria-hidden
+            />
+            <p className="text-[11px] text-zinc-500">{formatPresenceLabel(presence, locale)}</p>
+          </div>
+        </div>
         {onBackToList ? (
           <button
             type="button"
@@ -172,8 +344,25 @@ export default function InquiryChatThread({
         ) : null}
       </div>
 
-      <div className="mt-2 flex h-[420px] flex-col rounded-2xl border border-white/10 bg-zinc-950/70">
-        <div className="flex-1 overflow-y-auto p-3">
+      <div className="mt-2 flex h-[min(68vh,calc(100dvh-11rem))] min-h-[360px] flex-col rounded-2xl border border-white/10 bg-zinc-950/70 lg:h-[420px]">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3">
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => void loadOlder()}
+              disabled={loadingOlder}
+              className="mb-3 w-full rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-white/30 disabled:opacity-60"
+            >
+              {loadingOlder
+                ? isFr
+                  ? "Chargement..."
+                  : "Loading..."
+                : isFr
+                  ? "Charger des messages plus anciens"
+                  : "Load older messages"}
+            </button>
+          ) : null}
+
           {loading && messages.length === 0 ? (
             <div className="space-y-2">
               <div className="h-14 animate-pulse rounded-xl bg-zinc-900" />

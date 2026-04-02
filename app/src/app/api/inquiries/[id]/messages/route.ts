@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
 import type { Prisma } from "@prisma/client";
+import { decodeHistoryCursor, encodeHistoryCursor, parseThreadTake } from "@/lib/messages/history";
+import { getPresenceForUser, serializePresence } from "@/lib/messages/presence";
 import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
@@ -30,7 +32,7 @@ function getAccessWhere(
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -40,19 +42,37 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const beforeCursor = decodeHistoryCursor(request.nextUrl.searchParams.get("before"));
+  const paginated =
+    request.nextUrl.searchParams.has("take") || request.nextUrl.searchParams.has("before");
+  const take = parseThreadTake(request.nextUrl.searchParams.get("take"));
+
   const inquiry = await prisma.productInquiry.findFirst({
     where: getAccessWhere(session.user.id, session.user.role === "ADMIN", id),
     include: {
-      seller: { select: { userId: true } },
-      product: { select: { type: true } },
-      messages: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          sender: {
-            select: { id: true, name: true, email: true, role: true, image: true },
+      seller: {
+        select: {
+          userId: true,
+          displayName: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
           },
         },
       },
+      buyer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+      product: { select: { type: true } },
     },
   });
 
@@ -76,11 +96,82 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({
-    id: inquiry.id,
-    status: inquiry.status,
-    lastMessageAt: inquiry.lastMessageAt,
-    messages: inquiry.messages.map((message) => {
+  const counterpartId =
+    inquiry.buyerId === session.user.id ? (inquiry.seller?.userId ?? null) : inquiry.buyer?.id ?? null;
+  const counterpartPresence = serializePresence(await getPresenceForUser(counterpartId));
+
+  let messages: Array<{
+    id: string;
+    body: string;
+    attachmentUrl: string | null;
+    createdAt: Date;
+    senderId: string;
+    sender: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      role: string;
+      image: string | null;
+    };
+  }> = [];
+  let hasMore = false;
+  let nextCursor: string | null = null;
+
+  if (paginated) {
+    const rawMessages = await prisma.productInquiryMessage.findMany({
+      where: {
+        inquiryId: inquiry.id,
+        ...(beforeCursor
+          ? {
+              OR: [
+                { createdAt: { lt: beforeCursor.createdAt } },
+                {
+                  AND: [{ createdAt: beforeCursor.createdAt }, { id: { lt: beforeCursor.id } }],
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: take + 1,
+      include: {
+        sender: {
+          select: { id: true, name: true, email: true, role: true, image: true },
+        },
+      },
+    });
+
+    hasMore = rawMessages.length > take;
+    const slice = rawMessages.slice(0, take);
+    const oldestLoaded = slice[slice.length - 1] ?? null;
+    nextCursor = hasMore && oldestLoaded
+      ? encodeHistoryCursor({ id: oldestLoaded.id, createdAt: oldestLoaded.createdAt })
+      : null;
+    messages = slice
+      .reverse()
+      .map((message) => {
+        const parsed = parseMessageBody(message.body);
+        return {
+          id: message.id,
+          body: parsed.body,
+          attachmentUrl: parsed.attachmentUrl,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          sender: message.sender,
+        };
+      });
+  } else {
+    const allMessages = await prisma.productInquiryMessage.findMany({
+      where: { inquiryId: inquiry.id },
+      orderBy: { createdAt: "asc" },
+      include: {
+        sender: {
+          select: { id: true, name: true, email: true, role: true, image: true },
+        },
+      },
+    });
+
+    messages = allMessages.map((message) => {
       const parsed = parseMessageBody(message.body);
       return {
         id: message.id,
@@ -90,7 +181,40 @@ export async function GET(
         senderId: message.senderId,
         sender: message.sender,
       };
-    }),
+    });
+  }
+
+  return NextResponse.json({
+    id: inquiry.id,
+    status: inquiry.status,
+    lastMessageAt: inquiry.lastMessageAt,
+    counterpart: counterpartId
+      ? {
+          id: counterpartId,
+          name:
+            inquiry.buyerId === session.user.id
+              ? inquiry.seller?.displayName || inquiry.seller?.user?.name || inquiry.seller?.user?.email || null
+              : inquiry.buyer?.name || inquiry.buyer?.email || null,
+          email:
+            inquiry.buyerId === session.user.id
+              ? inquiry.seller?.user?.email ?? null
+              : inquiry.buyer?.email ?? null,
+          image:
+            inquiry.buyerId === session.user.id
+              ? inquiry.seller?.user?.image ?? null
+              : inquiry.buyer?.image ?? null,
+        }
+      : null,
+    presence: counterpartPresence,
+    pagination: {
+      hasMore,
+      nextCursor,
+      take: paginated ? take : messages.length,
+    },
+    messages: messages.map((message) => ({
+      ...message,
+      createdAt: message.createdAt,
+    })),
   });
 }
 

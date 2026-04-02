@@ -102,7 +102,7 @@ export type TiakLiveLocation = {
     waypointLabel: string | null;
     distanceMeters: number | null;
     etaSeconds: number | null;
-    source: "osrm" | "geodesic" | "none";
+    source: "osrm" | "geodesic" | "none" | "disabled";
     destination: {
       latitude: number;
       longitude: number;
