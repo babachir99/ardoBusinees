@@ -6,11 +6,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import ChatPanel from "@/components/messages/ChatPanel";
+import GpConversationThread from "@/components/messages/GpConversationThread";
 import OpsDetailsPanel from "@/components/messages/OpsDetailsPanel";
 import InquiryChatThread from "@/components/messages/InquiryChatThread";
 import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
 import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 import type {
+  GpConversationSummary,
   InquiryConversationSummary,
   TiakConversationSummary,
 } from "@/lib/messages/conversations";
@@ -19,8 +21,10 @@ import type { MessagePresenceSummary } from "@/lib/messages/presence";
 type Props = {
   locale: string;
   meId: string;
+  meRole: string | null;
   conversations: TiakConversationSummary[];
   inquiryConversations: InquiryConversationSummary[];
+  gpConversations: GpConversationSummary[];
   initialSelectedConversationId: string | null;
   initialQuickFilter?: QuickFilter;
   initialServiceFilter?: ServiceType;
@@ -28,8 +32,10 @@ type Props = {
   serverConversationTake: number;
   hasMoreShopConversations: boolean;
   hasMoreTiakConversations: boolean;
+  hasMoreGpConversations: boolean;
   nextShopCursor: string | null;
   nextTiakCursor: string | null;
+  nextGpCursor: string | null;
   serverUnreadCount: number;
 };
 
@@ -39,7 +45,7 @@ type ServiceType = "ALL" | "TIAK" | "SHOP" | "PRESTA" | "GP" | "IMMO" | "CARS";
 type UnifiedConversation = {
   id: string;
   sourceId: string;
-  kind: "TIAK" | "SHOP";
+  kind: "TIAK" | "SHOP" | "GP";
   serviceType: Exclude<ServiceType, "ALL">;
   title: string;
   counterpart: string;
@@ -108,6 +114,39 @@ function formatInquiryStatus(status: "OPEN" | "CLOSED", locale: string) {
   const isFr = locale === "fr";
   if (status === "OPEN") return isFr ? "Ouverte" : "Open";
   return isFr ? "Fermee" : "Closed";
+}
+
+function formatGpStatus(status: string, locale: string) {
+  const isFr = locale === "fr";
+  const fr: Record<string, string> = {
+    DROPPED_OFF: "Depose",
+    PICKED_UP: "Recupere",
+    BOARDED: "Embarque",
+    ARRIVED: "Arrive",
+    DELIVERED: "Livre",
+  };
+
+  const en: Record<string, string> = {
+    DROPPED_OFF: "Dropped off",
+    PICKED_UP: "Picked up",
+    BOARDED: "Boarded",
+    ARRIVED: "Arrived",
+    DELIVERED: "Delivered",
+  };
+
+  return isFr ? (fr[status] ?? status) : (en[status] ?? status);
+}
+
+function formatGpPreview(event: GpConversationSummary["latestEvent"], locale: string) {
+  if (event?.note?.trim()) {
+    return event.note;
+  }
+
+  if (!event) {
+    return locale === "fr" ? "Aucune mise a jour." : "No update yet.";
+  }
+
+  return formatGpStatus(event.status, locale);
 }
 
 function previewText(params: {
@@ -245,8 +284,10 @@ function formatPresenceLine(
 export default function ConversationsList({
   locale,
   meId,
+  meRole,
   conversations,
   inquiryConversations,
+  gpConversations,
   initialSelectedConversationId,
   initialQuickFilter = "ALL",
   initialServiceFilter = "ALL",
@@ -254,8 +295,10 @@ export default function ConversationsList({
   serverConversationTake,
   hasMoreShopConversations,
   hasMoreTiakConversations,
+  hasMoreGpConversations,
   nextShopCursor,
   nextTiakCursor,
+  nextGpCursor,
   serverUnreadCount,
 }: Props) {
   const isFr = locale === "fr";
@@ -266,23 +309,16 @@ export default function ConversationsList({
   });
   const [tiakConversationItems, setTiakConversationItems] = useState(conversations);
   const [shopConversationItems, setShopConversationItems] = useState(inquiryConversations);
+  const [gpConversationItems, setGpConversationItems] = useState(gpConversations);
   const [shopCursor, setShopCursor] = useState<string | null>(nextShopCursor);
   const [tiakCursor, setTiakCursor] = useState<string | null>(nextTiakCursor);
+  const [gpCursor, setGpCursor] = useState<string | null>(nextGpCursor);
   const [shopHasMore, setShopHasMore] = useState(hasMoreShopConversations);
   const [tiakHasMore, setTiakHasMore] = useState(hasMoreTiakConversations);
+  const [gpHasMore, setGpHasMore] = useState(hasMoreGpConversations);
   const [loadingMoreServer, setLoadingMoreServer] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
-    initialSelectedConversationId &&
-      ((initialSelectedConversationId.startsWith("tiak:") &&
-        tiakConversationItems.some((entry) => `tiak:${entry.id}` === initialSelectedConversationId)) ||
-        (initialSelectedConversationId.startsWith("shop:") &&
-          shopConversationItems.some((entry) => `shop:${entry.id}` === initialSelectedConversationId)))
-      ? initialSelectedConversationId
-      : shopConversationItems[0]
-        ? `shop:${shopConversationItems[0].id}`
-        : tiakConversationItems[0]
-          ? `tiak:${tiakConversationItems[0].id}`
-          : null
+    initialSelectedConversationId
   );
   const [query, setQuery] = useState(initialQuery);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(initialQuickFilter);
@@ -361,10 +397,37 @@ export default function ConversationsList({
       href: item.href,
     }));
 
-    return [...tiakItems, ...inquiryItems].sort(
+    const gpItems = gpConversationItems.map((item) => {
+      const counterpart =
+        item.transporterId === meId
+          ? item.sender?.name ||
+            item.sender?.email ||
+            item.receiver?.name ||
+            item.receiver?.email ||
+            (isFr ? "Expediteur" : "Sender")
+          : item.transporter?.name || item.transporter?.email || (isFr ? "Transporteur" : "Transporter");
+
+      return {
+        id: `gp:${item.id}`,
+        sourceId: item.id,
+        kind: "GP" as const,
+        serviceType: "GP" as const,
+        title: `${item.fromCity || (isFr ? "Depart" : "Origin")} -> ${item.toCity || (isFr ? "Arrivee" : "Destination")}`,
+        counterpart,
+        preview: formatGpPreview(item.latestEvent, locale),
+        updatedAt: item.updatedAt,
+        unreadCount: item.unread ? 1 : 0,
+        statusRaw: item.status,
+        statusLabel: formatGpStatus(item.status, locale),
+        isClosed: item.status === "DELIVERED",
+        counterpartPresence: item.counterpartPresence,
+      };
+    });
+
+    return [...tiakItems, ...inquiryItems, ...gpItems].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }, [isFr, locale, meId, shopConversationItems, tiakConversationItems, tiakUnreadById]);
+  }, [gpConversationItems, isFr, locale, meId, shopConversationItems, tiakConversationItems, tiakUnreadById]);
 
   const filteredConversations = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -421,6 +484,17 @@ export default function ConversationsList({
         ? shopConversationItems.find((entry) => entry.id === selectedShopInquiryId) ?? null
         : null,
     [selectedShopInquiryId, shopConversationItems]
+  );
+  const selectedGpShipmentId = useMemo(
+    () => (selectedConversation?.kind === "GP" ? selectedConversation.sourceId : null),
+    [selectedConversation]
+  );
+  const selectedGpConversation = useMemo(
+    () =>
+      selectedGpShipmentId
+        ? gpConversationItems.find((entry) => entry.id === selectedGpShipmentId) ?? null
+        : null,
+    [gpConversationItems, selectedGpShipmentId]
   );
 
   const visibleConversations = filteredConversations.slice(0, visibleCount);
@@ -484,12 +558,14 @@ export default function ConversationsList({
   const activeServiceLabel = serviceLabel(serviceFilter, isFr);
   const canLoadMoreFromServer =
     serviceFilter === "ALL"
-      ? shopHasMore || tiakHasMore
+      ? shopHasMore || tiakHasMore || gpHasMore
       : serviceFilter === "SHOP"
         ? shopHasMore
         : serviceFilter === "TIAK"
           ? tiakHasMore
-          : false;
+          : serviceFilter === "GP"
+            ? gpHasMore
+            : false;
 
   const handleServerLoadMore = async () => {
     if (loadingMoreServer) return;
@@ -499,6 +575,7 @@ export default function ConversationsList({
     search.set("take", String(serverConversationTake));
     if (shopCursor) search.set("shopCursor", shopCursor);
     if (tiakCursor) search.set("tiakCursor", tiakCursor);
+    if (gpCursor) search.set("gpCursor", gpCursor);
 
     setLoadingMoreServer(true);
 
@@ -518,6 +595,9 @@ export default function ConversationsList({
       const nextTiakItems = Array.isArray((data as { tiakConversations?: unknown }).tiakConversations)
         ? ((data as { tiakConversations: TiakConversationSummary[] }).tiakConversations ?? [])
         : [];
+      const nextGpItems = Array.isArray((data as { gpConversations?: unknown }).gpConversations)
+        ? ((data as { gpConversations: GpConversationSummary[] }).gpConversations ?? [])
+        : [];
 
       if (nextShopItems.length > 0) {
         setShopConversationItems((current) => {
@@ -533,8 +613,16 @@ export default function ConversationsList({
         });
       }
 
+      if (nextGpItems.length > 0) {
+        setGpConversationItems((current) => {
+          const seen = new Set(current.map((entry) => entry.id));
+          return [...current, ...nextGpItems.filter((entry) => !seen.has(entry.id))];
+        });
+      }
+
       setShopHasMore(Boolean((data as { hasMoreShopConversations?: unknown }).hasMoreShopConversations));
       setTiakHasMore(Boolean((data as { hasMoreTiakConversations?: unknown }).hasMoreTiakConversations));
+      setGpHasMore(Boolean((data as { hasMoreGpConversations?: unknown }).hasMoreGpConversations));
       setShopCursor(
         typeof (data as { nextShopCursor?: unknown }).nextShopCursor === "string"
           ? ((data as { nextShopCursor: string }).nextShopCursor ?? null)
@@ -543,6 +631,11 @@ export default function ConversationsList({
       setTiakCursor(
         typeof (data as { nextTiakCursor?: unknown }).nextTiakCursor === "string"
           ? ((data as { nextTiakCursor: string }).nextTiakCursor ?? null)
+          : null
+      );
+      setGpCursor(
+        typeof (data as { nextGpCursor?: unknown }).nextGpCursor === "string"
+          ? ((data as { nextGpCursor: string }).nextGpCursor ?? null)
           : null
       );
     } finally {
@@ -814,6 +907,13 @@ export default function ConversationsList({
             />
             {shopSidebar}
           </div>
+        ) : selectedConversation?.kind === "GP" && selectedGpConversation ? (
+          <GpConversationThread
+            locale={locale}
+            meId={meId}
+            meRole={meRole}
+            shipmentId={selectedGpConversation.id}
+          />
         ) : (
           <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-4">
             <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed border-white/15 bg-zinc-950/60 text-center text-sm text-zinc-400">
@@ -869,6 +969,14 @@ export default function ConversationsList({
             />
             {shopSidebar}
           </div>
+        ) : selectedConversation?.kind === "GP" && selectedGpConversation ? (
+          <GpConversationThread
+            locale={locale}
+            meId={meId}
+            meRole={meRole}
+            shipmentId={selectedGpConversation.id}
+            onBackToList={() => setMobileView("list")}
+          />
         ) : (
           listPanel
         )}

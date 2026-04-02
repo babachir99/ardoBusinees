@@ -29,6 +29,7 @@ export default async function MessagesPage({
     q?: string;
     shopCursor?: string;
     tiakCursor?: string;
+    gpCursor?: string;
   }>;
 }) {
   const [{ locale }, resolvedSearchParams] = await Promise.all([params, searchParams]);
@@ -54,6 +55,8 @@ export default async function MessagesPage({
     typeof resolvedSearchParams?.shopCursor === "string" ? resolvedSearchParams.shopCursor : null;
   const tiakCursor =
     typeof resolvedSearchParams?.tiakCursor === "string" ? resolvedSearchParams.tiakCursor : null;
+  const gpCursor =
+    typeof resolvedSearchParams?.gpCursor === "string" ? resolvedSearchParams.gpCursor : null;
 
   const sellerProfile = await prisma.sellerProfile.findUnique({
     where: { userId: session.user.id },
@@ -64,10 +67,13 @@ export default async function MessagesPage({
     {
       inquiryConversations,
       tiakConversations,
+      gpConversations,
       hasMoreShopConversations,
       hasMoreTiakConversations,
+      hasMoreGpConversations,
       nextShopCursor,
       nextTiakCursor,
+      nextGpCursor,
     },
     counts,
   ] = await Promise.all([
@@ -78,6 +84,7 @@ export default async function MessagesPage({
       take: conversationTake,
       shopCursor,
       tiakCursor,
+      gpCursor,
     }),
     countMessageConversations(session.user.id, sellerProfile?.id ?? null),
   ]);
@@ -132,6 +139,8 @@ export default async function MessagesPage({
 
   const requestedShopInquiryId =
     requestedThreadId && requestedThreadId.startsWith("shop:") ? requestedThreadId.slice(5) : null;
+  const requestedGpShipmentId =
+    requestedThreadId && requestedThreadId.startsWith("gp:") ? requestedThreadId.slice(3) : null;
 
   if (requestedShopInquiryId && !inquiryConversations.some((item) => item.id === requestedShopInquiryId)) {
     const requestedInquiry = await prisma.productInquiry.findFirst({
@@ -245,6 +254,77 @@ export default async function MessagesPage({
       });
     }
   }
+  if (requestedGpShipmentId && !gpConversations.some((item) => item.id === requestedGpShipmentId)) {
+    const requestedShipment = await prisma.gpShipment.findFirst({
+      where: {
+        id: requestedGpShipmentId,
+        OR: [{ senderId: session.user.id }, { receiverId: session.user.id }, { transporterId: session.user.id }],
+      },
+      select: {
+        id: true,
+        code: true,
+        fromCity: true,
+        toCity: true,
+        weightKg: true,
+        status: true,
+        updatedAt: true,
+        senderId: true,
+        receiverId: true,
+        transporterId: true,
+        sender: {
+          select: { id: true, name: true, email: true },
+        },
+        receiver: {
+          select: { id: true, name: true, email: true },
+        },
+        transporter: {
+          select: { id: true, name: true, email: true },
+        },
+        events: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            note: true,
+            createdAt: true,
+            actorId: true,
+          },
+        },
+      },
+    });
+
+    if (requestedShipment) {
+      const counterpartUserId =
+        requestedShipment.transporterId === session.user.id
+          ? requestedShipment.senderId ?? requestedShipment.receiverId ?? null
+          : requestedShipment.transporterId;
+      const counterpartPresence = serializePresence(await getPresenceForUser(counterpartUserId));
+      const latestEvent = requestedShipment.events[0] ?? null;
+      const unread = Boolean(latestEvent && latestEvent.actorId !== session.user.id);
+
+      gpConversations.unshift({
+        id: requestedShipment.id,
+        serviceType: "GP",
+        code: requestedShipment.code,
+        fromCity: requestedShipment.fromCity,
+        toCity: requestedShipment.toCity,
+        weightKg: requestedShipment.weightKg,
+        status: requestedShipment.status,
+        updatedAt: requestedShipment.updatedAt,
+        senderId: requestedShipment.senderId,
+        receiverId: requestedShipment.receiverId,
+        transporterId: requestedShipment.transporterId,
+        sender: requestedShipment.sender,
+        receiver: requestedShipment.receiver,
+        transporter: requestedShipment.transporter,
+        latestEvent,
+        unread,
+        counterpartUserId,
+        counterpartPresence,
+      });
+    }
+  }
   const activeThreadsCount = counts.totalCount;
 
   const activeTiakDeliveryId = requestedDeliveryId ?? tiakConversations[0]?.id ?? null;
@@ -296,12 +376,14 @@ export default async function MessagesPage({
           </div>
         </div>
 
-        {tiakConversations.length > 0 || inquiryConversations.length > 0 ? (
+        {tiakConversations.length > 0 || inquiryConversations.length > 0 || gpConversations.length > 0 ? (
           <ConversationsList
             locale={locale}
             meId={session.user.id}
+            meRole={session.user.role ?? null}
             conversations={tiakConversations}
             inquiryConversations={inquiryConversations}
+            gpConversations={gpConversations}
             initialSelectedConversationId={requestedThreadId ?? (activeTiakDeliveryId ? `tiak:${activeTiakDeliveryId}` : null)}
             initialQuickFilter={initialQuickFilter}
             initialServiceFilter={initialServiceFilter}
@@ -309,8 +391,10 @@ export default async function MessagesPage({
             serverConversationTake={conversationTake}
             hasMoreShopConversations={hasMoreShopConversations}
             hasMoreTiakConversations={hasMoreTiakConversations}
+            hasMoreGpConversations={hasMoreGpConversations}
             nextShopCursor={nextShopCursor}
             nextTiakCursor={nextTiakCursor}
+            nextGpCursor={nextGpCursor}
             serverUnreadCount={counts.unreadTotal}
           />
         ) : (

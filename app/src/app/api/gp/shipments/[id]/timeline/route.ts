@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { recordGpThreadRead } from "@/lib/messages/gpThreadRead";
+import { decodeHistoryCursor, encodeHistoryCursor, parseThreadTake } from "@/lib/messages/history";
+import { getPresenceForUser, serializePresence } from "@/lib/messages/presence";
 import { NotificationService } from "@/lib/notifications/NotificationService";
 import { normalizeDeliveryStep } from "@/lib/notifications/delivery-step";
 
@@ -130,6 +133,10 @@ export async function GET(
   }
 
   const { id } = await params;
+  const beforeCursor = decodeHistoryCursor(request.nextUrl.searchParams.get("before"));
+  const paginated =
+    request.nextUrl.searchParams.has("take") || request.nextUrl.searchParams.has("before");
+  const take = parseThreadTake(request.nextUrl.searchParams.get("take"));
 
   try {
     const loaded = await loadShipment(id);
@@ -149,9 +156,48 @@ export async function GET(
       };
     };
 
+    await recordGpThreadRead(session.user.id, loaded.shipment.id).catch(() => null);
+
+    const shipmentDetails = await prisma.gpShipment.findUnique({
+      where: { id: loaded.shipment.id },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        fromCity: true,
+        toCity: true,
+        weightKg: true,
+        senderId: true,
+        receiverId: true,
+        transporterId: true,
+        sender: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        receiver: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        transporter: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+      },
+    });
+
     const events = await runtimePrisma.gpShipmentEvent.findMany({
-      where: { shipmentId: loaded.shipment.id },
-      orderBy: [{ createdAt: "asc" }],
+      where: {
+        shipmentId: loaded.shipment.id,
+        ...(beforeCursor
+          ? {
+              OR: [
+                { createdAt: { lt: beforeCursor.createdAt } },
+                {
+                  AND: [{ createdAt: beforeCursor.createdAt }, { id: { lt: beforeCursor.id } }],
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: paginated ? [{ createdAt: "desc" }, { id: "desc" }] : [{ createdAt: "asc" }],
+      take: paginated ? take + 1 : undefined,
       select: {
         id: true,
         status: true,
@@ -159,17 +205,75 @@ export async function GET(
         note: true,
         proofUrl: true,
         proofType: true,
+        actorId: true,
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
       },
     });
+
+    const slicedEvents = paginated ? events.slice(0, take) : events;
+    const normalizedEvents = paginated ? [...slicedEvents].reverse() : slicedEvents;
+    const oldestLoaded =
+      paginated && slicedEvents.length > 0
+        ? (slicedEvents[slicedEvents.length - 1] as { id: string; createdAt: Date })
+        : null;
+    const counterpartId =
+      loaded.shipment.transporterId === session.user.id
+        ? loaded.shipment.senderId ?? loaded.shipment.receiverId ?? null
+        : loaded.shipment.transporterId;
+    const counterpartPresence = serializePresence(await getPresenceForUser(counterpartId));
 
     return respond(
       NextResponse.json({
         shipment: {
-          id: loaded.shipment.id,
-          code: loaded.shipment.code,
-          status: loaded.shipment.status,
+          id: shipmentDetails?.id ?? loaded.shipment.id,
+          code: shipmentDetails?.code ?? loaded.shipment.code,
+          status: shipmentDetails?.status ?? loaded.shipment.status,
+          fromCity: shipmentDetails?.fromCity ?? null,
+          toCity: shipmentDetails?.toCity ?? null,
+          weightKg: shipmentDetails?.weightKg ?? null,
+          senderId: shipmentDetails?.senderId ?? loaded.shipment.senderId,
+          receiverId: shipmentDetails?.receiverId ?? loaded.shipment.receiverId,
+          transporterId: shipmentDetails?.transporterId ?? loaded.shipment.transporterId,
+          sender: shipmentDetails?.sender ?? null,
+          receiver: shipmentDetails?.receiver ?? null,
+          transporter: shipmentDetails?.transporter ?? null,
         },
-        events,
+        counterpart: counterpartId
+          ? {
+              id: counterpartId,
+              name:
+                loaded.shipment.transporterId === session.user.id
+                  ? shipmentDetails?.sender?.name || shipmentDetails?.sender?.email || shipmentDetails?.receiver?.name || shipmentDetails?.receiver?.email || null
+                  : shipmentDetails?.transporter?.name || shipmentDetails?.transporter?.email || null,
+              email:
+                loaded.shipment.transporterId === session.user.id
+                  ? shipmentDetails?.sender?.email ?? shipmentDetails?.receiver?.email ?? null
+                  : shipmentDetails?.transporter?.email ?? null,
+              image:
+                loaded.shipment.transporterId === session.user.id
+                  ? shipmentDetails?.sender?.image ?? shipmentDetails?.receiver?.image ?? null
+                  : shipmentDetails?.transporter?.image ?? null,
+            }
+          : null,
+        presence: counterpartPresence,
+        pagination: paginated
+          ? {
+              hasMore: events.length > take,
+              nextCursor:
+                events.length > take && oldestLoaded
+                  ? encodeHistoryCursor({ id: oldestLoaded.id, createdAt: oldestLoaded.createdAt })
+                  : null,
+              take,
+            }
+          : null,
+        events: normalizedEvents,
       })
     );
   } catch (error) {

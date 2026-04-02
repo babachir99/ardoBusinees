@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const take = parseConversationTake(request.nextUrl.searchParams.get("take") ?? undefined);
   const shopCursor = request.nextUrl.searchParams.get("shopCursor");
   const tiakCursor = request.nextUrl.searchParams.get("tiakCursor");
+  const gpCursor = request.nextUrl.searchParams.get("gpCursor");
 
   const sellerProfile = await prisma.sellerProfile.findUnique({
     where: { userId: session.user.id },
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     take,
     shopCursor,
     tiakCursor,
+    gpCursor,
   });
 
   return NextResponse.json(payload);
