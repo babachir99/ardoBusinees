@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 import { formatMoney } from "@/lib/format";
@@ -93,14 +93,22 @@ export default function InquiryOffersPanel({
     return labels.expired;
   };
 
-  const refreshOffers = async () => {
+  const refreshOffers = useCallback(async () => {
     const res = await fetch(`/api/inquiries/${inquiryId}/offers`, {
       cache: "no-store",
     });
     if (!res.ok) return;
     const data = (await res.json()) as OfferItem[];
     setOffers(data);
-  };
+  }, [inquiryId]);
+
+  useEffect(() => {
+    setOffers(initialOffers);
+  }, [initialOffers]);
+
+  useEffect(() => {
+    void refreshOffers();
+  }, [refreshOffers]);
 
   const createOffer = async () => {
     const amountMajor = Number(amount);

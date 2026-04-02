@@ -62,6 +62,199 @@ function buildOpenStreetMapHref(latitude: number, longitude: number) {
   return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
 }
 
+const VIEWER_LOCATION_REFRESH_MS = 8000;
+const SHARE_LOCATION_REFRESH_MS = 12000;
+const STALE_LOCATION_MS = 60000;
+const VERY_STALE_LOCATION_MS = 180000;
+
+function formatRelativeTime(locale: string, value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  const diffMs = Date.now() - parsed.getTime();
+  const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
+
+  if (diffSeconds < 5) {
+    return locale === "fr" ? "a l'instant" : "just now";
+  }
+
+  if (diffSeconds < 60) {
+    return locale === "fr" ? `il y a ${diffSeconds}s` : `${diffSeconds}s ago`;
+  }
+
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return locale === "fr" ? `il y a ${diffMinutes} min` : `${diffMinutes} min ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  return locale === "fr" ? `il y a ${diffHours} h` : `${diffHours}h ago`;
+}
+
+function formatSpeed(locale: string, speed: number | null) {
+  if (speed === null || Number.isNaN(speed) || speed <= 0) {
+    return locale === "fr" ? "A l'arret" : "Stopped";
+  }
+
+  const kmh = Math.round(speed * 3.6);
+  return `${kmh} km/h`;
+}
+
+function formatHeading(locale: string, heading: number | null) {
+  if (heading === null || Number.isNaN(heading)) {
+    return locale === "fr" ? "Cap indisponible" : "Heading unavailable";
+  }
+
+  const normalized = ((heading % 360) + 360) % 360;
+  const directions = locale === "fr"
+    ? ["Nord", "Nord-Est", "Est", "Sud-Est", "Sud", "Sud-Ouest", "Ouest", "Nord-Ouest"]
+    : ["North", "North-East", "East", "South-East", "South", "South-West", "West", "North-West"];
+  const index = Math.round(normalized / 45) % directions.length;
+  return `${directions[index]} - ${Math.round(normalized)}deg`;
+}
+
+function formatDistance(locale: string, meters: number | null) {
+  if (meters === null || !Number.isFinite(meters) || meters <= 0) {
+    return locale === "fr" ? "Distance indisponible" : "Distance unavailable";
+  }
+
+  if (meters < 1000) {
+    return `${meters} m`;
+  }
+
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(locale: string, seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds) || seconds <= 0) {
+    return locale === "fr" ? "ETA indisponible" : "ETA unavailable";
+  }
+
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) {
+    return locale === "fr" ? `${minutes} min` : `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return locale === "fr"
+    ? `${hours} h ${remainingMinutes} min`
+    : `${hours}h ${remainingMinutes} min`;
+}
+
+function getRouteSourceLabel(
+  locale: string,
+  source: "osrm" | "geodesic" | "none" | undefined
+) {
+  if (source === "osrm") {
+    return locale === "fr" ? "ETA routiere" : "Route ETA";
+  }
+
+  if (source === "geodesic") {
+    return locale === "fr" ? "ETA estimee" : "Estimated ETA";
+  }
+
+  return locale === "fr" ? "ETA indisponible" : "ETA unavailable";
+}
+
+function getLocationSignalTone(locale: string, ageMs: number | null) {
+  if (ageMs === null) {
+    return {
+      label: locale === "fr" ? "En attente" : "Waiting",
+      hint: locale === "fr" ? "Aucune position partagee pour le moment." : "No shared location yet.",
+      badgeClass: "border-white/15 bg-white/5 text-zinc-200",
+    };
+  }
+
+  if (ageMs <= STALE_LOCATION_MS) {
+    return {
+      label: locale === "fr" ? "Live" : "Live",
+      hint: locale === "fr" ? "Signal recent et exploitable." : "Fresh signal available.",
+      badgeClass: "border-emerald-300/40 bg-emerald-300/15 text-emerald-100",
+    };
+  }
+
+  if (ageMs <= VERY_STALE_LOCATION_MS) {
+    return {
+      label: locale === "fr" ? "Signal faible" : "Weak signal",
+      hint: locale === "fr" ? "Derniere position un peu ancienne." : "Latest position is getting older.",
+      badgeClass: "border-amber-300/40 bg-amber-300/15 text-amber-100",
+    };
+  }
+
+  return {
+    label: locale === "fr" ? "Hors ligne" : "Offline",
+    hint: locale === "fr" ? "Le suivi semble interrompu." : "Tracking looks paused.",
+    badgeClass: "border-rose-300/35 bg-rose-300/10 text-rose-100",
+  };
+}
+
+function getEtaHint(
+  locale: string,
+  status: TiakDelivery["status"] | null,
+  speed: number | null,
+  ageMs: number | null
+) {
+  if (!status || ageMs === null || ageMs > VERY_STALE_LOCATION_MS) {
+    return {
+      label: locale === "fr" ? "Indisponible" : "Unavailable",
+      hint: locale === "fr" ? "ETA indicative en attente d'un signal fiable." : "Indicative ETA is waiting for a fresh signal.",
+    };
+  }
+
+  if (status === "ACCEPTED") {
+    return {
+      label: locale === "fr" ? "Approche pickup" : "Approaching pickup",
+      hint: locale === "fr" ? "Le coursier se rapproche du point de collecte." : "Courier is moving toward pickup.",
+    };
+  }
+
+  if (status === "PICKED_UP") {
+    const kmh = speed !== null && speed > 0 ? speed * 3.6 : 0;
+    if (kmh >= 30) {
+      return {
+        label: locale === "fr" ? "Tres proche" : "Very close",
+        hint: locale === "fr" ? "Fenetre ETA courte si le rythme reste stable." : "Short ETA window if pace remains stable.",
+      };
+    }
+    if (kmh >= 15) {
+      return {
+        label: locale === "fr" ? "En route" : "On the way",
+        hint: locale === "fr" ? "Progression reguliere vers la destination." : "Steady progress toward destination.",
+      };
+    }
+    if (kmh > 0) {
+      return {
+        label: locale === "fr" ? "Progression lente" : "Slow progress",
+        hint: locale === "fr" ? "ETA plus large tant que la vitesse reste basse." : "Wider ETA window while speed stays low.",
+      };
+    }
+    return {
+      label: locale === "fr" ? "Pause courte" : "Short stop",
+      hint: locale === "fr" ? "Le coursier semble momentanement a l'arret." : "Courier appears briefly stopped.",
+    };
+  }
+
+  if (status === "DELIVERED") {
+    return {
+      label: locale === "fr" ? "Livre" : "Delivered",
+      hint: locale === "fr" ? "En attente de confirmation du client." : "Waiting for customer confirmation.",
+    };
+  }
+
+  if (status === "COMPLETED") {
+    return {
+      label: locale === "fr" ? "Termine" : "Completed",
+      hint: locale === "fr" ? "La course est finalisee." : "Delivery is finalized.",
+    };
+  }
+
+  return {
+    label: locale === "fr" ? "Suivi actif" : "Tracking active",
+    hint: locale === "fr" ? "Le suivi est actif sur cette course." : "Tracking is active for this delivery.",
+  };
+}
+
 function parseRatingNote(note: string | null) {
   if (!note) return null;
   const match = /^RATING:(\d)(?:\|(.*))?$/i.exec(note.trim());
@@ -210,6 +403,7 @@ export default function TiakDeliveryDetails({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [sharingMessage, setSharingMessage] = useState<string | null>(null);
+  const [locationRefreshNonce, setLocationRefreshNonce] = useState(0);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const onDeliveryLoadedRef = useRef(onDeliveryLoaded);
   const locationIntervalRef = useRef<number | null>(null);
@@ -354,6 +548,48 @@ export default function TiakDeliveryDetails({
         currentUserId === delivery.courierId)
   );
 
+  const locationAgeMs = useMemo(() => {
+    if (!liveLocation) return null;
+    const parsed = new Date(liveLocation.createdAt);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return Math.max(0, Date.now() - parsed.getTime());
+  }, [liveLocation]);
+
+  const signalTone = useMemo(
+    () => getLocationSignalTone(locale, locationAgeMs),
+    [locale, locationAgeMs]
+  );
+
+  const etaHint = useMemo(
+    () => getEtaHint(locale, delivery?.status ?? null, liveLocation?.speed ?? null, locationAgeMs),
+    [delivery?.status, liveLocation?.speed, locale, locationAgeMs]
+  );
+
+  const speedLabel = useMemo(
+    () => formatSpeed(locale, liveLocation?.speed ?? null),
+    [liveLocation?.speed, locale]
+  );
+
+  const headingLabel = useMemo(
+    () => formatHeading(locale, liveLocation?.heading ?? null),
+    [liveLocation?.heading, locale]
+  );
+
+  const routeEtaLabel = useMemo(
+    () => formatDuration(locale, liveLocation?.route?.etaSeconds ?? null),
+    [liveLocation?.route?.etaSeconds, locale]
+  );
+
+  const routeDistanceLabel = useMemo(
+    () => formatDistance(locale, liveLocation?.route?.distanceMeters ?? null),
+    [liveLocation?.route?.distanceMeters, locale]
+  );
+
+  const routeSourceLabel = useMemo(
+    () => getRouteSourceLabel(locale, liveLocation?.route?.source),
+    [liveLocation?.route?.source, locale]
+  );
+
   useEffect(() => {
     if (canShareLocation) return;
     setSharingLocation(false);
@@ -413,14 +649,14 @@ export default function TiakDeliveryDetails({
     const interval = shouldPoll
       ? window.setInterval(() => {
           void loadLocation(true);
-        }, 15000)
+        }, VIEWER_LOCATION_REFRESH_MS)
       : null;
 
     return () => {
       cancelled = true;
       if (interval) window.clearInterval(interval);
     };
-  }, [canViewLocation, delivery, deliveryId, locale, open]);
+  }, [canViewLocation, delivery, deliveryId, locale, locationRefreshNonce, open]);
 
   useEffect(() => {
     if (!sharingLocation || !canShareLocation || typeof window === "undefined") return;
@@ -515,7 +751,7 @@ export default function TiakDeliveryDetails({
     void publishPosition();
     locationIntervalRef.current = window.setInterval(() => {
       void publishPosition();
-    }, 20000);
+    }, SHARE_LOCATION_REFRESH_MS);
 
     return () => {
       cancelled = true;
@@ -659,103 +895,179 @@ export default function TiakDeliveryDetails({
             </section>
 
             {(canViewLocation || canShareLocation) ? (
-              <section className="rounded-xl border border-emerald-300/20 bg-emerald-300/5 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h4 className="text-sm font-semibold text-white">
-                      {locale === "fr" ? "Suivi sur carte" : "Live map tracking"}
-                    </h4>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      {liveLocation
-                        ? locale === "fr"
-                          ? `Derniere position connue: ${formatDate(liveLocation.createdAt)}`
-                          : `Last known position: ${formatDate(liveLocation.createdAt)}`
-                        : locale === "fr"
-                          ? "Aucune position partagee pour le moment."
-                          : "No shared location yet."}
+              <section className="rounded-2xl border border-emerald-300/20 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_45%),rgba(6,95,70,0.08)] p-4 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-semibold text-white">
+                        {locale === "fr" ? "Suivi sur carte" : "Live map tracking"}
+                      </h4>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${signalTone.badgeClass}`}>
+                        {signalTone.label}
+                      </span>
+                      {liveLocation ? (
+                        <span className="rounded-full border border-white/10 bg-zinc-900/70 px-2.5 py-1 text-[11px] text-zinc-300">
+                          {locale === "fr" ? "Maj" : "Updated"} {formatRelativeTime(locale, liveLocation.createdAt)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-zinc-400">{signalTone.hint}</p>
+                    <p className="text-[11px] text-zinc-500">
+                      {locale === "fr"
+                        ? "Refresh auto toutes les 8s pour le client, partage coursier toutes les 12s."
+                        : "Auto-refresh every 8s for viewers, courier sharing every 12s."}
                     </p>
                   </div>
 
-                  {canShareLocation ? (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setSharingMessage(null);
                         setLocationError(null);
-                        setSharingLocation((value) => !value);
+                        setLocationRefreshNonce((value) => value + 1);
                       }}
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                        sharingLocation
-                          ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100"
-                          : "border-white/20 text-white hover:border-emerald-300/50"
-                      }`}
+                      className="rounded-full border border-white/15 bg-zinc-950/60 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-emerald-300/50 hover:text-white"
                     >
-                      {sharingLocation
+                      {locationLoading
                         ? locale === "fr"
-                          ? "Pause position"
-                          : "Pause location"
+                          ? "Actualisation..."
+                          : "Refreshing..."
                         : locale === "fr"
-                          ? "Partager ma position"
-                          : "Share my location"}
+                          ? "Actualiser"
+                          : "Refresh"}
                     </button>
-                  ) : null}
+
+                    {canShareLocation ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSharingMessage(null);
+                          setLocationError(null);
+                          setSharingLocation((value) => !value);
+                        }}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          sharingLocation
+                            ? "border-emerald-300/60 bg-emerald-300/15 text-emerald-100"
+                            : "border-white/20 text-white hover:border-emerald-300/50"
+                        }`}
+                      >
+                        {sharingLocation
+                          ? locale === "fr"
+                            ? "Pause position"
+                            : "Pause location"
+                          : locale === "fr"
+                            ? "Partager ma position"
+                            : "Share my location"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
-                {locationLoading ? (
-                  <p className="mt-3 text-xs text-zinc-400">
-                    {locale === "fr" ? "Chargement position..." : "Loading location..."}
+                {locationError ? (
+                  <p className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs text-rose-200">
+                    {locationError}
                   </p>
                 ) : null}
 
-                {locationError ? (
-                  <p className="mt-3 text-xs text-rose-300">{locationError}</p>
-                ) : null}
-
                 {sharingMessage ? (
-                  <p className="mt-3 text-xs text-emerald-300">{sharingMessage}</p>
+                  <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs text-emerald-200">
+                    {sharingMessage}
+                  </p>
                 ) : null}
 
                 {liveLocation ? (
-                  <div className="mt-3 space-y-3">
-                    <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-3">
-                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
-                        <span className="text-zinc-500">Lat</span>
-                        <p className="mt-1 font-medium text-white">{liveLocation.latitude.toFixed(5)}</p>
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-2 xl:grid-cols-5">
+                      <div className="rounded-xl border border-white/10 bg-zinc-950/70 px-3 py-3">
+                        <span className="text-zinc-500">{routeSourceLabel}</span>
+                        <p className="mt-1 text-sm font-semibold text-white">{routeEtaLabel}</p>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {liveLocation.route?.waypointLabel
+                            ? `${liveLocation.route.waypointType === "PICKUP"
+                                ? locale === "fr"
+                                  ? "Vers pickup"
+                                  : "To pickup"
+                                : locale === "fr"
+                                  ? "Vers livraison"
+                                  : "To dropoff"}: ${liveLocation.route.waypointLabel}`
+                            : etaHint.hint}
+                        </p>
                       </div>
-                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
-                        <span className="text-zinc-500">Lng</span>
-                        <p className="mt-1 font-medium text-white">{liveLocation.longitude.toFixed(5)}</p>
+                      <div className="rounded-xl border border-white/10 bg-zinc-950/70 px-3 py-3">
+                        <span className="text-zinc-500">{locale === "fr" ? "Distance restante" : "Remaining distance"}</span>
+                        <p className="mt-1 text-sm font-semibold text-white">{routeDistanceLabel}</p>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {etaHint.label}
+                        </p>
                       </div>
-                      <div className="rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2">
+                      <div className="rounded-xl border border-white/10 bg-zinc-950/70 px-3 py-3">
+                        <span className="text-zinc-500">{locale === "fr" ? "Vitesse" : "Speed"}</span>
+                        <p className="mt-1 text-sm font-semibold text-white">{speedLabel}</p>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {locale === "fr" ? "Basee sur le dernier signal partage." : "Based on the latest shared ping."}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-zinc-950/70 px-3 py-3">
+                        <span className="text-zinc-500">{locale === "fr" ? "Direction" : "Heading"}</span>
+                        <p className="mt-1 text-sm font-semibold text-white">{headingLabel}</p>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {locale === "fr" ? "Cap du dernier mouvement mesure." : "Heading from the last measured movement."}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-zinc-950/70 px-3 py-3">
                         <span className="text-zinc-500">{locale === "fr" ? "Precision" : "Accuracy"}</span>
-                        <p className="mt-1 font-medium text-white">
-                          {liveLocation.accuracy !== null
-                            ? `${Math.round(liveLocation.accuracy)} m`
-                            : "-"}
+                        <p className="mt-1 text-sm font-semibold text-white">
+                          {liveLocation.accuracy !== null ? `${Math.round(liveLocation.accuracy)} m` : "-"}
+                        </p>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          {locale === "fr" ? "Qualite du point GPS courant." : "Quality of the current GPS sample."}
                         </p>
                       </div>
                     </div>
 
-                    <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-[0_12px_30px_rgba(0,0,0,0.24)]">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-zinc-950/90 px-4 py-3 text-xs text-zinc-300">
+                        <div>
+                          <p className="font-semibold text-white">
+                            {delivery.pickupArea} -&gt; {delivery.dropoffArea}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            {locale === "fr"
+                              ? `Signal recu ${formatRelativeTime(locale, liveLocation.createdAt)}`
+                              : `Signal received ${formatRelativeTime(locale, liveLocation.createdAt)}`}
+                          </p>
+                        </div>
+                        <a
+                          href={buildOpenStreetMapHref(liveLocation.latitude, liveLocation.longitude)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 py-1 font-semibold text-emerald-200 transition hover:border-emerald-300/60"
+                        >
+                          {locale === "fr" ? "Ouvrir la carte" : "Open map"}
+                        </a>
+                      </div>
+
                       <iframe
                         title={locale === "fr" ? "Carte de suivi Tiak" : "Tiak tracking map"}
                         src={buildOpenStreetMapEmbedUrl(liveLocation.latitude, liveLocation.longitude)}
-                        className="h-56 w-full"
+                        className="h-64 w-full"
                         loading="lazy"
                         referrerPolicy="no-referrer-when-downgrade"
                       />
                     </div>
-
-                    <a
-                      href={buildOpenStreetMapHref(liveLocation.latitude, liveLocation.longitude)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex text-xs font-semibold text-emerald-300 underline"
-                    >
-                      {locale === "fr" ? "Ouvrir la carte" : "Open map"}
-                    </a>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-zinc-950/40 px-4 py-5 text-xs text-zinc-400">
+                    {locationLoading
+                      ? locale === "fr"
+                        ? "Chargement du signal GPS..."
+                        : "Loading GPS signal..."
+                      : locale === "fr"
+                        ? "Le suivi s'activera des que le coursier partagera sa position."
+                        : "Tracking will appear as soon as the courier starts sharing location."}
+                  </div>
+                )}
               </section>
             ) : null}
 

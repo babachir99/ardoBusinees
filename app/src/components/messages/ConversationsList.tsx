@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useMemo, useState } from "react";
-import { Link } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import ChatPanel from "@/components/messages/ChatPanel";
 import OpsDetailsPanel from "@/components/messages/OpsDetailsPanel";
@@ -82,8 +82,13 @@ type Props = {
   meId: string;
   conversations: TiakConversationSummary[];
   inquiryConversations: InquiryConversationSummary[];
-  initialSelectedId: string | null;
+  initialSelectedConversationId: string | null;
   initialQuickFilter?: QuickFilter;
+  initialServiceFilter?: ServiceType;
+  initialQuery?: string;
+  serverConversationTake: number;
+  hasMoreShopConversations: boolean;
+  hasMoreTiakConversations: boolean;
 };
 
 type QuickFilter = "ALL" | "UNREAD" | "OPEN" | "CLOSED";
@@ -271,23 +276,34 @@ export default function ConversationsList({
   meId,
   conversations,
   inquiryConversations,
-  initialSelectedId,
+  initialSelectedConversationId,
   initialQuickFilter = "ALL",
+  initialServiceFilter = "ALL",
+  initialQuery = "",
+  serverConversationTake,
+  hasMoreShopConversations,
+  hasMoreTiakConversations,
 }: Props) {
   const isFr = locale === "fr";
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
-    initialSelectedId && conversations.some((entry) => entry.id === initialSelectedId)
-      ? `tiak:${initialSelectedId}`
+    initialSelectedConversationId &&
+      ((initialSelectedConversationId.startsWith("tiak:") &&
+        conversations.some((entry) => `tiak:${entry.id}` === initialSelectedConversationId)) ||
+        (initialSelectedConversationId.startsWith("shop:") &&
+          inquiryConversations.some((entry) => `shop:${entry.id}` === initialSelectedConversationId)))
+      ? initialSelectedConversationId
       : inquiryConversations[0]
         ? `shop:${inquiryConversations[0].id}`
         : conversations[0]
           ? `tiak:${conversations[0].id}`
           : null
   );
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(initialQuickFilter);
-  const [serviceFilter, setServiceFilter] = useState<ServiceType>("ALL");
+  const [serviceFilter, setServiceFilter] = useState<ServiceType>(initialServiceFilter);
   const [visibleCount, setVisibleCount] = useState(20);
   const [manuallyReadTiak, setManuallyReadTiak] = useState<Record<string, true>>({});
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -453,6 +469,28 @@ export default function ConversationsList({
     }`;
 
   const activeServiceLabel = serviceLabel(serviceFilter, isFr);
+  const canLoadMoreFromServer =
+    serviceFilter === "ALL"
+      ? hasMoreShopConversations || hasMoreTiakConversations
+      : serviceFilter === "SHOP"
+        ? hasMoreShopConversations
+        : serviceFilter === "TIAK"
+          ? hasMoreTiakConversations
+          : false;
+
+  const handleServerLoadMore = () => {
+    const queryParams: Record<string, string> = {
+      take: String(serverConversationTake + 24),
+    };
+
+    if (query.trim()) queryParams.q = query.trim();
+    if (serviceFilter !== "ALL") queryParams.service = serviceFilter;
+    if (quickFilter !== "ALL") queryParams.quick = quickFilter;
+    if (resolvedSelectedConversationId) queryParams.thread = resolvedSelectedConversationId;
+    if (selectedTiakConversation?.id) queryParams.deliveryId = selectedTiakConversation.id;
+
+    router.push({ pathname, query: queryParams }, { scroll: false });
+  };
 
   const shopSidebar = selectedShopConversation ? (
     <div className="space-y-4">
@@ -645,6 +683,18 @@ export default function ConversationsList({
             className="mt-3 w-full rounded-xl border border-white/15 bg-zinc-950/70 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:border-white/35"
           >
             {isFr ? "Afficher plus (+20)" : "Load more (+20)"}
+          </button>
+        ) : null}
+
+        {canLoadMoreFromServer ? (
+          <button
+            type="button"
+            onClick={handleServerLoadMore}
+            className="mt-3 w-full rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/45 hover:bg-emerald-300/15"
+          >
+            {isFr
+              ? "Charger des conversations plus anciennes (+24)"
+              : "Load older conversations (+24)"}
           </button>
         ) : null}
       </div>

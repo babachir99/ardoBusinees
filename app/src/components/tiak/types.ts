@@ -97,4 +97,16 @@ export type TiakLiveLocation = {
   heading: number | null;
   speed: number | null;
   createdAt: string;
+  route?: {
+    waypointType: "PICKUP" | "DROPOFF" | null;
+    waypointLabel: string | null;
+    distanceMeters: number | null;
+    etaSeconds: number | null;
+    source: "osrm" | "geodesic" | "none";
+    destination: {
+      latitude: number;
+      longitude: number;
+    } | null;
+    refreshedAt: string;
+  } | null;
 };

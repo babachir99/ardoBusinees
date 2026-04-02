@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
+import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 
 type ThreadState = {
   delivery: TiakDelivery | null;
@@ -189,6 +190,7 @@ export default function ChatPanel({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const wasNearBottomRef = useRef(true);
+  const pollIntervalMs = useAdaptivePolling({ active: Boolean(deliveryId) });
 
   const loadThread = useCallback(
     async (silent = false) => {
@@ -246,14 +248,14 @@ export default function ChatPanel({
   }, [loadThread, refreshNonce]);
 
   useEffect(() => {
-    if (!deliveryId) return;
+    if (!deliveryId || pollIntervalMs === null) return;
 
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       void loadThread(true);
-    }, 5000);
+    }, pollIntervalMs);
 
-    return () => clearInterval(interval);
-  }, [deliveryId, loadThread]);
+    return () => window.clearInterval(interval);
+  }, [deliveryId, loadThread, pollIntervalMs]);
 
   useEffect(() => {
     onThreadStateChange({ delivery, events, loading });

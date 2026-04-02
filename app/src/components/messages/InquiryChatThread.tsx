@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 
 type InquiryMessage = {
   id: string;
@@ -48,6 +49,7 @@ export default function InquiryChatThread({
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pollIntervalMs = useAdaptivePolling({ active: Boolean(inquiryId) });
 
   const loadMessages = useCallback(
     async (silent = false) => {
@@ -83,12 +85,14 @@ export default function InquiryChatThread({
   }, [loadMessages]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void loadMessages(true);
-    }, 5000);
+    if (pollIntervalMs === null) return;
 
-    return () => clearInterval(interval);
-  }, [loadMessages]);
+    const interval = window.setInterval(() => {
+      void loadMessages(true);
+    }, pollIntervalMs);
+
+    return () => window.clearInterval(interval);
+  }, [loadMessages, pollIntervalMs]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

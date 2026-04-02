@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TiakDelivery, type TiakDeliveryEvent } from "@/components/tiak/types";
+import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 
 type Props = {
   locale: string;
@@ -155,6 +156,7 @@ export default function TiakConversationThread({ locale, meId, deliveryId }: Pro
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [ratingSuccess, setRatingSuccess] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const pollIntervalMs = useAdaptivePolling({ active: Boolean(deliveryId) });
 
   const loadThread = useCallback(
     async (silent = false) => {
@@ -197,12 +199,14 @@ export default function TiakConversationThread({ locale, meId, deliveryId }: Pro
   }, [loadThread]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void loadThread(true);
-    }, 5000);
+    if (pollIntervalMs === null) return;
 
-    return () => clearInterval(interval);
-  }, [loadThread]);
+    const interval = window.setInterval(() => {
+      void loadThread(true);
+    }, pollIntervalMs);
+
+    return () => window.clearInterval(interval);
+  }, [loadThread, pollIntervalMs]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -310,7 +314,9 @@ export default function TiakConversationThread({ locale, meId, deliveryId }: Pro
       </div>
 
       <p className="mt-2 text-[11px] text-zinc-500">
-        {isFr ? "Synchronise automatiquement toutes les 5 secondes." : "Auto-sync every 5 seconds."}
+        {isFr
+          ? "Synchronisation legere tant que la conversation reste active."
+          : "Light background sync while the thread stays active."}
       </p>
 
       <div className="mt-3 h-[360px] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950/70 p-3">
