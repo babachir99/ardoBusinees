@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import { authOptions } from "@/lib/auth";

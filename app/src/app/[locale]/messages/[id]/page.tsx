@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";

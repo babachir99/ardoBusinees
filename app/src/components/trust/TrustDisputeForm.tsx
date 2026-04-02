@@ -70,7 +70,11 @@ export default function TrustDisputeForm({ locale }: { locale: string }) {
       <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm">
           <span className="text-zinc-300">{isFr ? "Verticale" : "Vertical"}</span>
-          <select value={vertical} onChange={(e) => setVertical(e.target.value as any)} className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white">
+          <select
+            value={vertical}
+            onChange={(e) => setVertical(e.target.value as (typeof verticals)[number])}
+            className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white"
+          >
             {verticals.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>

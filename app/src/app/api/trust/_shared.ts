@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { Session } from "next-auth";
+import type { PrismaClient } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasUserRole } from "@/lib/userRoles";
@@ -12,6 +14,55 @@ export const TRUST_DISPUTE_STATUSES_PUBLIC = ["OPEN", "UNDER_REVIEW", "RESOLVED"
 export const TRUST_DISPUTE_STATUS_DB = ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"] as const;
 
 export type TrustPublicDisputeStatus = (typeof TRUST_DISPUTE_STATUSES_PUBLIC)[number];
+export type TrustVertical = (typeof TRUST_VERTICALS)[number];
+export type TrustDb = PrismaClient;
+type TrustUserSummaryRecord = {
+  id: string;
+  name: string | null;
+};
+export type TrustReportRecord = {
+  id: string;
+  reporterId: string;
+  reportedId: string;
+  assignedAdminId: string | null;
+  reason: string;
+  description: string | null;
+  proofUrls: string[];
+  status: string;
+  resolutionCode: string | null;
+  internalNote: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  reporter?: TrustUserSummaryRecord | null;
+  reported?: TrustUserSummaryRecord | null;
+  assignedAdmin?: TrustUserSummaryRecord | null;
+};
+export type TrustDisputeRecord = {
+  id: string;
+  userId: string;
+  assignedAdminId: string | null;
+  orderId: string | null;
+  vertical: TrustVertical;
+  reason: string;
+  description: string;
+  proofUrls: string[];
+  status: string;
+  resolutionCode: string | null;
+  internalNote: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  user?: TrustUserSummaryRecord | null;
+  assignedAdmin?: TrustUserSummaryRecord | null;
+};
+export type TrustBlockRecord = {
+  id: string;
+  blockerId: string;
+  blockedId: string;
+  createdAt: Date;
+  blocked?: TrustUserSummaryRecord | null;
+};
 
 export const TRUST_DUPLICATE_WINDOW_MS = 60 * 60 * 1000;
 
@@ -37,13 +88,17 @@ export async function enforceTrustCreateRateLimit(
   );
 }
 
-export function getTrustDb() {
-  return prisma as any;
+function hasDelegate(db: TrustDb, key: "report" | "trustDispute" | "userBlock") {
+  return key in (db as object) && Boolean((db as unknown as Record<string, unknown>)[key]);
+}
+
+export function getTrustDb(): TrustDb {
+  return prisma as TrustDb;
 }
 
 export function hasTrustDelegates() {
   const db = getTrustDb();
-  return Boolean(db?.report && db?.trustDispute && db?.userBlock);
+  return hasDelegate(db, "report") && hasDelegate(db, "trustDispute") && hasDelegate(db, "userBlock");
 }
 
 export function trustJson<T extends Record<string, unknown>>(
@@ -76,7 +131,7 @@ export async function requireTrustSession(correlationId: string) {
   return { session, response: null as NextResponse | null };
 }
 
-export function requireTrustAdmin(session: any, correlationId: string) {
+export function requireTrustAdmin(session: Session | null, correlationId: string) {
   if (!session?.user?.id) {
     return trustError("NO_SESSION", "Authentication required.", 401, correlationId);
   }
@@ -139,7 +194,9 @@ export function validateReasonAndDescription(reason: unknown, description: unkno
 
 export function parseVertical(value: unknown) {
   const vertical = String(value ?? "").trim().toUpperCase();
-  return (TRUST_VERTICALS as readonly string[]).includes(vertical) ? vertical : null;
+  return (TRUST_VERTICALS as readonly string[]).includes(vertical)
+    ? (vertical as TrustVertical)
+    : null;
 }
 
 export function parseReportStatus(value: unknown) {
@@ -150,7 +207,9 @@ export function parseReportStatus(value: unknown) {
 export function parseTrustDisputeStatusInput(value: unknown): (typeof TRUST_DISPUTE_STATUS_DB)[number] | null {
   const raw = String(value ?? "").trim().toUpperCase();
   if (raw === "UNDER_REVIEW") return "IN_REVIEW";
-  return (TRUST_DISPUTE_STATUS_DB as readonly string[]).includes(raw) ? (raw as any) : null;
+  return (TRUST_DISPUTE_STATUS_DB as readonly string[]).includes(raw)
+    ? (raw as (typeof TRUST_DISPUTE_STATUS_DB)[number])
+    : null;
 }
 
 export function parseOptionalStatus(value: unknown) {
@@ -188,34 +247,48 @@ export function presentTrustDisputeStatus(status: string): TrustPublicDisputeSta
   return "OPEN";
 }
 
-export function serializeReport(record: any) {
+function serializeUserSummary(user: { id: string; name: string | null } | null | undefined) {
+  return user
+    ? {
+        id: user.id,
+        name: user.name ?? null,
+      }
+    : undefined;
+}
+
+export function hasTrustAdminRole(
+  user:
+    | {
+        role?: string | null;
+        roleAssignments?:
+          | Array<{
+              role?: string | null;
+              status?: string | null;
+            }>
+          | null;
+      }
+    | null
+    | undefined
+) {
+  if (!user) return false;
+  if (user.role === "ADMIN") return true;
+  const assignments = Array.isArray(user.roleAssignments) ? user.roleAssignments : [];
+  return assignments.some((item) => item?.role === "ADMIN" && item?.status === "ACTIVE");
+}
+
+export function serializeReport(record: TrustReportRecord) {
   return {
     id: record.id,
     reporterId: record.reporterId,
     reportedId: record.reportedId,
-    reporter: record.reporter
-      ? {
-          id: record.reporter.id,
-          name: record.reporter.name ?? null,
-        }
-      : undefined,
-    reported: record.reported
-      ? {
-          id: record.reported.id,
-          name: record.reported.name ?? null,
-        }
-      : undefined,
+    reporter: serializeUserSummary(record.reporter),
+    reported: serializeUserSummary(record.reported),
     reason: record.reason,
     description: record.description ?? null,
     proofUrls: Array.isArray(record.proofUrls) ? record.proofUrls : [],
     status: record.status,
     assignedAdminId: record.assignedAdminId ?? null,
-    assignedAdmin: record.assignedAdmin
-      ? {
-          id: record.assignedAdmin.id,
-          name: record.assignedAdmin.name ?? null,
-        }
-      : undefined,
+    assignedAdmin: serializeUserSummary(record.assignedAdmin),
     resolutionCode: record.resolutionCode ?? null,
     internalNote: record.internalNote ?? null,
     reviewedAt: record.reviewedAt ?? null,
@@ -224,16 +297,11 @@ export function serializeReport(record: any) {
   };
 }
 
-export function serializeTrustDispute(record: any) {
+export function serializeTrustDispute(record: TrustDisputeRecord) {
   return {
     id: record.id,
     userId: record.userId,
-    user: record.user
-      ? {
-          id: record.user.id,
-          name: record.user.name ?? null,
-        }
-      : undefined,
+    user: serializeUserSummary(record.user),
     orderId: record.orderId ?? null,
     vertical: record.vertical,
     reason: record.reason,
@@ -241,12 +309,7 @@ export function serializeTrustDispute(record: any) {
     proofUrls: Array.isArray(record.proofUrls) ? record.proofUrls : [],
     status: presentTrustDisputeStatus(record.status),
     assignedAdminId: record.assignedAdminId ?? null,
-    assignedAdmin: record.assignedAdmin
-      ? {
-          id: record.assignedAdmin.id,
-          name: record.assignedAdmin.name ?? null,
-        }
-      : undefined,
+    assignedAdmin: serializeUserSummary(record.assignedAdmin),
     resolutionCode: record.resolutionCode ?? null,
     internalNote: record.internalNote ?? null,
     reviewedAt: record.reviewedAt ?? null,
@@ -255,18 +318,13 @@ export function serializeTrustDispute(record: any) {
   };
 }
 
-export function serializeBlock(record: any) {
+export function serializeBlock(record: TrustBlockRecord) {
   return {
     id: record.id,
     blockerId: record.blockerId,
     blockedId: record.blockedId,
     createdAt: record.createdAt,
-    blockedUser: record.blocked
-      ? {
-          id: record.blocked.id,
-          name: record.blocked.name ?? null,
-        }
-      : undefined,
+    blockedUser: serializeUserSummary(record.blocked),
   };
 }
 

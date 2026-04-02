@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -88,9 +90,7 @@ function inferAttributeFields(category?: CategoryOption): AttributeField[] {
   if (!category) return [];
 
   const currentSlug = category.slug.toLowerCase();
-  const currentName = category.name.toLowerCase();
   const rootSlug = (category.parent?.slug ?? category.slug).toLowerCase();
-  const rootName = (category.parent?.name ?? category.name).toLowerCase();
 
   const isRealEstateCategory = rootSlug === "immobilier" || currentSlug.startsWith("immobilier-");
   if (isRealEstateCategory) {

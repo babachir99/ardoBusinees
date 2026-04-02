@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { Vertical } from "@/lib/verticals";
 
 const allDisputeStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"] as const;
-const blockingStatuses = ["OPEN", "IN_REVIEW"] as const;
-
 type DisputeStatusValue = (typeof allDisputeStatuses)[number];
 
 function normalizeStatus(value: unknown): DisputeStatusValue | null {

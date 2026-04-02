@@ -54,6 +54,13 @@ function normalizeString(value: unknown) {
   return value.trim();
 }
 
+function normalizeProofUrl(value: unknown) {
+  const text = normalizeString(value);
+  if (!text) return null;
+  if (!text.startsWith("/uploads/")) return null;
+  return text.slice(0, 500);
+}
+
 function toArea(address: string) {
   const base = address.split(",")[0]?.trim() || address.trim();
   return base.slice(0, 72);
@@ -272,6 +279,7 @@ export async function PATCH(
   if (!nextStatus) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
+  const proofUrl = normalizeProofUrl((body as { proofUrl?: unknown }).proofUrl);
 
   const delivery = await prisma.tiakDelivery.findUnique({
     where: { id },
@@ -389,6 +397,13 @@ export async function PATCH(
     );
   }
 
+  if (nextStatus === "DELIVERED" && !proofUrl) {
+    return NextResponse.json(
+      { error: "PROOF_REQUIRED", message: "proofUrl is required before marking delivery as DELIVERED." },
+      { status: 400 }
+    );
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.tiakDelivery.update({
       where: { id: delivery.id },
@@ -402,6 +417,7 @@ export async function PATCH(
             {
               status: nextStatus,
               note: normalizeString(body.note).slice(0, 600) || null,
+              proofUrl,
               actorId: session.user.id,
             },
           ],

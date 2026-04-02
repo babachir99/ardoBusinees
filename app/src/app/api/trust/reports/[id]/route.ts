@@ -4,6 +4,7 @@ import {
   AuditReason,
   getCorrelationId,
   getTrustDb,
+  hasTrustAdminRole,
   hasTrustDelegates,
   parseAssignedAdminInput,
   parseInternalNoteInput,
@@ -16,13 +17,6 @@ import {
   trustError,
   trustJson,
 } from "@/app/api/trust/_shared";
-
-function hasAdminRole(user: any) {
-  if (!user) return false;
-  if (user.role === "ADMIN") return true;
-  const assignments = Array.isArray(user.roleAssignments) ? user.roleAssignments : [];
-  return assignments.some((item: any) => item?.role === "ADMIN" && item?.status === "ACTIVE");
-}
 
 export async function PATCH(
   request: NextRequest,
@@ -100,7 +94,7 @@ export async function PATCH(
           roleAssignments: { select: { role: true, status: true } },
         },
       });
-      if (!assignedAdmin || !hasAdminRole(assignedAdmin)) {
+      if (!assignedAdmin || !hasTrustAdminRole(assignedAdmin)) {
         return trustError("VALIDATION_ERROR", "assignedAdminId must reference an admin user.", 400, correlationId);
       }
     }

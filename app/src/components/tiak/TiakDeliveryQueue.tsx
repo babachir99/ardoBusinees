@@ -185,7 +185,8 @@ export default function TiakDeliveryQueue({
   }, [activeTab, deliveries, pendingOnly, searchTerm, sortKey]);
 
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    const timeoutId = window.setTimeout(() => setVisibleCount(PAGE_SIZE), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [activeTab, pendingOnly, searchTerm, sortKey, deliveries.length]);
 
   const visibleDeliveries = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);

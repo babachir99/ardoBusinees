@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "next-intl";
 import { formatMoney } from "@/lib/format";
 
@@ -82,7 +82,7 @@ export default function AdminPayoutsBoard() {
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  const loadPayouts = async () => {
+  const loadPayouts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -115,11 +115,11 @@ export default function AdminPayoutsBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query, statusFilter]);
 
   useEffect(() => {
-    loadPayouts();
-  }, []);
+    void loadPayouts();
+  }, [loadPayouts]);
 
   const updatePayout = async (id: string) => {
     const current = edits[id];

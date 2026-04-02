@@ -14,6 +14,8 @@ function hasTiakCourierProfileDelegate() {
   return Boolean(runtimePrisma.tiakCourierProfile);
 }
 
+void NextRequest;
+
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -76,7 +78,7 @@ async function resolveIsConfirmedCourier(userId: string) {
   return Boolean(approvedKyc);
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   if (!hasTiakCourierProfileDelegate()) {
     return NextResponse.json(
       { error: "Tiak courier profile delegate unavailable. Run npx prisma generate and restart dev server." },

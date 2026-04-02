@@ -49,13 +49,14 @@ export default function GpTripDetailsPopover({
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    const frameId = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frameId);
   }, []);
 
   useEffect(() => {
     if (open) {
-      setRendered(true);
-      return;
+      const frameId = window.requestAnimationFrame(() => setRendered(true));
+      return () => window.cancelAnimationFrame(frameId);
     }
 
     const timeoutId = window.setTimeout(() => setRendered(false), 140);

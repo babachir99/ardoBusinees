@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import CountryPhoneField from "@/components/forms/CountryPhoneField";
@@ -115,7 +117,7 @@ export default function ProfileEditForm() {
 
   const canSave = !loading && !saving && !uploading && hasUnsavedChanges && !phoneInvalid;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -169,11 +171,11 @@ export default function ProfileEditForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const handlePhoneFieldChange = (next: {
     country: string;

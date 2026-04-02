@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type StoreType = "MARKETPLACE" | "IMMO" | "CARS" | "PRESTA" | "TIAK_TIAK" | "GP";
 
@@ -61,14 +61,14 @@ export default function AdminStoresBoard() {
   const [editForm, setEditForm] = useState<StoreFormState>(initialForm);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     const response = await fetch("/api/admin/categories?active=1");
     if (!response.ok) throw new Error("Impossible de charger les categories");
     const payload = (await response.json()) as Array<{ id: string; name: string }>;
     setCategories(payload.map((item) => ({ id: item.id, name: item.name })));
-  };
+  }, []);
 
-  const loadStores = async () => {
+  const loadStores = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -92,13 +92,13 @@ export default function AdminStoresBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
 
   useEffect(() => {
     Promise.all([loadStores(), loadCategories()]).catch((err) => {
       setError(err instanceof Error ? err.message : "Chargement impossible");
     });
-  }, []);
+  }, [loadCategories, loadStores]);
 
   const toggleCategory = (
     categoryId: string,

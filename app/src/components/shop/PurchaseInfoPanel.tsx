@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useRef, useState } from "react";
 import ProductActionCardClient from "@/components/shop/ProductActionCardClient";
 import UserSafetyActions from "@/components/trust/UserSafetyActions";

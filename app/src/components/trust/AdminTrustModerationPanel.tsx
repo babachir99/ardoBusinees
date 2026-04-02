@@ -198,7 +198,7 @@ export default function AdminTrustModerationPanel({
         {tab === "reports" ? (
           <label className="flex items-center gap-2 text-zinc-300">
             <span>{isFr ? "Statut" : "Status"}</span>
-            <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+            <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value as "ALL" | TrustReportItem["status"])} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
               <option value="ALL">ALL</option>
               {reportStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
@@ -207,14 +207,14 @@ export default function AdminTrustModerationPanel({
           <>
             <label className="flex items-center gap-2 text-zinc-300">
               <span>{isFr ? "Statut" : "Status"}</span>
-              <select value={disputeStatusFilter} onChange={(e) => setDisputeStatusFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+              <select value={disputeStatusFilter} onChange={(e) => setDisputeStatusFilter(e.target.value as "ALL" | TrustDisputeItem["status"])} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
                 <option value="ALL">ALL</option>
                 {disputeStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
               </select>
             </label>
             <label className="flex items-center gap-2 text-zinc-300">
               <span>Vertical</span>
-              <select value={verticalFilter} onChange={(e) => setVerticalFilter(e.target.value as any)} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
+              <select value={verticalFilter} onChange={(e) => setVerticalFilter(e.target.value as "ALL" | TrustDisputeItem["vertical"])} className="rounded-lg border border-white/15 bg-zinc-950 px-2 py-1 text-xs text-zinc-200">
                 <option value="ALL">ALL</option>
                 <option value="SHOP">SHOP</option>
                 <option value="PRESTA">PRESTA</option>

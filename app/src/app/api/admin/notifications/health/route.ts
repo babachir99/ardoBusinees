@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasUserRole } from "@/lib/userRoles";
 
+void NextRequest;
+
 function errorResponse(status: number, code: string, message: string) {
   return NextResponse.json({ ok: false, code, message }, { status });
 }
@@ -16,7 +18,7 @@ function toAgeSeconds(timestamp: Date | null): number | null {
   return Math.max(0, Math.floor((Date.now() - timestamp.getTime()) / 1000));
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {

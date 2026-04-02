@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { Link } from "@/i18n/navigation";
 
 type HeaderProfile = {

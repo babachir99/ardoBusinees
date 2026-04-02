@@ -480,7 +480,14 @@ export async function POST(request: NextRequest) {
             totalCents: groupTotal,
             currency,
             items: {
-              create: group.items.map(({ sellerId: _sellerId, ...orderItem }) => orderItem),
+              create: group.items.map((orderItem) => ({
+                productId: orderItem.productId,
+                unitPriceCents: orderItem.unitPriceCents,
+                quantity: orderItem.quantity,
+                type: orderItem.type,
+                optionColor: orderItem.optionColor,
+                optionSize: orderItem.optionSize,
+              })),
             },
             events: {
               create: [

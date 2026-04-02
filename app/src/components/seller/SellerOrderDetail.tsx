@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
@@ -162,7 +164,7 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
     ).slice(0, 18);
   }, [order]);
 
-  const loadOrder = async () => {
+  const loadOrder = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -179,11 +181,11 @@ export default function SellerOrderDetail({ orderId }: { orderId: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId, t]);
 
   useEffect(() => {
     void loadOrder();
-  }, [orderId]);
+  }, [loadOrder]);
 
   useEffect(() => {
     let cancelled = false;

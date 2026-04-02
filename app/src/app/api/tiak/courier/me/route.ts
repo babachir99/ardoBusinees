@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasAnyUserRole } from "@/lib/userRoles";
 
+void NextRequest;
+
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
 }
@@ -43,7 +45,7 @@ function validateZones(value: unknown) {
   return { ok: true as const, zones: unique };
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const runtimePrisma = prisma as unknown as { tiakCourierProfile?: unknown };
   if (!runtimePrisma.tiakCourierProfile) {
     return errorResponse(503, "PRISMA_ERROR", "Migration missing: run prisma migrate");

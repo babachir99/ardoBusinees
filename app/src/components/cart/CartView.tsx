@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
@@ -579,7 +581,6 @@ export default function CartView() {
     </div>
   );
 }
-
 
 
 

@@ -147,16 +147,22 @@ export async function GET(request: NextRequest) {
     return errorResponse(403, "FORBIDDEN", "Use mine=1 unless admin.");
   }
 
-  const transporterId = mine ? session.user.id : session.user.id;
-
   try {
-    if (mine) {
-      await syncShipmentsForTransporter(transporterId);
+    if (mine && ["ADMIN", "TRANSPORTER", "GP_CARRIER"].includes(session.user.role ?? "")) {
+      await syncShipmentsForTransporter(session.user.id);
     }
 
     const shipments = await runtimePrisma.gpShipment.findMany({
       where: {
-        transporterId,
+        ...(mine
+          ? {
+              OR: [
+                { transporterId: session.user.id },
+                { senderId: session.user.id },
+                { receiverId: session.user.id },
+              ],
+            }
+          : { transporterId: session.user.id }),
         ...(status === "ACTIVE" ? { status: { in: [...activeStatuses] } } : {}),
       },
       orderBy: [{ updatedAt: "desc" }],

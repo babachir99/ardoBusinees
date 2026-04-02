@@ -160,6 +160,33 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  const sanitizeAnalyzedProduct = <
+    T extends {
+      _sharedCategories: number;
+      _similarScore: number;
+      _complementaryScore: number;
+      _createdAt: Date;
+    },
+  >(
+    product: T
+  ): Omit<
+    T,
+    "_sharedCategories" | "_similarScore" | "_complementaryScore" | "_createdAt"
+  > => {
+    const {
+      _sharedCategories,
+      _similarScore,
+      _complementaryScore,
+      _createdAt,
+      ...rest
+    } = product;
+    void _sharedCategories;
+    void _similarScore;
+    void _complementaryScore;
+    void _createdAt;
+    return rest;
+  };
+
   const similar = analyzed
     .filter((product) => product._sharedCategories > 0)
     .sort((a, b) => {
@@ -169,15 +196,7 @@ export async function GET(request: NextRequest) {
       return new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime();
     })
     .slice(0, take)
-    .map(
-      ({
-        _sharedCategories: _ignoredShared,
-        _similarScore: _ignoredSimilar,
-        _complementaryScore: _ignoredComplementary,
-        _createdAt: _ignoredCreatedAt,
-        ...product
-      }) => product
-    );
+    .map((product) => sanitizeAnalyzedProduct(product));
 
   const complementary = analyzed
     .filter((product) => product._sharedCategories === 0)
@@ -188,15 +207,7 @@ export async function GET(request: NextRequest) {
       return new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime();
     })
     .slice(0, take)
-    .map(
-      ({
-        _sharedCategories: _ignoredShared,
-        _similarScore: _ignoredSimilar,
-        _complementaryScore: _ignoredComplementary,
-        _createdAt: _ignoredCreatedAt,
-        ...product
-      }) => product
-    );
+    .map((product) => sanitizeAnalyzedProduct(product));
 
   return NextResponse.json({ similar, complementary });
 }

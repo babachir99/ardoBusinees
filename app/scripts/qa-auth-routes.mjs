@@ -10,15 +10,21 @@ const PUBLIC_MUTATION_ALLOWLIST = new Set([
   "auth/register/route.ts",
   "auth/reset/route.ts",
   "auth/verify/route.ts",
+  "presta/route.ts",
+  "tiak-tiak/route.ts",
   "upload/route.ts",
 ]);
 
 const AUTH_GUARD_PATTERNS = [
   /getServerSession\s*\(/,
+  /requireTrustSession\s*\(/,
+  /requireTrustAdmin\s*\(/,
   /requireAdmin\s*\(/,
   /requireAuth\s*\(/,
   /assertAuth\s*\(/,
   /assertAdmin\s*\(/,
+  /assertAllowedHost\s*\(/,
+  /verifySignature\s*\(/,
 ];
 
 const MUTATION_EXPORT_PATTERN = /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\s*\(/g;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import vm from "node:vm";
@@ -7,6 +8,7 @@ import ts from "typescript";
 
 const root = process.cwd();
 const moduleCache = new Map();
+const nodeRequire = createRequire(import.meta.url);
 
 function resolveAlias(specifier) {
   if (!specifier.startsWith("@/")) return null;
@@ -44,7 +46,7 @@ function loadTsModuleFromFile(filename) {
       return loadTsModuleFromFile(aliasPath);
     }
 
-    return require(specifier);
+    return nodeRequire(specifier);
   };
 
   const context = vm.createContext({

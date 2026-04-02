@@ -34,7 +34,6 @@ export default function TiakCourierActions({
   const [eventMessage, setEventMessage] = useState<string | null>(null);
 
   const isAdmin = currentUserRole === "ADMIN";
-  const isCourierRole = currentUserRole === "COURIER" || isAdmin;
   const isAssignedCourier = Boolean(currentUserId && currentUserId === delivery.courierId);
 
   const canAcceptDirect = false;
@@ -49,6 +48,18 @@ export default function TiakCourierActions({
   }
 
   async function patchStatus(status: TiakDeliveryStatus) {
+    const trimmedProofUrl = proofUrl.trim();
+    const trimmedNote = note.trim();
+
+    if (status === "DELIVERED" && trimmedProofUrl.length === 0) {
+      setError(
+        locale === "fr"
+          ? "Ajoute une preuve de livraison avant de marquer le colis comme livre."
+          : "Add a delivery proof before marking the parcel as delivered."
+      );
+      return;
+    }
+
     setSaving(status);
     setError(null);
     setEventMessage(null);
@@ -57,7 +68,11 @@ export default function TiakCourierActions({
       const response = await fetch(`/api/tiak-tiak/deliveries/${delivery.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          note: trimmedNote || undefined,
+          proofUrl: status === "DELIVERED" ? trimmedProofUrl : undefined,
+        }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -72,6 +87,11 @@ export default function TiakCourierActions({
       }
 
       onDeliveryUpdated(data as TiakDelivery);
+      if (status === "DELIVERED") {
+        setEventMessage(locale === "fr" ? "Livraison marquee avec preuve." : "Delivery marked with proof.");
+        setProofUrl("");
+        setNote("");
+      }
     } catch {
       setError(locale === "fr" ? "Action refusee" : "Action denied");
     } finally {

@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
@@ -297,7 +299,7 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     } finally {
       setProfileLoading(false);
     }
-  }, [isCourierOrAdmin, isLoggedIn]);
+  }, [isCourierOrAdmin, isLoggedIn, locale]);
 
   const refreshPayouts = useCallback(async () => {
     if (!canViewEarnings) {

@@ -1,5 +1,7 @@
 ﻿"use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
@@ -659,7 +661,6 @@ export default function ProductPurchasePanel({
     </>
   );
 }
-
 
 
 

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
 import ChatPanel from "@/components/messages/ChatPanel";
@@ -81,6 +83,7 @@ type Props = {
   conversations: TiakConversationSummary[];
   inquiryConversations: InquiryConversationSummary[];
   initialSelectedId: string | null;
+  initialQuickFilter?: QuickFilter;
 };
 
 type QuickFilter = "ALL" | "UNREAD" | "OPEN" | "CLOSED";
@@ -269,6 +272,7 @@ export default function ConversationsList({
   conversations,
   inquiryConversations,
   initialSelectedId,
+  initialQuickFilter = "ALL",
 }: Props) {
   const isFr = locale === "fr";
 
@@ -282,7 +286,7 @@ export default function ConversationsList({
           : null
   );
   const [query, setQuery] = useState("");
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>(initialQuickFilter);
   const [serviceFilter, setServiceFilter] = useState<ServiceType>("ALL");
   const [visibleCount, setVisibleCount] = useState(20);
   const [manuallyReadTiak, setManuallyReadTiak] = useState<Record<string, true>>({});
@@ -378,15 +382,24 @@ export default function ConversationsList({
     });
   }, [query, quickFilter, serviceFilter, unifiedConversations]);
 
-  useEffect(() => {
-    if (!selectedConversationId || !filteredConversations.some((entry) => entry.id === selectedConversationId)) {
-      setSelectedConversationId(filteredConversations[0]?.id ?? null);
+  const availableServiceTabs = useMemo(() => {
+    const presentTabs = new Set<ServiceType>(["ALL", serviceFilter]);
+
+    for (const conversation of unifiedConversations) {
+      presentTabs.add(conversation.serviceType);
     }
-  }, [filteredConversations, selectedConversationId]);
+
+    return SERVICE_TABS.filter((service) => presentTabs.has(service));
+  }, [serviceFilter, unifiedConversations]);
+
+  const resolvedSelectedConversationId =
+    selectedConversationId && filteredConversations.some((entry) => entry.id === selectedConversationId)
+      ? selectedConversationId
+      : (filteredConversations[0]?.id ?? null);
 
   const selectedConversation = useMemo(
-    () => filteredConversations.find((entry) => entry.id === selectedConversationId) ?? null,
-    [filteredConversations, selectedConversationId]
+    () => filteredConversations.find((entry) => entry.id === resolvedSelectedConversationId) ?? null,
+    [filteredConversations, resolvedSelectedConversationId]
   );
 
   const selectedTiakConversation = useMemo(
@@ -409,16 +422,11 @@ export default function ConversationsList({
     [inquiryConversations, selectedShopInquiryId]
   );
 
-
-  useEffect(() => {
-    if (selectedConversation?.kind === "TIAK") return;
-    setOpsDrawerOpen(false);
-    setActiveDelivery(null);
-    setActiveEvents([]);
-    setThreadLoading(false);
-  }, [selectedConversation?.kind]);
-
   const visibleConversations = filteredConversations.slice(0, visibleCount);
+  const opsPanelOpen = selectedConversation?.kind === "TIAK" ? opsDrawerOpen : false;
+  const opsPanelDelivery = selectedConversation?.kind === "TIAK" ? activeDelivery : null;
+  const opsPanelEvents = selectedConversation?.kind === "TIAK" ? activeEvents : [];
+  const opsPanelLoading = selectedConversation?.kind === "TIAK" ? threadLoading : false;
 
   const totalUnreadCount = useMemo(
     () => unifiedConversations.reduce((sum, item) => sum + item.unreadCount, 0),
@@ -498,7 +506,7 @@ export default function ConversationsList({
     <aside className="rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
       <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          {SERVICE_TABS.map((service) => (
+          {availableServiceTabs.map((service) => (
             <button
               key={service}
               type="button"
@@ -568,7 +576,7 @@ export default function ConversationsList({
 
         <div className="space-y-2">
           {visibleConversations.map((item) => {
-            const isSelected = item.id === selectedConversationId;
+            const isSelected = item.id === resolvedSelectedConversationId;
 
             const rowClasses = `group block w-full rounded-xl border px-3 py-2.5 text-left transition ${
               isSelected
@@ -697,9 +705,9 @@ export default function ConversationsList({
               locale={locale}
               mode="sidebar"
               open
-              loading={threadLoading}
-              delivery={activeDelivery}
-              events={activeEvents}
+              loading={opsPanelLoading}
+              delivery={opsPanelDelivery}
+              events={opsPanelEvents}
               onRefresh={() => {
                 setRefreshNonce((current) => current + 1);
               }}
@@ -746,10 +754,10 @@ export default function ConversationsList({
       <OpsDetailsPanel
         locale={locale}
         mode="drawer"
-        open={opsDrawerOpen}
-        loading={threadLoading}
-        delivery={activeDelivery}
-        events={activeEvents}
+        open={opsPanelOpen}
+        loading={opsPanelLoading}
+        delivery={opsPanelDelivery}
+        events={opsPanelEvents}
         onClose={() => setOpsDrawerOpen(false)}
         onRefresh={() => {
           setRefreshNonce((current) => current + 1);

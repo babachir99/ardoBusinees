@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedWizard from "@/components/presta/PrestaNeedWizard";
 import PrestaNeedPublishPopup from "@/components/presta/PrestaNeedPublishPopup";
@@ -202,7 +202,7 @@ export default function PrestaStoreClient({
   const isAdmin = currentUserRole === "ADMIN";
   const isFr = locale === "fr";
 
-  async function loadServices() {
+  const loadServices = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -225,9 +225,9 @@ export default function PrestaStoreClient({
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function loadNeeds() {
+  const loadNeeds = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -250,23 +250,22 @@ export default function PrestaStoreClient({
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     if (tab === "offers") {
-      loadServices();
+      void loadServices();
       return;
     }
 
     if (tab === "needs") {
-      loadNeeds();
+      void loadNeeds();
       return;
     }
 
     setLoading(false);
     setError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [loadNeeds, loadServices, tab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -706,6 +705,26 @@ export default function PrestaStoreClient({
   const shouldShowServiceEmpty = !loading && tab === "offers" && filteredServices.length === 0;
   const shouldShowNeedEmpty = !loading && tab === "needs" && filteredNeeds.length === 0;
   const showNeedPublishPanel = tab === "needs" && showNeedForm && isLoggedIn;
+
+  useEffect(() => {
+    if (!bookingService) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setBookingService(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [bookingService]);
 
   const openServiceDetails = (service: PrestaService) => {
     setDetailsItem({
@@ -1313,23 +1332,47 @@ export default function PrestaStoreClient({
       )}
 
       {bookingService && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-3 md:items-center" role="dialog" aria-modal="true">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-4">
+        <div
+          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm md:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isFr ? "Reservation PRESTA" : "PRESTA booking"}
+          onClick={() => setBookingService(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">Reserver: {bookingService.title}</h3>
-              <button type="button" className="rounded-full border border-white/20 px-2 py-1 text-xs text-zinc-200" onClick={() => setBookingService(null)}>
-                Fermer
+              <h3 className="text-base font-semibold text-white">
+                {isFr ? "Reserver :" : "Book:"} {bookingService.title}
+              </h3>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 px-2 py-1 text-xs text-zinc-200"
+                onClick={() => setBookingService(null)}
+                aria-label={isFr ? "Fermer la reservation" : "Close booking"}
+              >
+                {isFr ? "Fermer" : "Close"}
               </button>
             </div>
 
             <form className="mt-4 space-y-3" onSubmit={handleBookingSubmit}>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Message
-                <textarea className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white" value={bookingMessage} onChange={(event) => setBookingMessage(event.target.value)} />
+                {isFr ? "Message" : "Message"}
+                <textarea
+                  className="min-h-20 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+                  value={bookingMessage}
+                  onChange={(event) => setBookingMessage(event.target.value)}
+                />
               </label>
               <label className="flex flex-col gap-1 text-xs text-zinc-300">
-                Methode de paiement
-                <select className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white" value={bookingMethod} onChange={(event) => setBookingMethod(event.target.value)}>
+                {isFr ? "Methode de paiement" : "Payment method"}
+                <select
+                  className="h-10 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-white"
+                  value={bookingMethod}
+                  onChange={(event) => setBookingMethod(event.target.value)}
+                >
                   {paymentMethods.map((method) => (
                     <option key={method} value={method}>
                       {method}
@@ -1340,8 +1383,18 @@ export default function PrestaStoreClient({
 
               {bookingError && <p className="text-sm text-rose-300">{bookingError}</p>}
 
-              <button type="submit" disabled={bookingSubmitting} className="w-full rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60">
-                {bookingSubmitting ? "Envoi..." : "Confirmer la reservation"}
+              <button
+                type="submit"
+                disabled={bookingSubmitting}
+                className="w-full rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+              >
+                {bookingSubmitting
+                  ? isFr
+                    ? "Envoi..."
+                    : "Sending..."
+                  : isFr
+                    ? "Confirmer la reservation"
+                    : "Confirm booking"}
               </button>
             </form>
           </div>

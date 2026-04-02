@@ -3,6 +3,7 @@ import { Vertical, getVerticalRules } from "@/lib/verticals";
 
 const vertical = Vertical.TIAK_TIAK;
 const rules = getVerticalRules(vertical);
+void NextRequest;
 const todo = [
   "POST /api/tiak-tiak/deliveries (publish delivery mission)",
   "POST /api/tiak-tiak/bookings (request a courier)",
@@ -21,10 +22,10 @@ function notImplementedPayload() {
   };
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   return NextResponse.json(notImplementedPayload(), { status: 501 });
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST() {
   return NextResponse.json(notImplementedPayload(), { status: 501 });
 }

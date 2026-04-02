@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -165,38 +165,41 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
   const t = useTranslations("Admin.opsHub");
   const locale = useLocale();
   const isFr = locale.toLowerCase().startsWith("fr");
-  const uiText = {
-    trustReportsPending: isFr ? "Signalements trust (en attente)" : "Trust Reports (Pending)",
-    trustDisputesActive: isFr ? "Litiges trust (ouverts/en revue)" : "Trust Disputes (Open/In review)",
-    immoMonetization: isFr ? "Monetisation IMMO (EN_ATTENTE/ECHEC)" : "IMMO Monetization (PENDING/FAILED)",
-    autoMonetization: isFr ? "Monetisation AUTO (EN_ATTENTE/ECHEC)" : "AUTO Monetization (PENDING/FAILED)",
-    carsMonetization: isFr ? "Monetisation CARS (EN_ATTENTE/ECHEC)" : "CARS Monetization (PENDING/FAILED)",
-    immoMonetizationTab: isFr ? "Monetisation IMMO" : "IMMO monetization",
-    autoMonetizationTab: isFr ? "Monetisation AUTO" : "AUTO monetization",
-    carsMonetizationTab: isFr ? "Monetisation CARS" : "CARS monetization",
-    pendingOrders: isFr ? "Commandes en attente" : "Pending orders",
-    inactiveProducts: isFr ? "Produits inactifs" : "Inactive products",
-    trustTab: isFr ? "Trust" : "Trust",
-    trustModeration: isFr ? "Moderation trust" : "Trust moderation",
-    trustReportsAlert: isFr ? "Signalements trust en attente" : "Trust reports pending",
-    trustDisputesAlert: isFr ? "Litiges trust actifs" : "Trust disputes active",
-    notificationsFailed24h: isFr ? "Notifications en echec (24h)" : "Notifications failed (24h)",
-    oldestPendingAge: isFr ? "Age max notification en attente" : "Oldest pending notification age",
-    openNotificationsHealth: isFr ? "Ouvrir la sante notifications" : "Open notifications health",
-    templateFailures: isFr ? "Echecs de template" : "Template failures",
-    notificationHealthUnavailable: isFr ? "Sante notifications indisponible." : "Notification health unavailable.",
-    notificationsHealthTitle: isFr ? "Sante des notifications" : "Notifications health",
-    notificationsHealthSubtitle: isFr ? "Metriques outbox en lecture seule (sans PII)." : "Read-only outbox health metrics (no PII).",
-    notificationsRefreshing: isFr ? "Actualisation..." : "Refreshing...",
-    notificationsRefresh: isFr ? "Actualiser" : "Refresh",
-    notificationsLoad: isFr ? "Charger" : "Load",
-    pendingLabel: isFr ? "EN ATTENTE" : "PENDING",
-    failed24hLabel: isFr ? "ECHEC (24h)" : "FAILED (24h)",
-    sent24hLabel: isFr ? "ENVOYE (24h)" : "SENT (24h)",
-    oldestPendingAgeLabel: isFr ? "Age max en attente" : "Oldest pending age",
-    loadNotificationHealthHint: isFr ? "Chargez la sante notifications pour voir les echecs et l'anciennete de file." : "Load notification health to view failures and queue age.",
-    topTemplateFailuresTitle: isFr ? "Top des echecs de template" : "Top template failures",
-  };
+  const uiText = useMemo(
+    () => ({
+      trustReportsPending: isFr ? "Signalements trust (en attente)" : "Trust Reports (Pending)",
+      trustDisputesActive: isFr ? "Litiges trust (ouverts/en revue)" : "Trust Disputes (Open/In review)",
+      immoMonetization: isFr ? "Monetisation IMMO (EN_ATTENTE/ECHEC)" : "IMMO Monetization (PENDING/FAILED)",
+      autoMonetization: isFr ? "Monetisation AUTO (EN_ATTENTE/ECHEC)" : "AUTO Monetization (PENDING/FAILED)",
+      carsMonetization: isFr ? "Monetisation CARS (EN_ATTENTE/ECHEC)" : "CARS Monetization (PENDING/FAILED)",
+      immoMonetizationTab: isFr ? "Monetisation IMMO" : "IMMO monetization",
+      autoMonetizationTab: isFr ? "Monetisation AUTO" : "AUTO monetization",
+      carsMonetizationTab: isFr ? "Monetisation CARS" : "CARS monetization",
+      pendingOrders: isFr ? "Commandes en attente" : "Pending orders",
+      inactiveProducts: isFr ? "Produits inactifs" : "Inactive products",
+      trustTab: isFr ? "Trust" : "Trust",
+      trustModeration: isFr ? "Moderation trust" : "Trust moderation",
+      trustReportsAlert: isFr ? "Signalements trust en attente" : "Trust reports pending",
+      trustDisputesAlert: isFr ? "Litiges trust actifs" : "Trust disputes active",
+      notificationsFailed24h: isFr ? "Notifications en echec (24h)" : "Notifications failed (24h)",
+      oldestPendingAge: isFr ? "Age max notification en attente" : "Oldest pending notification age",
+      openNotificationsHealth: isFr ? "Ouvrir la sante notifications" : "Open notifications health",
+      templateFailures: isFr ? "Echecs de template" : "Template failures",
+      notificationHealthUnavailable: isFr ? "Sante notifications indisponible." : "Notification health unavailable.",
+      notificationsHealthTitle: isFr ? "Sante des notifications" : "Notifications health",
+      notificationsHealthSubtitle: isFr ? "Metriques outbox en lecture seule (sans PII)." : "Read-only outbox health metrics (no PII).",
+      notificationsRefreshing: isFr ? "Actualisation..." : "Refreshing...",
+      notificationsRefresh: isFr ? "Actualiser" : "Refresh",
+      notificationsLoad: isFr ? "Charger" : "Load",
+      pendingLabel: isFr ? "EN ATTENTE" : "PENDING",
+      failed24hLabel: isFr ? "ECHEC (24h)" : "FAILED (24h)",
+      sent24hLabel: isFr ? "ENVOYE (24h)" : "SENT (24h)",
+      oldestPendingAgeLabel: isFr ? "Age max en attente" : "Oldest pending age",
+      loadNotificationHealthHint: isFr ? "Chargez la sante notifications pour voir les echecs et l'anciennete de file." : "Load notification health to view failures and queue age.",
+      topTemplateFailuresTitle: isFr ? "Top des echecs de template" : "Top template failures",
+    }),
+    [isFr]
+  );
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeFilter = normalizeFilter(searchParams.get("opsFilter"));
@@ -216,10 +219,43 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
   const [notificationsHealthLoaded, setNotificationsHealthLoaded] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
 
+  const handleLoadNotificationsHealth = useCallback(async () => {
+    setNotificationsHealthLoaded(true);
+    setNotificationsHealthLoading(true);
+    setNotificationsHealthError("");
+
+    try {
+      const response = await fetch("/api/admin/notifications/health", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        setNotificationsHealthError(uiText.notificationHealthUnavailable);
+        return;
+      }
+
+      const body = (await response.json().catch(() => null)) as
+        | { health?: NotificationsHealth }
+        | null;
+
+      if (!body?.health) {
+        setNotificationsHealthError(uiText.notificationHealthUnavailable);
+        return;
+      }
+
+      setNotificationsHealth(body.health);
+    } catch {
+      setNotificationsHealthError(uiText.notificationHealthUnavailable);
+    } finally {
+      setNotificationsHealthLoading(false);
+    }
+  }, [uiText.notificationHealthUnavailable]);
+
   useEffect(() => {
     if (notificationsHealthLoaded || notificationsHealthLoading) return;
     void handleLoadNotificationsHealth();
-  }, [notificationsHealthLoaded, notificationsHealthLoading]);
+  }, [handleLoadNotificationsHealth, notificationsHealthLoaded, notificationsHealthLoading]);
 
   useEffect(() => {
     if (!insightsOpen) return;
@@ -347,7 +383,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
         warn: typeof kpis.carsMonetizationIssues === "number" && kpis.carsMonetizationIssues > 0,
       },
     ].filter((card) => card.key !== "kyc" || typeof card.value === "number"),
-    [kpis, t, warnFlags]
+    [kpis, t, uiText, warnFlags]
   );
 
   const filterTabs: Array<{ key: QueueFilter; label: string }> = [
@@ -552,7 +588,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
     }
 
     return alerts;
-  }, [kpis, notificationsHealth, reconData, t, warnFlags]);
+  }, [kpis, notificationsHealth, reconData, t, uiText, warnFlags]);
 
   async function handleRelease(item: OpsQueueItem) {
     if (item.action.kind !== "release") return;
@@ -619,39 +655,6 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
       setReconError(t("messages.dryRunFailed"));
     } finally {
       setReconLoading(false);
-    }
-  }
-
-  async function handleLoadNotificationsHealth() {
-    setNotificationsHealthLoaded(true);
-    setNotificationsHealthLoading(true);
-    setNotificationsHealthError("");
-
-    try {
-      const response = await fetch("/api/admin/notifications/health", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        setNotificationsHealthError(uiText.notificationHealthUnavailable);
-        return;
-      }
-
-      const body = (await response.json().catch(() => null)) as
-        | { health?: NotificationsHealth }
-        | null;
-
-      if (!body?.health) {
-        setNotificationsHealthError(uiText.notificationHealthUnavailable);
-        return;
-      }
-
-      setNotificationsHealth(body.health);
-    } catch {
-      setNotificationsHealthError(uiText.notificationHealthUnavailable);
-    } finally {
-      setNotificationsHealthLoading(false);
     }
   }
 

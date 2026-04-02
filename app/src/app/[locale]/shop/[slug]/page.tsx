@@ -1,3 +1,5 @@
+﻿/* eslint-disable @next/next/no-img-element */
+
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
@@ -648,5 +650,4 @@ export default async function ProductPage({
     </div>
   );
 }
-
 

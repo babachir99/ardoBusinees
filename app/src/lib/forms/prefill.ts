@@ -64,7 +64,6 @@ export function buildFormDefaults({
 }
 
 export function normalizePhoneInput({
-  country: _country,
   dialCode,
   phoneNational,
 }: NormalizePhoneInput): {

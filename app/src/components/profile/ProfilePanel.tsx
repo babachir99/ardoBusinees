@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -19,12 +21,6 @@ type Profile = {
   phone?: string | null;
   role: string;
   roles?: string[];
-  createdAt: string;
-};
-
-type Activity = {
-  id: string;
-  action: string;
   createdAt: string;
 };
 
@@ -194,7 +190,7 @@ export default function ProfilePanel() {
   const [error, setError] = useState<string | null>(null);
   const selectedRoleForKyc = mapPartnerRoleToKycRole(selectedRole);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -301,11 +297,11 @@ export default function ProfilePanel() {
       setLoading(false);
       setFavoritesLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
 
   useEffect(() => {
@@ -342,10 +338,6 @@ export default function ProfilePanel() {
       cancelled = true;
     };
   }, [selectedRoleForKyc]);
-
-  const save = async () => {
-    return;
-  };
 
   const submitKyc = async () => {
     setKycLoading(true);
@@ -451,6 +443,7 @@ export default function ProfilePanel() {
         .map((role) => normalizeRoleKey(role))
     )
   );
+  const currentRoleKey = normalizeRoleKey(profile.role);
 
   const roleLabels = normalizedRoles.map((role) => ROLE_LABELS[role] ?? role);
   const activeRoleShortcuts = ROLE_SHORTCUTS.filter((shortcut) =>
@@ -552,7 +545,8 @@ export default function ProfilePanel() {
       ? 33
       : 0;
 
-  const currentRoleBadge = roleLabels[0] ?? "CLIENT";
+  const currentRoleBadge =
+    ROLE_LABELS[currentRoleKey] ?? roleLabels[0] ?? (isFr ? "Client" : "Client");
   const completionHints = missingRequiredFields
     .filter((field) => field !== "phoneVerified")
     .slice(0, 3)

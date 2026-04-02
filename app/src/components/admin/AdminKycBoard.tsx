@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 type Submission = {
@@ -38,7 +40,7 @@ export default function AdminKycBoard() {
   const [statusFilter, setStatusFilter] = useState("PENDING");
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -55,11 +57,11 @@ export default function AdminKycBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const updateUser = async (id: string, payload: { role?: string; isActive?: boolean }) => {
     try {

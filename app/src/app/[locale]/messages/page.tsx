@@ -35,11 +35,6 @@ export default async function MessagesPage({
 
   const where: Prisma.ProductInquiryWhereInput = {
     OR: [{ buyerId: session.user.id }, ...(sellerProfile ? [{ sellerId: sellerProfile.id }] : [])],
-    ...(statusFilter === "all"
-      ? {}
-      : {
-          status: statusFilter === "open" ? "OPEN" : "CLOSED",
-        }),
   };
 
   const [inquiries, tiakConversations] = await Promise.all([
@@ -154,12 +149,6 @@ export default async function MessagesPage({
     (item) => item.events[0] && item.events[0].actorId !== session.user.id
   ).length;
 
-  const filters = [
-    { key: "all", label: isFr ? "Toutes" : "All" },
-    { key: "open", label: isFr ? "Ouvertes" : "Open" },
-    { key: "closed", label: isFr ? "Fermees" : "Closed" },
-  ] as const;
-
   const inquiryConversations = inquiries.map((item) => {
     const iAmBuyer = item.buyerId === session.user.id;
     const counterpart = iAmBuyer
@@ -223,14 +212,8 @@ export default async function MessagesPage({
     requestedDeliveryId && tiakConversations.some((item) => item.id === requestedDeliveryId)
       ? requestedDeliveryId
       : (tiakConversations[0]?.id ?? null);
-
-  const buildMessagesHref = (nextStatus: string, deliveryId?: string | null) => {
-    const query = new URLSearchParams();
-    if (nextStatus !== "all") query.set("status", nextStatus);
-    if (deliveryId) query.set("deliveryId", deliveryId);
-    const value = query.toString();
-    return value ? `/messages?${value}` : "/messages";
-  };
+  const initialQuickFilter =
+    statusFilter === "open" ? "OPEN" : statusFilter === "closed" ? "CLOSED" : "ALL";
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -258,25 +241,6 @@ export default async function MessagesPage({
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          {filters.map((filter) => {
-            const active = statusFilter === filter.key;
-            return (
-              <Link
-                key={filter.key}
-                href={buildMessagesHref(filter.key, activeTiakDeliveryId)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  active
-                    ? "border-emerald-300/70 bg-emerald-300/15 text-emerald-200"
-                    : "border-white/15 bg-zinc-900/70 text-zinc-300 hover:border-white/40"
-                }`}
-              >
-                {filter.label}
-              </Link>
-            );
-          })}
-        </div>
-
         {tiakConversations.length > 0 || inquiryConversations.length > 0 ? (
           <ConversationsList
             locale={locale}
@@ -284,6 +248,7 @@ export default async function MessagesPage({
             conversations={tiakConversations}
             inquiryConversations={inquiryConversations}
             initialSelectedId={activeTiakDeliveryId}
+            initialQuickFilter={initialQuickFilter}
           />
         ) : (
           <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8 text-center text-zinc-400">

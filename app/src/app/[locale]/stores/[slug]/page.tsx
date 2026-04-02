@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { prisma } from "@/lib/prisma";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { formatMoney } from "@/lib/format";
 
@@ -50,7 +50,7 @@ export default function AdminOrdersBoard() {
   const [emailFilter, setEmailFilter] = useState("");
   const [uploadingId, setUploadingId] = useState<string | null>(null);
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -69,11 +69,11 @@ export default function AdminOrdersBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [emailFilter, statusFilter, t]);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    void loadOrders();
+  }, [loadOrders]);
 
   const addEvent = async (
     orderId: string,

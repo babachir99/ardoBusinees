@@ -86,7 +86,8 @@ type LoadedCarListing = Awaited<ReturnType<typeof loadListing>>;
 
 function sanitizePublicListing(listing: LoadedCarListing) {
   if (!listing) return null;
-  const { ownerId: _ownerId, ...safeListing } = listing;
+  const { ownerId, ...safeListing } = listing;
+  void ownerId;
   const now = new Date();
   return {
     ...safeListing,

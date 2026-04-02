@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 type User = {
@@ -23,7 +23,7 @@ export default function AdminUsersBoard() {
   const [emailFilter, setEmailFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -41,11 +41,11 @@ export default function AdminUsersBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [emailFilter, roleFilter, t]);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    void loadUsers();
+  }, [loadUsers]);
 
   const updateRole = async (userId: string, role: string) => {
     setSavingId(userId);

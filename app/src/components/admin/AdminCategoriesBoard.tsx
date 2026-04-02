@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Category = {
   id: string;
@@ -52,7 +52,7 @@ export default function AdminCategoriesBoard() {
     [categories]
   );
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -76,11 +76,11 @@ export default function AdminCategoriesBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeFilter, query]);
 
   useEffect(() => {
-    loadCategories();
-  }, []);
+    void loadCategories();
+  }, [loadCategories]);
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault();

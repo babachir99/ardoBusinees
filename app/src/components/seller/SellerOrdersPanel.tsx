@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
@@ -66,7 +66,7 @@ export default function SellerOrdersPanel() {
   const [statusDrafts, setStatusDrafts] = useState<Record<string, string>>({});
   const [messageDrafts, setMessageDrafts] = useState<Record<string, string>>({});
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -91,11 +91,11 @@ export default function SellerOrdersPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [emailFilter, rangeFilter, statusFilter, t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const addEvent = async (
     orderId: string,

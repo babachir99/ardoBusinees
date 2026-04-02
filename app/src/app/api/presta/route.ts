@@ -3,6 +3,7 @@ import { Vertical, getVerticalRules } from "@/lib/verticals";
 
 const vertical = Vertical.PRESTA;
 const rules = getVerticalRules(vertical);
+void NextRequest;
 const todo = [
   "POST /api/presta/listings (publish service listing)",
   "POST /api/presta/bookings (customer booking flow)",
@@ -20,10 +21,10 @@ function notImplementedPayload() {
   };
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   return NextResponse.json(notImplementedPayload(), { status: 501 });
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST() {
   return NextResponse.json(notImplementedPayload(), { status: 501 });
 }

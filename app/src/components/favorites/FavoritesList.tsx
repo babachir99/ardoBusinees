@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 
@@ -26,7 +28,7 @@ export default function FavoritesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -41,11 +43,11 @@ export default function FavoritesList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const remove = async (productId: string) => {
     await fetch(`/api/favorites?productId=${productId}`, { method: "DELETE" });

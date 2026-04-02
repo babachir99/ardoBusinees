@@ -69,7 +69,8 @@ export default function GpTripPublishModal({
   );
 
   useEffect(() => {
-    setMounted(true);
+    const frameId = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frameId);
   }, []);
 
   useEffect(() => {

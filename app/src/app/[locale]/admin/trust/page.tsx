@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AdminTrustModerationPanel from "@/components/trust/AdminTrustModerationPanel";
+import type { TrustDb, TrustDisputeRecord, TrustReportRecord } from "@/app/api/trust/_shared";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -30,7 +31,7 @@ export default async function AdminTrustPage({ params, searchParams }: { params:
     );
   }
 
-  const db = prisma as any;
+  const db = prisma as TrustDb;
   const trustReady = Boolean(db?.report && db?.trustDispute);
   const [reports, disputes] = trustReady
     ? await Promise.all([
@@ -39,7 +40,20 @@ export default async function AdminTrustPage({ params, searchParams }: { params:
       ])
     : [[], []];
 
-  const normalizeDisputeStatus = (status: string) => (status === "IN_REVIEW" ? "UNDER_REVIEW" : status);
+  const normalizeReportStatus = (
+    status: string
+  ): "PENDING" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED" =>
+    status === "UNDER_REVIEW" || status === "RESOLVED" || status === "REJECTED"
+      ? status
+      : "PENDING";
+  const normalizeDisputeStatus = (
+    status: string
+  ): "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED" =>
+    status === "IN_REVIEW"
+      ? "UNDER_REVIEW"
+      : status === "RESOLVED" || status === "REJECTED"
+        ? status
+        : "OPEN";
   const initialTab = resolvedSearchParams?.tab === "disputes" ? "disputes" : "reports";
   const focusId = typeof resolvedSearchParams?.focus === "string" && resolvedSearchParams.focus.trim() ? resolvedSearchParams.focus.trim() : null;
 
@@ -58,8 +72,8 @@ export default async function AdminTrustPage({ params, searchParams }: { params:
             initialTab={initialTab}
             focusId={focusId}
             currentAdminId={session.user.id}
-            initialReports={reports.map((item: any) => ({ id: item.id, reporterId: item.reporterId, reportedId: item.reportedId, reporter: item.reporter ? { id: item.reporter.id, name: item.reporter.name ?? null } : undefined, reported: item.reported ? { id: item.reported.id, name: item.reported.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, reason: item.reason, description: item.description ?? null, proofUrls: Array.isArray(item.proofUrls) ? item.proofUrls : [], status: item.status, resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
-            initialDisputes={disputes.map((item: any) => ({ id: item.id, userId: item.userId, user: item.user ? { id: item.user.id, name: item.user.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, orderId: item.orderId ?? null, vertical: item.vertical, reason: item.reason, description: item.description, proofUrls: Array.isArray(item.proofUrls) ? item.proofUrls : [], status: normalizeDisputeStatus(item.status), resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
+            initialReports={reports.map((item: TrustReportRecord) => ({ id: item.id, reporterId: item.reporterId, reportedId: item.reportedId, reporter: item.reporter ? { id: item.reporter.id, name: item.reporter.name ?? null } : undefined, reported: item.reported ? { id: item.reported.id, name: item.reported.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, reason: item.reason, description: item.description ?? null, proofUrls: Array.isArray(item.proofUrls) ? item.proofUrls : [], status: normalizeReportStatus(item.status), resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
+            initialDisputes={disputes.map((item: TrustDisputeRecord) => ({ id: item.id, userId: item.userId, user: item.user ? { id: item.user.id, name: item.user.name ?? null } : undefined, assignedAdminId: item.assignedAdminId ?? null, assignedAdmin: item.assignedAdmin ? { id: item.assignedAdmin.id, name: item.assignedAdmin.name ?? null } : undefined, orderId: item.orderId ?? null, vertical: item.vertical, reason: item.reason, description: item.description, proofUrls: Array.isArray(item.proofUrls) ? item.proofUrls : [], status: normalizeDisputeStatus(item.status), resolutionCode: item.resolutionCode ?? null, internalNote: item.internalNote ?? null, reviewedAt: item.reviewedAt ? item.reviewedAt.toISOString() : null, createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString() }))}
           />
         )}
       </main>

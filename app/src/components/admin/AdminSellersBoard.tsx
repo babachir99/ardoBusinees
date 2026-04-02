@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type SellerStatus = "PENDING" | "APPROVED" | "SUSPENDED";
 
@@ -87,7 +87,7 @@ export default function AdminSellersBoard() {
   const [editForm, setEditForm] = useState<SellerEditForm>(initialEditForm);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     const response = await fetch("/api/admin/users");
     if (!response.ok) throw new Error("Impossible de charger les utilisateurs");
     const payload = (await response.json()) as Array<{
@@ -96,9 +96,9 @@ export default function AdminSellersBoard() {
       name?: string | null;
     }>;
     setUsers(payload);
-  };
+  }, []);
 
-  const loadSellers = async () => {
+  const loadSellers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -118,13 +118,13 @@ export default function AdminSellersBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
 
   useEffect(() => {
     Promise.all([loadSellers(), loadUsers()]).catch((err) => {
       setError(err instanceof Error ? err.message : "Chargement impossible");
     });
-  }, []);
+  }, [loadSellers, loadUsers]);
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault();

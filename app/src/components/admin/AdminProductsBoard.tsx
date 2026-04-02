@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 
@@ -31,7 +33,7 @@ export default function AdminProductsBoard() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -49,11 +51,11 @@ export default function AdminProductsBoard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query, statusFilter, t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!successToast) return;

@@ -53,7 +53,9 @@ export default function PrestaNeedWizard({
   const [step, setStep] = useState(1);
 
   useEffect(() => {
-    if (open) setStep(1);
+    if (!open) return;
+    const frameId = window.requestAnimationFrame(() => setStep(1));
+    return () => window.cancelAnimationFrame(frameId);
   }, [open]);
 
   const steps = useMemo(

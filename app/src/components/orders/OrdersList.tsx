@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
@@ -134,7 +136,7 @@ export default function OrdersList() {
     [orders]
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -153,11 +155,11 @@ export default function OrdersList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [rangeFilter, statusFilter, t]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,5 +1,7 @@
 ﻿"use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";

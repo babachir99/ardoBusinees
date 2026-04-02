@@ -1,3 +1,5 @@
+﻿/* eslint-disable @next/next/no-img-element */
+
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";

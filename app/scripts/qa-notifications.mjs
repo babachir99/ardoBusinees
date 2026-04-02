@@ -14,16 +14,16 @@ function loadTsModule(source, filename) {
     fileName: filename,
   }).outputText;
 
-  const module = { exports: {} };
+  const cjsModule = { exports: {} };
   const context = vm.createContext({
-    module,
-    exports: module.exports,
+    module: cjsModule,
+    exports: cjsModule.exports,
     process,
     console,
   });
 
   vm.runInContext(transpiled, context, { filename });
-  return module.exports;
+  return cjsModule.exports;
 }
 
 function assertNoPiiLeak(serializedBody, label) {
