@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
+import Image from "next/image";
 
 type InternalNavigationHeaderProps = {
   locale: string;
@@ -58,7 +59,6 @@ const LABELS = {
     jontaadoTiak: "JONTAADO Tiak Tiak",
     detail: "Detail",
     back: "Retour",
-    backToParent: "Retour a {label}",
     currentPage: "Page actuelle",
   },
   en: {
@@ -110,7 +110,6 @@ const LABELS = {
     jontaadoTiak: "JONTAADO Tiak Tiak",
     detail: "Detail",
     back: "Back",
-    backToParent: "Back to {label}",
     currentPage: "Current page",
   },
 } as const;
@@ -186,13 +185,10 @@ export default function InternalNavigationHeader({
     return {
       breadcrumbs,
       currentLabel,
+      parentLabel,
       parentHref,
-      backLabel:
-        parentLabel && parentHref !== "/"
-          ? copy.backToParent.replace("{label}", parentLabel)
-          : copy.back,
     };
-  }, [copy.back, copy.backToParent, copy.home, copy.detail, locale, pathname]);
+  }, [copy.home, locale, pathname]);
 
   if (!meta) {
     return null;
@@ -212,59 +208,73 @@ export default function InternalNavigationHeader({
   };
 
   return (
-    <div className="border-b border-white/8 bg-zinc-950/70">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <div className="min-w-0 flex flex-1 items-center gap-3">
+    <div className="sticky top-0 z-40 border-b border-white/8 bg-zinc-950/80 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+        <Link href="/" className="hidden shrink-0 items-center sm:flex">
+          <Image
+            src="/logo.png"
+            alt="JONTAADO logo"
+            width={120}
+            height={120}
+            className="h-[52px] w-auto"
+            priority
+          />
+        </Link>
+
+        <div className="min-w-0 flex flex-1 items-center gap-2 rounded-2xl border border-white/8 bg-zinc-900/70 px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
           <button
             type="button"
             onClick={handleBack}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-zinc-900/70 px-3 text-sm font-medium text-zinc-100 transition hover:border-emerald-300/35 hover:bg-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-emerald-400/35"
-            aria-label={meta.backLabel}
-            title={meta.backLabel}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/12 bg-zinc-950/75 text-zinc-100 transition hover:border-emerald-300/35 hover:bg-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-emerald-400/35"
+            aria-label={copy.back}
+            title={copy.back}
           >
-            <span aria-hidden="true" className="text-base leading-none">
-              ←
-            </span>
-            <span className="ml-2 hidden sm:inline">{copy.back}</span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
+            >
+              <path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
 
-          <div className="min-w-0">
-            <nav
-              aria-label={copy.currentPage}
-              className="flex max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap text-[11px] uppercase tracking-[0.18em] text-zinc-500"
-            >
-              <Link href="/" className="transition hover:text-zinc-200">
-                {copy.home}
-              </Link>
-              {meta.breadcrumbs.map((item) => (
-                <span key={item.href} className="flex items-center gap-1">
-                  <span aria-hidden="true">/</span>
-                  {item.isLast ? (
-                    <span className="text-zinc-300">{item.label}</span>
-                  ) : (
-                    <Link href={item.href} className="transition hover:text-zinc-200">
-                      {item.label}
-                    </Link>
-                  )}
-                </span>
-              ))}
-            </nav>
-            <p className="truncate text-sm font-semibold text-zinc-100">{meta.currentLabel}</p>
+          <div className="min-w-0 flex-1 px-1">
+            <p className="truncate text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+              {meta.parentHref === "/" ? copy.home : meta.parentLabel}
+            </p>
+            <p className="truncate text-sm font-semibold text-zinc-100 sm:text-[15px]">
+              {meta.currentLabel}
+            </p>
           </div>
+
+          {meta.parentHref !== "/" ? (
+            <Link
+              href={meta.parentHref}
+              className="hidden rounded-full border border-white/12 bg-zinc-950/75 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-emerald-300/35 hover:bg-zinc-800/75 md:inline-flex"
+            >
+              {meta.parentLabel}
+            </Link>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
           <Link
-            href={meta.parentHref}
-            className="hidden rounded-full border border-white/15 bg-zinc-900/65 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-emerald-300/35 hover:bg-zinc-800/75 md:inline-flex"
-          >
-            {meta.backLabel}
-          </Link>
-          <Link
             href="/"
-            className="rounded-full border border-white/15 bg-zinc-900/65 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-white/35 hover:bg-zinc-800/75"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-zinc-900/65 text-zinc-200 transition hover:border-white/35 hover:bg-zinc-800/75 sm:h-11 sm:w-auto sm:px-4"
+            title={copy.home}
           >
-            {copy.home}
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
+            >
+              <path
+                d="M3.5 8.5 10 3l6.5 5.5v7a1 1 0 0 1-1 1h-3.5v-4.5h-4V16.5H4.5a1 1 0 0 1-1-1z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="hidden sm:ml-2 sm:inline">{copy.home}</span>
           </Link>
         </div>
       </div>

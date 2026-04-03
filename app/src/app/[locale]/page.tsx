@@ -19,6 +19,21 @@ const storeLogos: Record<string, string> = {
   "jontaado-tiak-tiak": "/stores/tiak.png",
 };
 
+const homeProductSelect = {
+  id: true,
+  slug: true,
+  title: true,
+  type: true,
+  priceCents: true,
+  currency: true,
+  discountPercent: true,
+  boostStatus: true,
+  boostedUntil: true,
+  createdAt: true,
+  seller: { select: { displayName: true } },
+  images: { orderBy: { position: "asc" }, take: 5, select: { url: true, alt: true } },
+} satisfies Prisma.ProductSelect;
+
 export default async function HomePage({
   params,
   searchParams,
@@ -31,8 +46,99 @@ export default async function HomePage({
     searchParams,
   ]);
   const query = q?.trim();
+  const orderBy: Prisma.ProductOrderByWithRelationInput =
+    sort === "price_asc"
+      ? { priceCents: "asc" }
+      : sort === "price_desc"
+      ? { priceCents: "desc" }
+      : { createdAt: "desc" };
 
-  const session = await getServerSession(authOptions);
+  const [
+    session,
+    products,
+    stores,
+    categories,
+    suggestions,
+    sellerHints,
+    sidebarRootCategories,
+  ] = await Promise.all([
+    getServerSession(authOptions),
+    prisma.product.findMany({
+      where: {
+        isActive: true,
+        ...(category
+          ? {
+              categories: {
+                some: {
+                  category: {
+                    OR: [{ slug: category }, { parent: { slug: category } }],
+                  },
+                },
+              },
+            }
+          : {}),
+        ...(query
+          ? {
+              OR: [
+                { title: { contains: query, mode: "insensitive" } },
+                { description: { contains: query, mode: "insensitive" } },
+                { seller: { displayName: { contains: query, mode: "insensitive" } } },
+                {
+                  categories: {
+                    some: { category: { name: { contains: query, mode: "insensitive" } } },
+                  },
+                },
+                { store: { name: { contains: query, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy,
+      take: 24,
+      select: homeProductSelect,
+    }),
+    prisma.store.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, slug: true, name: true },
+    }),
+    prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { name: true, slug: true },
+    }),
+    prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { title: true },
+    }),
+    prisma.sellerProfile.findMany({
+      orderBy: { displayName: "asc" },
+      take: 6,
+      select: { displayName: true },
+    }),
+    prisma.category.findMany({
+      where: {
+        isActive: true,
+        parentId: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        children: {
+          where: {
+            isActive: true,
+          },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, slug: true },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
   const operatorProfile = session?.user?.id
     ? await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -77,50 +183,6 @@ export default async function HomePage({
     operatorProfile?.sellerProfile || operatorProfile?.role === "SELLER"
       ? "/seller"
       : "/profile";
-  const orderBy: Prisma.ProductOrderByWithRelationInput =
-    sort === "price_asc"
-      ? { priceCents: "asc" }
-      : sort === "price_desc"
-      ? { priceCents: "desc" }
-      : { createdAt: "desc" };
-
-  const products = await prisma.product.findMany({
-    where: {
-      isActive: true,
-      ...(category
-        ? {
-            categories: {
-              some: {
-                category: {
-                  OR: [{ slug: category }, { parent: { slug: category } }],
-                },
-              },
-            },
-          }
-        : {}),
-      ...(query
-        ? {
-            OR: [
-              { title: { contains: query, mode: "insensitive" } },
-              { description: { contains: query, mode: "insensitive" } },
-              { seller: { displayName: { contains: query, mode: "insensitive" } } },
-              {
-                categories: {
-                  some: { category: { name: { contains: query, mode: "insensitive" } } },
-                },
-              },
-              { store: { name: { contains: query, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
-    orderBy,
-    take: 24,
-    include: {
-      seller: { select: { displayName: true } },
-      images: { orderBy: { position: "asc" }, take: 5 },
-    },
-  });
 
   const now = new Date();
   const isBoosted = (product: typeof products[number]) =>
@@ -135,55 +197,7 @@ export default async function HomePage({
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
   const displayedProducts = sortedProducts.slice(0, 12);
-
-  const [stores, categories, suggestions, sellerHints, storeHints, sidebarRootCategories] =
-    await Promise.all([
-    prisma.store.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { name: true, slug: true },
-    }),
-    prisma.product.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { title: true },
-    }),
-    prisma.sellerProfile.findMany({
-      orderBy: { displayName: "asc" },
-      take: 6,
-      select: { displayName: true },
-    }),
-    prisma.store.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      take: 6,
-      select: { name: true },
-    }),
-    prisma.category.findMany({
-      where: {
-        isActive: true,
-        parentId: null,
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        children: {
-          where: {
-            isActive: true,
-          },
-          orderBy: { name: "asc" },
-          select: { id: true, name: true, slug: true },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const storeHints = stores.slice(0, 6).map((item) => ({ name: item.name }));
 
   const orderedSidebarRoots = [...sidebarRootCategories].sort((a, b) =>
     a.name.localeCompare(b.name, locale)

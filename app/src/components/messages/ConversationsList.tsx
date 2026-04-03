@@ -3,13 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Link } from "@/i18n/navigation";
 import type { TiakDelivery, TiakDeliveryEvent } from "@/components/tiak/types";
-import ChatPanel from "@/components/messages/ChatPanel";
-import GpConversationThread from "@/components/messages/GpConversationThread";
-import OpsDetailsPanel from "@/components/messages/OpsDetailsPanel";
-import InquiryChatThread from "@/components/messages/InquiryChatThread";
-import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
 import useAdaptivePolling from "@/components/messages/useAdaptivePolling";
 import type {
   GpConversationSummary,
@@ -68,6 +64,34 @@ const SYSTEM_NOTES = new Set([
 ]);
 
 const SERVICE_TABS: ServiceType[] = ["ALL", "TIAK", "SHOP", "PRESTA", "GP", "IMMO", "CARS"];
+
+function PanelLoadingShell() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5">
+      <div className="animate-pulse space-y-3">
+        <div className="h-4 w-40 rounded-full bg-zinc-800" />
+        <div className="h-24 rounded-2xl bg-zinc-900/80" />
+        <div className="h-10 rounded-xl bg-zinc-900/80" />
+      </div>
+    </div>
+  );
+}
+
+const ChatPanel = dynamic(() => import("@/components/messages/ChatPanel"), {
+  loading: PanelLoadingShell,
+});
+const GpConversationThread = dynamic(() => import("@/components/messages/GpConversationThread"), {
+  loading: PanelLoadingShell,
+});
+const OpsDetailsPanel = dynamic(() => import("@/components/messages/OpsDetailsPanel"), {
+  loading: () => null,
+});
+const InquiryChatThread = dynamic(() => import("@/components/messages/InquiryChatThread"), {
+  loading: PanelLoadingShell,
+});
+const InquiryOffersPanel = dynamic(() => import("@/components/messages/InquiryOffersPanel"), {
+  loading: PanelLoadingShell,
+});
 
 function toArea(value: string) {
   return value.split(",")[0]?.trim() || value;

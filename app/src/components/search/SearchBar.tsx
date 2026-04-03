@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "@/i18n/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type SearchBarProps = {
   initialQuery?: string;
@@ -22,6 +22,7 @@ export default function SearchBar({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [category, setCategory] = useState(initialCategory ?? "");
   const [sort, setSort] = useState(initialSort ?? "recent");
+  const didMountRef = useRef(false);
 
   const paramsString = useMemo(() => {
     const params = new URLSearchParams();
@@ -37,6 +38,11 @@ export default function SearchBar({
   };
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+
     router.push(`/?${paramsString}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, sort]);

@@ -3,12 +3,20 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import TiakCreateDeliveryForm from "@/components/tiak/TiakCreateDeliveryForm";
+import dynamic from "next/dynamic";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
-import TiakDeliveryDetailsPanel from "@/components/tiak/TiakDeliveryDetailsPanel";
-import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
+
+const TiakCreateDeliveryForm = dynamic(() => import("@/components/tiak/TiakCreateDeliveryForm"), {
+  loading: () => <div className="p-4 text-sm text-zinc-400">Chargement...</div>,
+});
+const TiakDeliveryDetailsPanel = dynamic(() => import("@/components/tiak/TiakDeliveryDetailsPanel"), {
+  loading: () => null,
+});
+const UserProfileDrawer = dynamic(() => import("@/components/trust/UserProfileDrawer"), {
+  loading: () => null,
+});
 
 type Props = {
   locale: string;
@@ -416,10 +424,6 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   }, [refreshMyProfile]);
 
   useEffect(() => {
-    refreshPayouts();
-  }, [refreshPayouts]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const deliveryId = new URLSearchParams(window.location.search).get("deliveryId");
     if (deliveryId) {
@@ -436,6 +440,10 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
     const stored = window.localStorage.getItem(notificationsReadKey);
     setTiakNotificationsReadAt(stored);
   }, [notificationsReadKey]);
+
+  useEffect(() => {
+    refreshPayouts();
+  }, [refreshPayouts]);
 
   useEffect(() => {
     refreshTiakNotifications();
