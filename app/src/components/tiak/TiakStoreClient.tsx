@@ -4,6 +4,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { Link } from "@/i18n/navigation";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
@@ -23,6 +24,7 @@ type Props = {
   isLoggedIn: boolean;
   currentUserId: string | null;
   currentUserRole: string | null;
+  canOpenDashboard?: boolean;
 };
 
 function scheduleIdleTask(task: () => void, timeout = 1200) {
@@ -118,7 +120,13 @@ function formatTiakActivityAction(action: string, locale: string) {
   return locale === "fr" ? (frMap[action] ?? action) : (enMap[action] ?? action);
 }
 
-export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, currentUserRole }: Props) {
+export default function TiakStoreClient({
+  locale,
+  isLoggedIn,
+  currentUserId,
+  currentUserRole,
+  canOpenDashboard = false,
+}: Props) {
   const [openDeliveries, setOpenDeliveries] = useState<TiakDelivery[]>([]);
   const [trackedDeliveries, setTrackedDeliveries] = useState<TiakDelivery[]>([]);
   const [loading, setLoading] = useState(false);
@@ -824,24 +832,34 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setOpenNewMission(true)}
-            className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-2.5 font-medium text-neutral-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition-all duration-200 ease-out hover:brightness-110 hover:shadow-[0_14px_36px_rgba(16,185,129,0.35)] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/50 motion-reduce:transition-none"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none motion-reduce:transition-none"
-              aria-hidden="true"
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {canOpenDashboard ? (
+              <Link
+                href="/stores/jontaado-tiak-tiak/dashboard"
+                className="inline-flex items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-5 py-2.5 text-sm font-medium text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-400/15"
+              >
+                {locale === "fr" ? "Dashboard TIAK" : "TIAK dashboard"}
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setOpenNewMission(true)}
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-2.5 font-medium text-neutral-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition-all duration-200 ease-out hover:brightness-110 hover:shadow-[0_14px_36px_rgba(16,185,129,0.35)] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/50 motion-reduce:transition-none"
             >
-              <path d="M5 12h14" />
-              <path d="m13 6 6 6-6 6" />
-            </svg>
-            <span>{locale === "fr" ? "Demarrer une livraison" : "Start a delivery"}</span>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none motion-reduce:transition-none"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14" />
+                <path d="m13 6 6 6-6 6" />
+              </svg>
+              <span>{locale === "fr" ? "Demarrer une livraison" : "Start a delivery"}</span>
+            </button>
+          </div>
         </div>
       </section>
 

@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import SellerTrendsPanel from "@/components/seller/SellerTrendsPanel";
+import { hasAnyUserRole } from "@/lib/userRoles";
+import { Vertical, getVerticalRules } from "@/lib/verticals";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -20,11 +22,10 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   const tSpace = await getTranslations("SellerSpace");
   const locale = await getLocale();
 
-  const role = session?.user?.role ?? "CUSTOMER";
-  const canViewShop = ["SELLER", "ADMIN"].includes(role);
-  const canViewPresta = ["PROVIDER", "ADMIN"].includes(role);
-  const canViewGp = ["TRANSPORTER", "GP_CARRIER", "TRAVELER", "ADMIN"].includes(role);
-  const canViewTiak = ["COURIER", "ADMIN"].includes(role);
+  const canViewShop = hasAnyUserRole(session?.user, getVerticalRules(Vertical.SHOP).publishRoles);
+  const canViewPresta = hasAnyUserRole(session?.user, getVerticalRules(Vertical.PRESTA).publishRoles);
+  const canViewGp = hasAnyUserRole(session?.user, getVerticalRules(Vertical.GP).publishRoles);
+  const canViewTiak = hasAnyUserRole(session?.user, getVerticalRules(Vertical.TIAK_TIAK).publishRoles);
   const canAccessPartnerDashboard =
     canViewShop || canViewPresta || canViewGp || canViewTiak;
 
@@ -140,12 +141,22 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
           <section className="grid gap-4 md:grid-cols-3">
             {canViewPresta && (
               <article className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6">
-                <h2 className="text-lg font-semibold text-white">PRESTA block (coming next)</h2>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-white">JONTAADO PRESTA</h2>
+                  <Link
+                    href="/stores/jontaado-presta/dashboard"
+                    className="rounded-full border border-amber-300/30 px-3 py-1 text-[11px] text-amber-100 transition hover:border-amber-300/70"
+                  >
+                    {locale === "fr" ? "Dashboard PRESTA" : "PRESTA dashboard"}
+                  </Link>
+                </div>
                 <p className="mt-2 text-sm text-zinc-300">
-                  {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                  {locale === "fr"
+                    ? "Retrouve les gains, les clients et l'activite jour par jour."
+                    : "Track earnings, clients and activity day by day."}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                  {locale === "fr" ? "Espace stats dedie pret." : "Dedicated stats space ready."}
                 </p>
               </article>
             )}
@@ -155,10 +166,10 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-white">JONTAADO GP</h2>
                   <Link
-                    href="/stores/jontaado-gp"
-                    className="rounded-full border border-white/20 px-3 py-1 text-[11px] text-white transition hover:border-white/50"
+                    href="/transporter"
+                    className="rounded-full border border-cyan-300/30 px-3 py-1 text-[11px] text-cyan-100 transition hover:border-cyan-300/70"
                   >
-                    {locale === "fr" ? "Voir mes trajets" : "View my trips"}
+                    {locale === "fr" ? "Dashboard GP" : "GP dashboard"}
                   </Link>
                 </div>
                 <div className="mt-4 grid gap-2 text-xs text-zinc-300">
@@ -172,12 +183,22 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
 
             {canViewTiak && (
               <article className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6">
-                <h2 className="text-lg font-semibold text-white">TIAK block (coming next)</h2>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-white">JONTAADO TIAK TIAK</h2>
+                  <Link
+                    href="/stores/jontaado-tiak-tiak/dashboard"
+                    className="rounded-full border border-emerald-300/30 px-3 py-1 text-[11px] text-emerald-100 transition hover:border-emerald-300/70"
+                  >
+                    {locale === "fr" ? "Dashboard TIAK" : "TIAK dashboard"}
+                  </Link>
+                </div>
                 <p className="mt-2 text-sm text-zinc-300">
-                  {locale === "fr" ? "Stats bientot disponibles" : "Stats coming soon"}
+                  {locale === "fr"
+                    ? "Suivi des gains, des clients et des livraisons sur la duree."
+                    : "Track earnings, clients and deliveries over time."}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {locale === "fr" ? "Acces a venir" : "Access coming soon"}
+                  {locale === "fr" ? "Lecture journaliere disponible." : "Daily readout available."}
                 </p>
               </article>
             )}
