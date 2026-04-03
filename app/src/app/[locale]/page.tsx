@@ -19,6 +19,26 @@ const storeLogos: Record<string, string> = {
   "jontaado-tiak-tiak": "/stores/tiak.png",
 };
 
+const CARES_STORE_SLUGS = new Set(["jontaado-marketplace", "jontaado-shop"]);
+
+function resolveHomeStoreCard(store: { slug: string; name: string; type: string }) {
+  if (store.type === "MARKETPLACE" || CARES_STORE_SLUGS.has(store.slug)) {
+    return {
+      href: "/stores/jontaado-cares",
+      logoSrc: "/stores/cares.png",
+      srLabel: "JONTAADO CARES",
+      imageClassName: "scale-[1.75] sm:scale-[1.65]",
+    };
+  }
+
+  return {
+    href: `/stores/${store.slug}`,
+    logoSrc: storeLogos[store.slug] ?? "/logo.png",
+    srLabel: store.name,
+    imageClassName: "",
+  };
+}
+
 const homeProductSelect = {
   id: true,
   slug: true,
@@ -100,7 +120,7 @@ export default async function HomePage({
     prisma.store.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, slug: true, name: true },
+      select: { id: true, slug: true, name: true, type: true },
     }),
     prisma.category.findMany({
       where: { isActive: true },
@@ -139,25 +159,53 @@ export default async function HomePage({
     }),
   ]);
 
-  const operatorProfile = session?.user?.id
-    ? await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          name: true,
-          role: true,
-          sellerProfile: { select: { id: true } },
-          kycSubmissions: {
-            where: {
-              status: "APPROVED",
-              targetRole: { in: ["SELLER", "TRANSPORTER", "COURIER"] },
-            },
-            select: { id: true },
-            take: 1,
-          },
-        },
-      })
-    : null;
+  const now = new Date();
+  const isBoosted = (product: typeof products[number]) =>
+    product.boostStatus === "APPROVED" &&
+    (!product.boostedUntil || new Date(product.boostedUntil) > now);
 
+  const sortedProducts = [...products].sort((a, b) => {
+    const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
+    if (boostDiff !== 0) return boostDiff;
+    if (sort === "price_asc") return a.priceCents - b.priceCents;
+    if (sort === "price_desc") return b.priceCents - a.priceCents;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  const displayedProducts = sortedProducts.slice(0, 12);
+  const storeHints = stores.slice(0, 6).map((item) => ({ name: item.name }));
+  const displayedProductIds = displayedProducts.map((product) => product.id);
+
+  const [operatorProfile, favoriteEntries] = await Promise.all([
+    session?.user?.id
+      ? prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            name: true,
+            role: true,
+            sellerProfile: { select: { id: true } },
+            kycSubmissions: {
+              where: {
+                status: "APPROVED",
+                targetRole: { in: ["SELLER", "TRANSPORTER", "COURIER"] },
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        })
+      : Promise.resolve(null),
+    session?.user?.id && displayedProductIds.length > 0
+      ? prisma.favorite.findMany({
+          where: {
+            userId: session.user.id,
+            productId: { in: displayedProductIds },
+          },
+          select: { productId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const favoriteProductIds = new Set(favoriteEntries.map((entry) => entry.productId));
   const hasOperatorProfile =
     Boolean(operatorProfile?.sellerProfile) ||
     Boolean(operatorProfile?.kycSubmissions?.length) ||
@@ -183,21 +231,6 @@ export default async function HomePage({
     operatorProfile?.sellerProfile || operatorProfile?.role === "SELLER"
       ? "/seller"
       : "/profile";
-
-  const now = new Date();
-  const isBoosted = (product: typeof products[number]) =>
-    product.boostStatus === "APPROVED" &&
-    (!product.boostedUntil || new Date(product.boostedUntil) > now);
-
-  const sortedProducts = [...products].sort((a, b) => {
-    const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
-    if (boostDiff !== 0) return boostDiff;
-    if (sort === "price_asc") return a.priceCents - b.priceCents;
-    if (sort === "price_desc") return b.priceCents - a.priceCents;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-  const displayedProducts = sortedProducts.slice(0, 12);
-  const storeHints = stores.slice(0, 6).map((item) => ({ name: item.name }));
 
   const orderedSidebarRoots = [...sidebarRootCategories].sort((a, b) =>
     a.name.localeCompare(b.name, locale)
@@ -311,22 +344,28 @@ export default async function HomePage({
         <section className="flex flex-col gap-8">
           <div className="-mt-4 rounded-3xl border border-white/10 bg-zinc-900/70 p-[2.2px] card-glow fade-up">
             <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              {stores.map((store) => (
-                <Link
-                  key={store.id}
-                  href={`/stores/${store.slug}`}
-                  className="flex flex-col items-center gap-0.5 rounded-2xl border border-transparent bg-transparent px-1 py-1 text-center text-xs text-zinc-200 transition hover:border-emerald-300/40"
-                >
-                  <Image
-                    src={storeLogos[store.slug] ?? "/logo.png"}
-                    alt={`${store.name} logo`}
-                    width={252}
-                    height={252}
-                    className="h-[106px] w-[165px] object-contain"
-                  />
-                  <span className="sr-only">{store.name}</span>
-                </Link>
-              ))}
+              {stores.map((store) => {
+                const storeCard = resolveHomeStoreCard(store);
+
+                return (
+                  <Link
+                    key={store.id}
+                    href={storeCard.href}
+                    className="flex flex-col items-center gap-0.5 rounded-2xl border border-transparent bg-transparent px-1 py-1 text-center text-xs text-zinc-200 transition hover:border-emerald-300/40"
+                  >
+                    <div className="flex h-[106px] w-[165px] items-center justify-center overflow-hidden">
+                      <Image
+                        src={storeCard.logoSrc}
+                        alt={`${storeCard.srLabel} logo`}
+                        width={252}
+                        height={252}
+                        className={`h-[106px] w-[165px] object-contain transition-transform ${storeCard.imageClassName}`}
+                      />
+                    </div>
+                    <span className="sr-only">{storeCard.srLabel}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
@@ -404,6 +443,7 @@ export default async function HomePage({
                 <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
                   <FavoriteButton
                     productId={product.id}
+                    initialIsFavorite={favoriteProductIds.has(product.id)}
                     variant="icon"
                     className="absolute left-3 top-3 z-20"
                   />

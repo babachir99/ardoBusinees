@@ -52,6 +52,7 @@ const LABELS = {
     trust: "Trust Center",
     users: "Utilisateurs",
     verify: "Verification",
+    jontaadoCares: "JONTAADO Cares",
     jontaadoCars: "JONTAADO Cars",
     jontaadoGp: "JONTAADO GP",
     jontaadoImmo: "JONTAADO Immo",
@@ -103,6 +104,7 @@ const LABELS = {
     trust: "Trust Center",
     users: "Users",
     verify: "Verification",
+    jontaadoCares: "JONTAADO Cares",
     jontaadoCars: "JONTAADO Cars",
     jontaadoGp: "JONTAADO GP",
     jontaadoImmo: "JONTAADO Immo",
@@ -133,6 +135,7 @@ function looksLikeOpaqueId(segment: string) {
 function normalizeSegmentLabel(segment: string, locale: string) {
   const copy = LABELS[locale as "fr" | "en"] ?? LABELS.fr;
   const byKey: Record<string, string> = {
+    "jontaado-cares": copy.jontaadoCares,
     "jontaado-cars": copy.jontaadoCars,
     "jontaado-gp": copy.jontaadoGp,
     "jontaado-immo": copy.jontaadoImmo,

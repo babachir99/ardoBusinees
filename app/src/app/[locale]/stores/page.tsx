@@ -4,7 +4,38 @@ import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 
-export default async function StoresPage() {
+const CARES_STORE_SLUGS = new Set(["jontaado-marketplace", "jontaado-shop"]);
+
+function resolveStoresCard(
+  store: { slug: string; name: string; description: string | null; type: string },
+  locale: string
+) {
+  if (store.type === "MARKETPLACE" || CARES_STORE_SLUGS.has(store.slug)) {
+    return {
+      href: "/stores/jontaado-cares",
+      typeLabel: locale === "fr" ? "Solidarite" : "Solidarity",
+      name: "JONTAADO CARES",
+      description:
+        locale === "fr"
+          ? "Dons, cagnottes, entraide locale et transparence pour soutenir des causes verifiees."
+          : "Donations, solidarity campaigns, mutual aid and transparent impact tracking for verified causes.",
+    };
+  }
+
+  return {
+    href: `/stores/${store.slug}`,
+    typeLabel: store.type,
+    name: store.name,
+    description: store.description,
+  };
+}
+
+export default async function StoresPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
   const t = await getTranslations("Stores");
   const stores = await prisma.store.findMany({
     where: { isActive: true },
@@ -44,24 +75,28 @@ export default async function StoresPage() {
         </section>
 
         <section className="grid gap-6 md:grid-cols-2 fade-up">
-          {stores.map((store) => (
-            <Link
-              key={store.id}
-              href={`/stores/${store.slug}`}
-              className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 transition hover:border-emerald-300/60"
-            >
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                {store.type}
-              </p>
-              <h2 className="mt-4 text-xl font-semibold">{store.name}</h2>
-              <p className="mt-2 text-sm text-zinc-300">
-                {store.description ?? t("defaultDesc")}
-              </p>
-              <div className="mt-6 text-xs text-emerald-200">
-                {t("view")}
-              </div>
-            </Link>
-          ))}
+          {stores.map((store) => {
+            const card = resolveStoresCard(store, locale);
+
+            return (
+              <Link
+                key={store.id}
+                href={card.href}
+                className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 transition hover:border-emerald-300/60"
+              >
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+                  {card.typeLabel}
+                </p>
+                <h2 className="mt-4 text-xl font-semibold">{card.name}</h2>
+                <p className="mt-2 text-sm text-zinc-300">
+                  {card.description ?? t("defaultDesc")}
+                </p>
+                <div className="mt-6 text-xs text-emerald-200">
+                  {t("view")}
+                </div>
+              </Link>
+            );
+          })}
         </section>
       </main>
       <Footer />

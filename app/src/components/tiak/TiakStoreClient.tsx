@@ -25,6 +25,18 @@ type Props = {
   currentUserRole: string | null;
 };
 
+function scheduleIdleTask(task: () => void, timeout = 1200) {
+  if (typeof window === "undefined") return () => undefined;
+
+  if ("requestIdleCallback" in window) {
+    const idleId = window.requestIdleCallback(task, { timeout });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timerId = globalThis.setTimeout(task, Math.min(timeout, 300));
+  return () => globalThis.clearTimeout(timerId);
+}
+
 function upsertDelivery(list: TiakDelivery[], entry: TiakDelivery) {
   const index = list.findIndex((item) => item.id === entry.id);
   if (index === -1) {
@@ -416,7 +428,11 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   }, [refreshTrackedDeliveries]);
 
   useEffect(() => {
-    refreshCouriers();
+    const cancel = scheduleIdleTask(() => {
+      void refreshCouriers();
+    }, 900);
+
+    return cancel;
   }, [refreshCouriers]);
 
   useEffect(() => {
@@ -442,11 +458,19 @@ export default function TiakStoreClient({ locale, isLoggedIn, currentUserId, cur
   }, [notificationsReadKey]);
 
   useEffect(() => {
-    refreshPayouts();
+    const cancel = scheduleIdleTask(() => {
+      void refreshPayouts();
+    }, 1400);
+
+    return cancel;
   }, [refreshPayouts]);
 
   useEffect(() => {
-    refreshTiakNotifications();
+    const cancel = scheduleIdleTask(() => {
+      void refreshTiakNotifications();
+    }, 1600);
+
+    return cancel;
   }, [refreshTiakNotifications]);
 
   useEffect(() => {

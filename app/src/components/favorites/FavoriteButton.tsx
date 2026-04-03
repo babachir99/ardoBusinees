@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 type FavoriteButtonProps = {
   productId: string;
+  initialIsFavorite?: boolean;
   addLabel?: string;
   removeLabel?: string;
   variant?: "default" | "icon";
@@ -13,16 +14,21 @@ type FavoriteButtonProps = {
 
 export default function FavoriteButton({
   productId,
+  initialIsFavorite,
   addLabel,
   removeLabel,
   variant = "default",
   className,
 }: FavoriteButtonProps) {
   const t = useTranslations("Favorites");
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(initialIsFavorite ?? false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (typeof initialIsFavorite === "boolean") {
+      return;
+    }
+
     const load = async () => {
       const res = await fetch(`/api/favorites?productId=${productId}`);
       if (res.ok) {
@@ -31,7 +37,7 @@ export default function FavoriteButton({
       }
     };
     load();
-  }, [productId]);
+  }, [initialIsFavorite, productId]);
 
   const toggle = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();

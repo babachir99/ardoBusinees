@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { parseMessageBody } from "@/lib/message-attachments";
-import { getGpThreadReadMap } from "@/lib/messages/gpThreadRead";
+import { GP_THREAD_READ_ACTION, getGpThreadReadMap } from "@/lib/messages/gpThreadRead";
 import { getPresenceMap, serializePresence, type MessagePresenceSummary } from "@/lib/messages/presence";
 import { prisma } from "@/lib/prisma";
 
@@ -220,6 +220,11 @@ function buildGpCursorWhere(cursor: ReturnType<typeof decodeCursor>) {
       },
     ],
   } satisfies Prisma.GpShipmentWhereInput;
+}
+
+async function queryCount(query: Prisma.Sql) {
+  const rows = await prisma.$queryRaw<Array<{ count: number }>>(query);
+  return Number(rows[0]?.count ?? 0);
 }
 
 export async function listMessageConversations({
@@ -524,7 +529,11 @@ export async function listMessageConversations({
 export async function countMessageConversations(userId: string, sellerProfileId: string | null) {
   const inquiryWhere = buildInquiryWhere(userId, sellerProfileId);
 
-  const [shopCount, tiakCount, gpCount, inquiries, tiakDeliveries, gpShipments] = await Promise.all([
+  const sellerScopeClause = sellerProfileId
+    ? Prisma.sql`OR pi."sellerId" = ${sellerProfileId}`
+    : Prisma.empty;
+
+  const [shopCount, tiakCount, gpCount, shopUnreadCount, tiakUnreadCount, gpUnreadCount] = await Promise.all([
     prisma.productInquiry.count({ where: inquiryWhere }),
     prisma.tiakDelivery.count({
       where: {
@@ -536,91 +545,70 @@ export async function countMessageConversations(userId: string, sellerProfileId:
         OR: [{ senderId: userId }, { receiverId: userId }, { transporterId: userId }],
       },
     }),
-    prisma.productInquiry.findMany({
-      where: inquiryWhere,
-      select: {
-        id: true,
-        buyerId: true,
-        buyerLastReadAt: true,
-        sellerLastReadAt: true,
-        seller: {
-          select: { userId: true },
-        },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            senderId: true,
-            createdAt: true,
-          },
-        },
-      },
-    }),
-    prisma.tiakDelivery.findMany({
-      where: {
-        OR: [{ customerId: userId }, { courierId: userId }],
-      },
-      select: {
-        id: true,
-        events: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            actorId: true,
-          },
-        },
-      },
-    }),
-    prisma.gpShipment.findMany({
-      where: {
-        OR: [{ senderId: userId }, { receiverId: userId }, { transporterId: userId }],
-      },
-      select: {
-        id: true,
-        events: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            actorId: true,
-            createdAt: true,
-          },
-        },
-      },
-    }),
+    queryCount(Prisma.sql`
+      SELECT COUNT(DISTINCT pi."id")::int AS count
+      FROM "ProductInquiry" pi
+      JOIN "ProductInquiryMessage" pim
+        ON pim."inquiryId" = pi."id"
+       AND pim."createdAt" = pi."lastMessageAt"
+      LEFT JOIN "SellerProfile" sp
+        ON sp."id" = pi."sellerId"
+      WHERE (pi."buyerId" = ${userId} ${sellerScopeClause})
+        AND pim."senderId" <> ${userId}
+        AND (
+          (pi."buyerId" = ${userId} AND (pi."buyerLastReadAt" IS NULL OR pim."createdAt" > pi."buyerLastReadAt"))
+          OR
+          (sp."userId" = ${userId} AND (pi."sellerLastReadAt" IS NULL OR pim."createdAt" > pi."sellerLastReadAt"))
+        )
+    `),
+    queryCount(Prisma.sql`
+      SELECT COUNT(*)::int AS count
+      FROM (
+        SELECT DISTINCT ON (event."deliveryId")
+          event."deliveryId",
+          event."actorId"
+        FROM "TiakDeliveryEvent" event
+        INNER JOIN "TiakDelivery" delivery
+          ON delivery."id" = event."deliveryId"
+        WHERE delivery."customerId" = ${userId}
+           OR delivery."courierId" = ${userId}
+        ORDER BY event."deliveryId", event."createdAt" DESC, event."id" DESC
+      ) latest
+      WHERE latest."actorId" <> ${userId}
+    `),
+    queryCount(Prisma.sql`
+      WITH latest_events AS (
+        SELECT DISTINCT ON (event."shipmentId")
+          event."shipmentId",
+          event."actorId",
+          event."createdAt"
+        FROM "GpShipmentEvent" event
+        INNER JOIN "GpShipment" shipment
+          ON shipment."id" = event."shipmentId"
+        WHERE shipment."senderId" = ${userId}
+           OR shipment."receiverId" = ${userId}
+           OR shipment."transporterId" = ${userId}
+        ORDER BY event."shipmentId", event."createdAt" DESC, event."id" DESC
+      ),
+      latest_reads AS (
+        SELECT DISTINCT ON (log."entityId")
+          log."entityId",
+          log."createdAt"
+        FROM "ActivityLog" log
+        WHERE log."userId" = ${userId}
+          AND log."action" = ${GP_THREAD_READ_ACTION}
+          AND log."entityType" = 'GpShipment'
+          AND log."entityId" IS NOT NULL
+        ORDER BY log."entityId", log."createdAt" DESC, log."id" DESC
+      )
+      SELECT COUNT(*)::int AS count
+      FROM latest_events event
+      LEFT JOIN latest_reads read_log
+        ON read_log."entityId" = event."shipmentId"
+      WHERE event."actorId" <> ${userId}
+        AND (read_log."createdAt" IS NULL OR event."createdAt" > read_log."createdAt")
+    `),
   ]);
-
-  const shopUnreadCount = inquiries.reduce((count, inquiry) => {
-    const lastMessage = inquiry.messages[0];
-    if (!lastMessage || lastMessage.senderId === userId) return count;
-
-    const lastReadAt =
-      inquiry.buyerId === userId
-        ? inquiry.buyerLastReadAt
-        : inquiry.seller?.userId === userId
-          ? inquiry.sellerLastReadAt
-          : null;
-
-    const unread = !lastReadAt || lastMessage.createdAt.getTime() > new Date(lastReadAt).getTime();
-    return unread ? count + 1 : count;
-  }, 0);
-
-  const tiakUnreadCount = tiakDeliveries.reduce((count, delivery) => {
-    const lastEvent = delivery.events[0];
-    return lastEvent && lastEvent.actorId !== userId ? count + 1 : count;
-  }, 0);
-
-  const gpReadMap = await getGpThreadReadMap(
-    userId,
-    gpShipments.map((shipment) => shipment.id)
-  );
-  const gpUnreadCount = gpShipments.reduce((count, shipment) => {
-    const lastEvent = shipment.events[0];
-    const lastReadAt = gpReadMap.get(shipment.id) ?? null;
-    const unread =
-      Boolean(lastEvent && lastEvent.actorId !== userId) &&
-      (!lastReadAt || lastEvent.createdAt.getTime() > lastReadAt.getTime());
-    return unread ? count + 1 : count;
-  }, 0);
 
   return {
     shopCount,

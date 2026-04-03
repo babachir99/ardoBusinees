@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useState, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 
 type ProductCardImage = {
   url: string;
@@ -22,19 +22,54 @@ export default function ProductCardCarousel({
   locale,
   className,
 }: ProductCardCarouselProps) {
-  const safeImages = images.filter((image) => Boolean(image.url));
+  const safeImages = useMemo(() => images.filter((image) => Boolean(image.url)), [images]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isInViewport, setIsInViewport] = useState(
+    () => typeof window === "undefined" || typeof IntersectionObserver === "undefined"
+  );
+  const [canAutoRotate] = useState(() => {
+    if (typeof window === "undefined") return false;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const supportsHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean };
+    }).connection;
+
+    return !prefersReducedMotion && supportsHover && !connection?.saveData;
+  });
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (safeImages.length <= 1) return;
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInViewport(entry?.isIntersecting ?? false);
+      },
+      { rootMargin: "120px 0px" }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (safeImages.length <= 1 || !canAutoRotate || !isInViewport) return;
 
     const intervalId = window.setInterval(() => {
       setActiveIndex((idx) => (idx + 1) % safeImages.length);
     }, 3800);
 
     return () => window.clearInterval(intervalId);
-  }, [safeImages.length]);
+  }, [canAutoRotate, isInViewport, safeImages.length]);
 
   const onPrev = () => {
     if (safeImages.length <= 1) return;
@@ -77,6 +112,7 @@ export default function ProductCardCarousel({
 
   return (
     <div
+      ref={containerRef}
       className={`relative h-full w-full ${className ?? ""}`}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
@@ -84,6 +120,8 @@ export default function ProductCardCarousel({
       <img
         src={currentImage.url}
         alt={currentImage.alt ?? title}
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
       />
 
