@@ -25,9 +25,8 @@ function resolveHomeStoreCard(store: { slug: string; name: string; type: string 
   if (store.type === "MARKETPLACE" || CARES_STORE_SLUGS.has(store.slug)) {
     return {
       href: "/stores/jontaado-cares",
-      logoSrc: "/stores/cares.png",
+      logoSrc: "/stores/last_cares.png",
       srLabel: "JONTAADO CARES",
-      imageClassName: "scale-[1.75] sm:scale-[1.65]",
     };
   }
 
@@ -35,7 +34,6 @@ function resolveHomeStoreCard(store: { slug: string; name: string; type: string 
     href: `/stores/${store.slug}`,
     logoSrc: storeLogos[store.slug] ?? "/logo.png",
     srLabel: store.name,
-    imageClassName: "",
   };
 }
 
@@ -246,7 +244,7 @@ export default async function HomePage({
             alt="JONTAADO logo"
             width={140}
             height={140}
-            className="h-[90px] w-auto md:h-[108px]"
+            className="h-[72px] w-auto md:h-[86px]"
             priority
           />
         </Link>
@@ -353,32 +351,18 @@ export default async function HomePage({
                     href={storeCard.href}
                     className="flex flex-col items-center gap-0.5 rounded-2xl border border-transparent bg-transparent px-1 py-1 text-center text-xs text-zinc-200 transition hover:border-emerald-300/40"
                   >
-                    <div className="flex h-[106px] w-[165px] items-center justify-center overflow-hidden">
-                      <Image
-                        src={storeCard.logoSrc}
-                        alt={`${storeCard.srLabel} logo`}
-                        width={252}
-                        height={252}
-                        className={`h-[106px] w-[165px] object-contain transition-transform ${storeCard.imageClassName}`}
-                      />
-                    </div>
+                    <Image
+                      src={storeCard.logoSrc}
+                      alt={`${storeCard.srLabel} logo`}
+                      width={252}
+                      height={252}
+                      className="h-[106px] w-[165px] object-contain"
+                    />
                     <span className="sr-only">{storeCard.srLabel}</span>
                   </Link>
                 );
               })}
             </div>
-          </div>
-
-          <div className="-mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-zinc-900/60 px-3 py-2 fade-up">
-            <Link href="/immo" className="rounded-full border border-emerald-300/40 px-3 py-1 text-[11px] font-semibold text-emerald-200">
-              IMMO
-            </Link>
-            <Link href="/auto" className="rounded-full border border-sky-300/40 px-3 py-1 text-[11px] font-semibold text-sky-200">
-              AUTO
-            </Link>
-            <Link href="/cars" className="rounded-full border border-cyan-300/40 px-3 py-1 text-[11px] font-semibold text-cyan-200">
-              CARS
-            </Link>
           </div>
 
           <div className="-mt-4 rounded-3xl border border-white/10 bg-zinc-900/70 p-[2.2px] card-glow fade-up">
@@ -390,7 +374,7 @@ export default async function HomePage({
                 >
                   <span className="text-sm font-semibold text-white">{operatorGreeting}</span>
                   <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">&rarr;</span>
                   </span>
                 </Link>
               ) : (
@@ -400,7 +384,7 @@ export default async function HomePage({
                 >
                   <span className="bg-gradient-to-r from-emerald-200 via-cyan-200 to-emerald-200 bg-[length:200%_100%] bg-[position:0%_50%] bg-clip-text text-sm font-semibold text-transparent transition-[background-position,letter-spacing] duration-500 group-hover:bg-[position:100%_50%] group-hover:tracking-[0.01em]">{startOperatorCta}</span>
                   <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                    {operatorCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">&rarr;</span>
                   </span>
                 </Link>
               )
@@ -411,7 +395,7 @@ export default async function HomePage({
               >
                 <span className="bg-gradient-to-r from-emerald-200 via-cyan-200 to-emerald-200 bg-[length:200%_100%] bg-[position:0%_50%] bg-clip-text text-sm font-semibold text-transparent transition-[background-position,letter-spacing] duration-500 group-hover:bg-[position:100%_50%] group-hover:tracking-[0.01em]">{startOperatorCta}</span>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300">
-                  {loginToStartCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">â†’</span>
+                  {loginToStartCta}<span className="text-sm transition-transform duration-200 group-hover:translate-x-0.5">&rarr;</span>
                 </span>
               </Link>
             )}

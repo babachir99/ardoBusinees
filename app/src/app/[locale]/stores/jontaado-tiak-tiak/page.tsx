@@ -4,6 +4,8 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import TiakStoreClient from "@/components/tiak/TiakStoreClient";
 import { authOptions } from "@/lib/auth";
+import { hasAnyUserRole } from "@/lib/userRoles";
+import { Vertical, getVerticalRules } from "@/lib/verticals";
 
 export default async function TiakTiakPage({
   params,
@@ -12,6 +14,7 @@ export default async function TiakTiakPage({
 }) {
   const { locale } = await params;
   const session = await getServerSession(authOptions);
+  const canOpenDashboard = hasAnyUserRole(session?.user, getVerticalRules(Vertical.TIAK_TIAK).publishRoles);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -26,12 +29,22 @@ export default async function TiakTiakPage({
             priority
           />
         </Link>
-        <Link
-          href="/stores"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-        </Link>
+        <div className="flex items-center gap-2">
+          {canOpenDashboard ? (
+            <Link
+              href="/stores/jontaado-tiak-tiak/dashboard"
+              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80"
+            >
+              {locale === "fr" ? "Mon dashboard TIAK" : "My TIAK dashboard"}
+            </Link>
+          ) : null}
+          <Link
+            href="/stores"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
@@ -52,6 +65,7 @@ export default async function TiakTiakPage({
           isLoggedIn={Boolean(session?.user?.id)}
           currentUserId={session?.user?.id ?? null}
           currentUserRole={session?.user?.role ?? null}
+          canOpenDashboard={canOpenDashboard}
         />
       </main>
 

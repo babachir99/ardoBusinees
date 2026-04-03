@@ -2,8 +2,13 @@ import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
+import { formatMoney } from "@/lib/format";
+import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { hasAnyUserRole } from "@/lib/userRoles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +20,12 @@ function formatDateOnly(locale: string, value: Date | null) {
   }).format(value);
 }
 
+function startOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 export default async function TransporterDashboardPage({
   params,
 }: {
@@ -22,8 +33,11 @@ export default async function TransporterDashboardPage({
 }) {
   const { locale } = await params;
   const session = await getServerSession(authOptions);
+  const isFr = locale === "fr";
+  const rules = getVerticalRules(Vertical.GP);
+  const canAccess = hasAnyUserRole(session?.user, rules.publishRoles);
 
-  if (!session?.user?.id || !["TRANSPORTER", "ADMIN"].includes(session.user.role)) {
+  if (!session?.user?.id || !canAccess) {
     return (
       <div className="min-h-screen bg-jonta text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12">
@@ -49,7 +63,25 @@ export default async function TransporterDashboardPage({
     );
   }
 
-  const [user, trips, recentReviews] = await Promise.all([
+  const today = startOfToday();
+  const trendDays = 90;
+  const trendStart = new Date(today);
+  trendStart.setDate(trendStart.getDate() - (trendDays - 1));
+
+  const [
+    user,
+    totalTrips,
+    openTrips,
+    totalKgAggregate,
+    avgPriceAggregate,
+    activeShipments,
+    uniqueClientRows,
+    bookedRows,
+    trendRows,
+    trips,
+    recentReviews,
+    recentClientBookings,
+  ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -58,15 +90,90 @@ export default async function TransporterDashboardPage({
         email: true,
         phone: true,
         image: true,
-        role: true,
         transporterRating: true,
         transporterReviewCount: true,
+      },
+    }),
+    prisma.gpTrip.count({
+      where: { transporterId: session.user.id },
+    }),
+    prisma.gpTrip.count({
+      where: { transporterId: session.user.id, status: "OPEN" },
+    }),
+    prisma.gpTripBooking.aggregate({
+      _sum: { requestedKg: true },
+      where: {
+        transporterId: session.user.id,
+        status: { in: ["CONFIRMED", "COMPLETED", "DELIVERED"] },
+      },
+    }),
+    prisma.gpTrip.aggregate({
+      _avg: { pricePerKgCents: true },
+      where: {
+        transporterId: session.user.id,
+        status: "OPEN",
+      },
+    }),
+    prisma.gpShipment.count({
+      where: {
+        transporterId: session.user.id,
+        status: { in: ["DROPPED_OFF", "PICKED_UP", "BOARDED", "ARRIVED"] },
+      },
+    }),
+    prisma.gpTripBooking.findMany({
+      where: {
+        transporterId: session.user.id,
+        status: { in: ["ACCEPTED", "CONFIRMED", "COMPLETED", "DELIVERED"] },
+      },
+      distinct: ["customerId"],
+      select: { customerId: true },
+    }),
+    prisma.gpTripBooking.findMany({
+      where: {
+        transporterId: session.user.id,
+        status: { in: ["ACCEPTED", "CONFIRMED", "COMPLETED", "DELIVERED"] },
+      },
+      select: {
+        id: true,
+        status: true,
+        requestedKg: true,
+        customerId: true,
+        createdAt: true,
+        confirmedAt: true,
+        completedAt: true,
+        trip: {
+          select: {
+            pricePerKgCents: true,
+            currency: true,
+          },
+        },
+      },
+    }),
+    prisma.gpTripBooking.findMany({
+      where: {
+        transporterId: session.user.id,
+        createdAt: { gte: trendStart },
+        status: { in: ["CONFIRMED", "COMPLETED", "DELIVERED"] },
+      },
+      select: {
+        id: true,
+        customerId: true,
+        requestedKg: true,
+        createdAt: true,
+        confirmedAt: true,
+        completedAt: true,
+        trip: {
+          select: {
+            pricePerKgCents: true,
+            currency: true,
+          },
+        },
       },
     }),
     prisma.gpTrip.findMany({
       where: { transporterId: session.user.id },
       orderBy: [{ flightDate: "asc" }, { createdAt: "desc" }],
-      take: 60,
+      take: 12,
       select: {
         id: true,
         originCity: true,
@@ -83,7 +190,7 @@ export default async function TransporterDashboardPage({
     prisma.transporterReview.findMany({
       where: { transporterId: session.user.id },
       orderBy: { createdAt: "desc" },
-      take: 12,
+      take: 8,
       include: {
         reviewer: { select: { id: true, name: true, image: true } },
         trip: {
@@ -92,6 +199,35 @@ export default async function TransporterDashboardPage({
             originCity: true,
             destinationCity: true,
             flightDate: true,
+          },
+        },
+      },
+    }),
+    prisma.gpTripBooking.findMany({
+      where: {
+        transporterId: session.user.id,
+        status: { in: ["ACCEPTED", "CONFIRMED", "COMPLETED", "DELIVERED"] },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: {
+        id: true,
+        status: true,
+        requestedKg: true,
+        createdAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+        trip: {
+          select: {
+            originCity: true,
+            destinationCity: true,
+            pricePerKgCents: true,
+            currency: true,
           },
         },
       },
@@ -111,21 +247,50 @@ export default async function TransporterDashboardPage({
     );
   }
 
-  const totalTrips = trips.length;
-  const openTrips = trips.filter((trip) => trip.status === "OPEN").length;
-  const closedTrips = trips.filter((trip) => trip.status === "CLOSED").length;
-  const canceledTrips = trips.filter((trip) => trip.status === "CANCELED").length;
-  const totalKg = trips.filter((trip) => trip.status === "OPEN").reduce((acc, trip) => acc + trip.availableKg, 0);
+  const trendDates = buildTrendPoints(locale, trendStart, trendDays);
+  const revenueByDay = Object.fromEntries(trendDates.map((point) => [point.key, 0])) as Record<string, number>;
+  const bookingsByDay = Object.fromEntries(trendDates.map((point) => [point.key, 0])) as Record<string, number>;
+  const clientSetsByDay = Object.fromEntries(
+    trendDates.map((point) => [point.key, new Set<string>()])
+  ) as Record<string, Set<string>>;
 
-  const pricedTrips = trips.filter((trip) => trip.status === "OPEN");
-  const averagePrice =
-    pricedTrips.length > 0
-      ? Math.round(pricedTrips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / pricedTrips.length)
-      : 0;
+  for (const booking of trendRows) {
+    const referenceDate = booking.completedAt ?? booking.confirmedAt ?? booking.createdAt;
+    const key = toDayKey(referenceDate);
+    if (!(key in bookingsByDay)) continue;
+    bookingsByDay[key] += 1;
+    clientSetsByDay[key]?.add(booking.customerId);
+    revenueByDay[key] += booking.requestedKg * (booking.trip?.pricePerKgCents ?? 0);
+  }
+
+  let signedRevenueCents = 0;
+  let pendingRevenueCents = 0;
+  for (const booking of bookedRows) {
+    const amount = booking.requestedKg * (booking.trip?.pricePerKgCents ?? 0);
+    if (["CONFIRMED", "COMPLETED", "DELIVERED"].includes(booking.status)) {
+      signedRevenueCents += amount;
+    }
+    if (["ACCEPTED", "CONFIRMED"].includes(booking.status)) {
+      pendingRevenueCents += amount;
+    }
+  }
 
   const nextTrip = trips
     .filter((trip) => trip.status === "OPEN" && trip.flightDate >= new Date())
     .sort((a, b) => a.flightDate.getTime() - b.flightDate.getTime())[0];
+  const displayCurrency = bookedRows[0]?.trip?.currency ?? nextTrip?.currency ?? "XOF";
+  const uniqueClients = uniqueClientRows.length;
+  const totalKg = totalKgAggregate._sum.requestedKg ?? 0;
+  const averagePrice = Math.round(avgPriceAggregate._avg.pricePerKgCents ?? 0);
+
+  const statCards = [
+    { label: isFr ? "Trajets ouverts" : "Open trips", value: openTrips },
+    { label: isFr ? "Colis en cours" : "Active shipments", value: activeShipments },
+    { label: isFr ? "Clients actifs" : "Active clients", value: uniqueClients },
+    { label: isFr ? "Kg confirmes" : "Confirmed kg", value: totalKg },
+    { label: isFr ? "Gains signes" : "Signed revenue", value: formatMoney(signedRevenueCents, displayCurrency, locale) },
+    { label: isFr ? "A livrer" : "Revenue in flight", value: formatMoney(pendingRevenueCents, displayCurrency, locale) },
+  ];
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -164,33 +329,26 @@ export default async function TransporterDashboardPage({
           </h1>
           <p className="mt-2 text-sm text-zinc-300">
             {locale === "fr"
-              ? `Ravis de vous retrouver ${user.name ?? ""}. Suivez vos trajets, avis et performances.`
-              : `Welcome back ${user.name ?? ""}. Track your trips, reviews and performance.`}
+              ? `Ravis de vous retrouver ${user.name ?? ""}. Suivez vos gains, vos colis et vos clients sur la duree.`
+              : `Welcome back ${user.name ?? ""}. Track revenue, parcels and customers over time.`}
           </p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
             <span className="rounded-full border border-white/15 px-3 py-1">
-              ? {user.transporterRating.toFixed(1)} ({user.transporterReviewCount})
+              Note {user.transporterRating.toFixed(1)} ({user.transporterReviewCount})
             </span>
-            {user.phone && (
+            <span className="rounded-full border border-white/15 px-3 py-1">
+              {locale === "fr" ? "Trajets publies" : "Published trips"}: {totalTrips}
+            </span>
+            {user.phone ? (
               <span className="rounded-full border border-white/15 px-3 py-1">
                 {locale === "fr" ? "Contact" : "Contact"}: {user.phone}
               </span>
-            )}
+            ) : null}
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-          {[
-            { label: locale === "fr" ? "Trajets total" : "Total trips", value: totalTrips },
-            { label: locale === "fr" ? "Ouverts" : "Open", value: openTrips },
-            { label: locale === "fr" ? "Clotures" : "Closed", value: closedTrips },
-            { label: locale === "fr" ? "Annules" : "Canceled", value: canceledTrips },
-            { label: locale === "fr" ? "Kg ouverts" : "Open kg", value: totalKg },
-            {
-              label: locale === "fr" ? "Prix moyen (open)" : "Average price (open)",
-              value: `${averagePrice} ${nextTrip?.currency === "XOF" ? "FCFA" : nextTrip?.currency ?? "XOF"}`,
-            },
-          ].map((card) => (
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          {statCards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
               <p className="text-[11px] text-zinc-400">{card.label}</p>
               <p className="mt-2 text-xl font-semibold text-white">{card.value}</p>
@@ -198,7 +356,42 @@ export default async function TransporterDashboardPage({
           ))}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <PartnerTrendsPanel
+          locale={locale}
+          title={locale === "fr" ? "Vue jour par jour" : "Day-by-day view"}
+          subtitle={
+            locale === "fr"
+              ? "Observe le rythme des reservations, la signature de revenu et l'arrivee de nouveaux clients."
+              : "See booking rhythm, signed revenue and new-client momentum."
+          }
+          dates={trendDates}
+          metrics={[
+            {
+              key: "revenue",
+              title: locale === "fr" ? "Gains signes" : "Signed revenue",
+              color: "#34d399",
+              series: trendDates.map((point) => revenueByDay[point.key] ?? 0),
+              isMoney: true,
+              moneyLabel: displayCurrency === "XOF" ? "FCFA" : displayCurrency,
+            },
+            {
+              key: "bookings",
+              title: locale === "fr" ? "Reservations" : "Bookings",
+              color: "#38bdf8",
+              series: trendDates.map((point) => bookingsByDay[point.key] ?? 0),
+            },
+            {
+              key: "clients",
+              title: locale === "fr" ? "Clients" : "Clients",
+              color: "#f59e0b",
+              series: trendDates.map((point) => clientSetsByDay[point.key]?.size ?? 0),
+            },
+          ]}
+          rangeOptions={[7, 30, 90]}
+          defaultRange={30}
+        />
+
+        <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-white">
@@ -219,10 +412,7 @@ export default async function TransporterDashboardPage({
             ) : (
               <div className="mt-4 grid gap-3">
                 {trips.map((trip) => (
-                  <div
-                    key={trip.id}
-                    className="rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300"
-                  >
+                  <div key={trip.id} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-white">
                         {trip.originCity} {"->"} {trip.destinationCity}
@@ -232,58 +422,118 @@ export default async function TransporterDashboardPage({
                           trip.status === "OPEN"
                             ? "bg-emerald-400/20 text-emerald-200"
                             : trip.status === "CLOSED"
-                            ? "bg-amber-400/20 text-amber-200"
-                            : "bg-rose-400/20 text-rose-200"
+                              ? "bg-amber-400/20 text-amber-200"
+                              : "bg-rose-400/20 text-rose-200"
                         }`}
                       >
                         {trip.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] text-zinc-400">
-                      {formatDateOnly(locale, trip.flightDate)} - {trip.availableKg}kg - {trip.pricePerKgCents} {trip.currency === "XOF" ? "FCFA" : trip.currency}
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">ID: {trip.id.slice(0, 10)}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400">
+                      <span>{formatDateOnly(locale, trip.flightDate)}</span>
+                      <span>{trip.availableKg}kg</span>
+                      <span>{formatMoney(trip.pricePerKgCents, trip.currency, locale)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold text-white">
-              {locale === "fr" ? "Avis recus" : "Received reviews"}
-            </h2>
-            {nextTrip && (
-              <p className="mt-2 text-xs text-zinc-400">
-                {locale === "fr" ? "Prochain depart" : "Next departure"}: {formatDateOnly(locale, nextTrip.flightDate)}
-              </p>
-            )}
-
-            {recentReviews.length === 0 ? (
-              <p className="mt-4 text-sm text-zinc-400">
-                {locale === "fr" ? "Aucun avis pour le moment." : "No reviews yet."}
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-3">
-                {recentReviews.map((review) => (
-                  <div
-                    key={review.id}
-                    className="rounded-2xl border border-white/10 bg-zinc-950/60 p-3 text-xs text-zinc-300"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-amber-200">? {review.rating}/5</p>
-                      <p className="text-[11px] text-zinc-500">
-                        {new Date(review.createdAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
-                      </p>
-                    </div>
-                    <p className="mt-1 text-[11px] text-zinc-400">
-                      {review.reviewer.name ?? (locale === "fr" ? "Client" : "Customer")} - {review.trip.originCity} {"->"} {review.trip.destinationCity}
-                    </p>
-                    {review.comment && <p className="mt-1">{review.comment}</p>}
-                  </div>
-                ))}
+          <div className="grid gap-6">
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-white">
+                  {locale === "fr" ? "Clients recents" : "Recent clients"}
+                </h2>
+                {nextTrip ? (
+                  <span className="text-[11px] text-zinc-400">
+                    {locale === "fr" ? "Prochain depart" : "Next departure"}: {formatDateOnly(locale, nextTrip.flightDate)}
+                  </span>
+                ) : null}
               </div>
-            )}
+              {recentClientBookings.length === 0 ? (
+                <p className="mt-4 text-sm text-zinc-400">
+                  {locale === "fr" ? "Aucun client pour le moment." : "No client yet."}
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  {recentClientBookings.map((booking) => (
+                    <div key={booking.id} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {booking.customer.name ?? (locale === "fr" ? "Client" : "Customer")}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-400">
+                            {booking.trip.originCity} {"->"} {booking.trip.destinationCity}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-zinc-300">
+                          {booking.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400">
+                        <span>{booking.requestedKg}kg</span>
+                        <span>{formatMoney(booking.requestedKg * booking.trip.pricePerKgCents, booking.trip.currency, locale)}</span>
+                        <span>{formatDateOnly(locale, booking.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
+              <h2 className="text-lg font-semibold text-white">
+                {locale === "fr" ? "Avis recus" : "Received reviews"}
+              </h2>
+              {recentReviews.length === 0 ? (
+                <p className="mt-4 text-sm text-zinc-400">
+                  {locale === "fr" ? "Aucun avis pour le moment." : "No reviews yet."}
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-3">
+                  {recentReviews.map((review) => (
+                    <div key={review.id} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-amber-200">{review.rating}/5</p>
+                        <p className="text-[11px] text-zinc-500">
+                          {new Date(review.createdAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-[11px] text-zinc-400">
+                        {review.reviewer.name ?? (locale === "fr" ? "Client" : "Customer")} - {review.trip.originCity} {"->"} {review.trip.destinationCity}
+                      </p>
+                      {review.comment ? <p className="mt-2">{review.comment}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 text-sm text-zinc-300">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                {locale === "fr" ? "Lecture rapide" : "Quick read"}
+              </h2>
+              <p className="mt-1 text-zinc-400">
+                {locale === "fr"
+                  ? "Un panorama simple de la traction du compte transporteur."
+                  : "A simple overview of transporter account momentum."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-white/10 px-3 py-1">
+                {locale === "fr" ? "Prix moyen ouvert" : "Average open price"}: {averagePrice > 0 ? formatMoney(averagePrice, displayCurrency, locale) : "-"}
+              </span>
+              <span className="rounded-full border border-white/10 px-3 py-1">
+                {locale === "fr" ? "Clients actifs" : "Active clients"}: {uniqueClients}
+              </span>
+            </div>
           </div>
         </section>
       </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@/i18n/navigation";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedWizard from "@/components/presta/PrestaNeedWizard";
 import PrestaNeedPublishPopup from "@/components/presta/PrestaNeedPublishPopup";
@@ -63,6 +64,7 @@ type Props = {
   canPublish: boolean;
   currentUserId?: string | null;
   currentUserRole?: string | null;
+  dashboardHref?: string | null;
 };
 
 type ProfilePayload = {
@@ -136,6 +138,7 @@ export default function PrestaStoreClient({
   canPublish,
   currentUserId,
   currentUserRole,
+  dashboardHref,
 }: Props) {
   const [tab, setTab] = useState<"offers" | "needs" | "provider">("offers");
 
@@ -800,6 +803,14 @@ export default function PrestaStoreClient({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {dashboardHref ? (
+              <Link
+                href={dashboardHref}
+                className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-400/15"
+              >
+                {isFr ? "Dashboard PRESTA" : "PRESTA dashboard"}
+              </Link>
+            ) : null}
             {tab === "needs" ? (
               <button
                 type="button"

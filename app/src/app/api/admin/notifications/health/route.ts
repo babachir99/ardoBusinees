@@ -11,32 +11,47 @@ function errorResponse(status: number, code: string, message: string) {
   return NextResponse.json({ ok: false, code, message }, { status });
 }
 
-const OUTBOX_STATUSES: EmailOutboxStatus[] = ["PENDING", "SENT", "FAILED", "CANCELLED"];
-
 function toAgeSeconds(timestamp: Date | null): number | null {
   if (!timestamp) return null;
   return Math.max(0, Math.floor((Date.now() - timestamp.getTime()) / 1000));
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return errorResponse(401, "NO_SESSION", "Authentication required.");
-  }
-
-  if (!hasUserRole(session.user, "ADMIN")) {
-    return errorResponse(403, "FORBIDDEN", "Admin access required.");
-  }
-
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
   try {
-    const [statusGroups, oldestPending, failedLast24h, sentLast24h, templateFailureGroups] =
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return errorResponse(401, "NO_SESSION", "Authentication required.");
+    }
+
+    if (!hasUserRole(session.user, "ADMIN")) {
+      return errorResponse(403, "FORBIDDEN", "Admin access required.");
+    }
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [
+      pendingCount,
+      sentCount,
+      failedCount,
+      cancelledCount,
+      oldestPending,
+      failedLast24h,
+      sentLast24h,
+      failedTemplates,
+    ] =
       await Promise.all([
-        prisma.emailOutbox.groupBy({
-          by: ["status"],
-          _count: { _all: true },
+        prisma.emailOutbox.count({
+          where: { status: "PENDING" },
+        }),
+        prisma.emailOutbox.count({
+          where: { status: "SENT" },
+        }),
+        prisma.emailOutbox.count({
+          where: { status: "FAILED" },
+        }),
+        prisma.emailOutbox.count({
+          where: { status: "CANCELLED" },
         }),
         prisma.emailOutbox.findFirst({
           where: { status: "PENDING" },
@@ -55,30 +70,33 @@ export async function GET() {
             sentAt: { gte: since },
           },
         }),
-        prisma.emailOutbox.groupBy({
-          by: ["templateKey"],
+        prisma.emailOutbox.findMany({
           where: { status: "FAILED" },
-          _count: { _all: true },
+          distinct: ["templateKey"],
+          select: { templateKey: true },
         }),
       ]);
 
     const counts: Record<EmailOutboxStatus, number> = {
-      PENDING: 0,
-      SENT: 0,
-      FAILED: 0,
-      CANCELLED: 0,
+      PENDING: pendingCount,
+      SENT: sentCount,
+      FAILED: failedCount,
+      CANCELLED: cancelledCount,
     };
 
-    for (const status of OUTBOX_STATUSES) {
-      const group = statusGroups.find((entry) => entry.status === status);
-      counts[status] = group?._count._all ?? 0;
-    }
-
-    const topTemplateFailures = templateFailureGroups
-      .map((entry) => ({
-        templateKey: entry.templateKey,
-        count: entry._count._all,
+    const templateFailureCounts = await Promise.all(
+      failedTemplates.map(async ({ templateKey }) => ({
+        templateKey,
+        count: await prisma.emailOutbox.count({
+          where: {
+            status: "FAILED",
+            templateKey,
+          },
+        }),
       }))
+    );
+
+    const topTemplateFailures = templateFailureCounts
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 

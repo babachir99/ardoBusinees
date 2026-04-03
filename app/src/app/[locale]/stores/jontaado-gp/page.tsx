@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth";
 import GpTripPublishModal from "@/components/gp/GpTripPublishModal";
 import GpTripCard from "@/components/gp/GpTripCard";
 import { resolveGpPublishAccess } from "@/components/gp/gpPublishAccess";
+import { hasAnyUserRole } from "@/lib/userRoles";
+import { Vertical, getVerticalRules } from "@/lib/verticals";
 
 const currencyLabelMap: Record<string, string> = {
   XOF: "FCFA",
@@ -160,7 +162,8 @@ export default async function GpPage({
 
   const bookingStatusByTrip = new Map(myBookings.map((booking) => [booking.tripId, booking.status]));
   const publishAccess = resolveGpPublishAccess(viewer, Boolean(session?.user?.id));
-  const canOpenTransporterDashboard = viewer?.role === "TRANSPORTER";
+  const gpRules = getVerticalRules(Vertical.GP);
+  const canOpenTransporterDashboard = hasAnyUserRole(session?.user, gpRules.publishRoles);
 
   const avgPriceValue =
     trips.length > 0 ? Math.round(trips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / trips.length) : null;

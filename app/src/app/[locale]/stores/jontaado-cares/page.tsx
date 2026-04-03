@@ -1,195 +1,528 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import CaresProductExperience, {
+  type CaresPageContent,
+} from "@/components/cares/CaresProductExperience";
 
-const copy = {
+const content: Record<"fr" | "en", CaresPageContent & { back: string }> = {
   fr: {
     back: "Retour aux boutiques",
     kicker: "JONTAADO CARES",
-    title: "Donner. Soutenir. Changer des vies.",
+    title: "Donner, offrir ou demander de l'aide dans une experience simple et rassurante.",
     subtitle:
-      "La verticale solidaire de JONTAADO reunira les dons, les cagnottes, l'entraide locale et le suivi d'impact dans une experience de confiance, claire et actionnable.",
-    badge: "Verticale en preparation",
-    specKicker: "Cahier de reference",
-    specTitle: "Un produit pense comme une vraie plateforme solidaire",
-    specBody:
-      "Paiements securises, moderation, IA utile, suivi d'impact et back-office admin: la base fonctionnelle est deja bien definie.",
-    chips: ["Dons", "Cagnottes", "Entraide", "Impact", "Transparence"],
-    metrics: [
-      { value: "4", label: "Piliers coeur", detail: "Dons, cagnottes, entraide, impact" },
-      { value: "24/7", label: "Moderation ciblee", detail: "Signalements, controles et validation" },
-      { value: "IA", label: "Aide terrain", detail: "Matching, detection et recommandations" },
+      "CARES doit ressembler a une verticale claire: je peux faire un don, lancer une cagnotte, demander de l'aide ou offrir un produit utile comme sur une marketplace, mais en mode solidaire.",
+    preprod: "Pre-prod guidee",
+    ctas: [
+      { label: "Faire un don", href: "#faire-un-don" },
+      { label: "Lancer une cagnotte", href: "#lancer-une-cagnotte" },
+      { label: "Demander de l'aide", href: "#demander-aide" },
     ],
-    modulesTitle: "Ce que JONTAADO CARES doit rendre simple",
-    modulesSubtitle:
-      "Chaque module est pense pour inspirer confiance, faciliter l'action et garder une lecture claire de l'impact.",
-    modules: [
+    explainerTitle: "Une logique simple et propre",
+    explainerBody:
+      "Dans CARES, on ne publie pas un don comme une annonce floue. On soutient une cause, on lance une cagnotte, on depose une demande d'aide ou on propose un produit a offrir avec un vrai suivi.",
+    chips: ["Dons verifies", "Produits a offrir", "Cagnottes", "Demandes d'aide", "Impact"],
+    metrics: [
+      { value: "4", label: "Actions utiles", detail: "Donner, offrir un produit, lancer une cagnotte, demander de l'aide" },
+      { value: "0", label: "Prix sur un don produit", detail: "Comme une fiche marketplace, mais le produit est offert" },
+      { value: "5", label: "Etapes de suivi", detail: "De la soumission jusqu'au recap d'impact" },
+    ],
+    heroHighlights: [
+      "Offrir un vetement ou un objet = fiche type marketplace, avec prix a zero et statut solidaire.",
+      "Chaque don, campagne ou demande a ses statuts, ses preuves et ses recaps.",
+      "Le cahier des charges et la logique produit restent accessibles dans un vrai panneau 'A propos'.",
+    ],
+    aboutButtonLabel: "A propos de CARES",
+    aboutButtonHint: "Voir le cahier des charges, les statuts et les infos produit sans alourdir la page.",
+    useCasesTitle: "Ce que l'on pourra faire dans CARES",
+    useCasesSubtitle:
+      "On met d'abord en avant les usages concrets. L'utilisateur doit comprendre en quelques secondes s'il vient pour donner, offrir, mobiliser ou demander du soutien.",
+    useCases: [
       {
-        title: "Dons solidaires",
-        description: "Dons uniques ou recurrents vers des causes verifiees avec categories, justificatifs et parcours rapide.",
+        title: "Don financier",
+        subtitle: "Soutenir vite une cause",
+        description:
+          "Je choisis une cause ou une campagne verifiee, je paie en quelques secondes, puis je recois un recap et je suis l'affectation de mon don.",
+        chips: ["Paiement", "Recu", "Affectation", "Impact"],
       },
       {
-        title: "Cagnottes a impact",
-        description: "Campagnes pour projets, urgences ou entraide locale avec objectifs, progression et preuves d'usage.",
+        title: "Produit a offrir",
+        subtitle: "Comme une marketplace, mais solidaire",
+        description:
+          "Je publie un vetement, un sac de riz ou un objet utile comme une fiche produit classique: titre, photo, categorie, etat, lieu. La difference: le prix est a zero et le produit est destine a etre offert.",
+        chips: ["Photo", "Categorie", "Etat", "Lieu", "Prix 0"],
       },
       {
-        title: "Entraide locale",
-        description: "Demandes d'aide, besoins de terrain et mobilisation de volontaires, voisins, associations ou ONG.",
+        title: "Demande d'aide",
+        subtitle: "Ouvrir un besoin suivi",
+        description:
+          "Je depose une demande d'aide locale ou urgente, elle est verifiee, qualifiee, puis reliee aux bons soutiens, campagnes ou dons produits.",
+        chips: ["Urgence", "Verification", "Matching", "Resolution"],
+      },
+    ],
+    productTitle: "Les 3 parcours principaux a rendre ultra-clairs",
+    productSubtitle:
+      "Chaque bouton principal correspond a un vrai usage. On veut une page legere: trois portes d'entree fortes, puis des panneaux qui expliquent le detail sans noyer l'utilisateur.",
+    journeys: [
+      {
+        id: "faire-un-don",
+        label: "Faire un don",
+        eyebrow: "Cote donateur",
+        description:
+          "Choisir une cause verifiee, contribuer en argent ou soutenir une campagne, puis suivre l'usage du don jusqu'a l'impact.",
+        bullets: [
+          "Selection d'une cause ou d'une cagnotte verifiee",
+          "Paiement simple et recu immediat",
+          "Suivi de l'affectation et des preuves d'usage",
+        ],
+        cta: "Voir le parcours",
+        panelTitle: "Parcours donateur",
+        panelDescription:
+          "Un don n'est pas un contenu publie librement. C'est une contribution a une cause verifiee, avec un recu, un suivi et une preuve d'impact.",
+        previewFields: [
+          { label: "Action", value: "Choisir une cause, un projet ou une demande verifiee" },
+          { label: "Paiement", value: "Montant, methode de paiement, recu immediat" },
+          { label: "Suivi", value: "Affectation, usage, recap d'impact et updates" },
+        ],
+        statusPath: ["Initie", "Confirme", "Affecte", "Utilise", "Impact publie"],
+        opsBullets: [
+          "Verification des causes et organisateurs avant visibilite",
+          "Journal des transactions et preuves d'utilisation",
+          "Notification donateur a chaque jalon important",
+        ],
+        footerNote:
+          "Le donateur ne publie pas une annonce. Il declenche une contribution suivie de bout en bout, avec transparence et preuves.",
+        panelPrimary: "Recevoir l'ouverture des dons",
       },
       {
-        title: "Transparence & impact",
-        description: "Suivi des fonds, pieces justificatives, rapports terrain et mesure concrete de l'impact genere.",
+        id: "lancer-une-cagnotte",
+        label: "Lancer une cagnotte",
+        eyebrow: "Cote porteur de projet",
+        description:
+          "Creer une campagne claire, definie par un objectif, un contexte, des justificatifs et un plan de mise a jour pour inspirer confiance.",
+        bullets: [
+          "Objectif, montant cible et contexte du projet",
+          "Pieces justificatives et moderation avant mise en ligne",
+          "Suivi des dons, jalons et publication d'impact",
+        ],
+        cta: "Preparer ma campagne",
+        panelTitle: "Parcours createur de cagnotte",
+        panelDescription:
+          "Une cagnotte cree un objet produit a part entiere: objectif, justificatifs, updates, equipe, moderation et historique de dons.",
+        previewFields: [
+          { label: "Objet cree", value: "Campagne avec objectif, montant cible et contexte" },
+          { label: "Confiance", value: "Pieces, verification, moderation et controle de visibilite" },
+          { label: "Pilotage", value: "Dons recus, updates, jalons et publication d'impact" },
+        ],
+        statusPath: ["Brouillon", "En revue", "Active", "En verification", "Cloturee"],
+        opsBullets: [
+          "Moderation avant publication et apres signalement",
+          "Tableau de bord campagne avec progression et dons recus",
+          "Publication d'impact obligatoire pour renforcer la confiance",
+        ],
+        footerNote:
+          "Le createur ne depose pas juste un texte. Il ouvre une campagne structuree, moderee, suivie et mesurable.",
+        panelPrimary: "Structurer ma future campagne",
       },
+      {
+        id: "demander-aide",
+        label: "Demander de l'aide",
+        eyebrow: "Cote beneficiaire",
+        description:
+          "Deposer une demande d'aide locale ou urgente, etre relie a des soutiens, a des volontaires ou a des dons produits, puis suivre la resolution.",
+        bullets: [
+          "Description du besoin et niveau d'urgence",
+          "Verification et mise en relation avec soutiens ou volontaires",
+          "Suivi de la demande jusqu'a sa resolution",
+        ],
+        cta: "Comprendre le parcours",
+        panelTitle: "Parcours demande d'aide",
+        panelDescription:
+          "Une demande d'aide ouvre un suivi clair: verification, qualification, matching, aides recues, resolution et recap.",
+        previewFields: [
+          { label: "Besoin", value: "Nature de l'aide, urgence, zone et justificatifs" },
+          { label: "Matching", value: "Soutiens, volontaires, campagnes ou dons produits adaptes" },
+          { label: "Resolution", value: "Aides recues, coordination et cloture du besoin" },
+        ],
+        statusPath: ["Soumise", "Verifiee", "Visible", "En cours de soutien", "Resolue"],
+        opsBullets: [
+          "Qualification du besoin avant diffusion",
+          "Priorisation des demandes sensibles ou urgentes",
+          "Journal d'aide recue, preuves et recap de resolution",
+        ],
+        footerNote:
+          "Le beneficiaire ne publie pas un simple post. Il ouvre un dossier d'aide suivi, qualifie et oriente vers les bons soutiens.",
+        panelPrimary: "Preparer ma demande d'aide",
+      },
+    ],
+    modelsTitle: "Ce que CARES manipule vraiment",
+    modelsSubtitle:
+      "On commence a poser la vraie structure produit: des dons, des produits a offrir, des cagnottes et des demandes d'aide. Chaque objet a sa propre logique de moderation, de matching et de suivi.",
+    models: [
+      {
+        title: "Don solidaire",
+        subtitle: "Objet transactionnel",
+        description:
+          "Le don est rattache a une cause, une campagne ou une demande verifiee. Il produit un recu, un statut, puis un recap d'usage.",
+        chips: ["Donateur", "Cause cible", "Recu", "Affectation"],
+        states: ["Initie", "Confirme", "Affecte", "Utilise"],
+      },
+      {
+        title: "Produit a offrir",
+        subtitle: "Objet marketplace solidaire",
+        description:
+          "Un produit a offrir ressemble a une fiche marketplace classique: titre, photo, categorie, etat, lieu et disponibilite. La difference: il est publie pour etre donne, pas vendu.",
+        chips: ["Photo", "Etat", "Lieu", "Prix 0", "Reservation"],
+        states: ["Brouillon", "Visible", "Reserve", "Remis"],
+      },
+      {
+        title: "Cagnotte ou demande d'aide",
+        subtitle: "Objet mobilisation / besoin",
+        description:
+          "La cagnotte porte un objectif et la demande d'aide porte un besoin. Les deux servent a mobiliser la bonne aide avec un suivi clair.",
+        chips: ["Objectif", "Urgence", "Verification", "Resolution"],
+        states: ["Soumise", "En revue", "Active", "Cloturee"],
+      },
+    ],
+    statusesTitle: "Les statuts que l'utilisateur doit pouvoir suivre",
+    statusesSubtitle:
+      "Le vrai plus produit, c'est la clarte. Chaque action doit avoir un cycle lisible, rassurant et explicite.",
+    statusColumns: [
+      {
+        title: "Statut d'un don",
+        tone: "emerald",
+        items: ["Initie", "Confirme", "Affecte", "Utilise", "Impact publie"],
+      },
+      {
+        title: "Statut d'un produit a offrir",
+        tone: "cyan",
+        items: ["Publie", "Visible", "Reserve", "Remis", "Cloture"],
+      },
+      {
+        title: "Statut d'une demande d'aide",
+        tone: "amber",
+        items: ["Soumise", "Verifiee", "Visible", "En cours de soutien", "Resolue"],
+      },
+    ],
+    whyTitle: "Pourquoi cette structure est forte",
+    whyCards: [
+      {
+        title: "Confiance immediate",
+        description: "L'utilisateur comprend ce qu'il peut faire, ce qui sera verifie, et comment le parcours sera suivi.",
+      },
+      {
+        title: "Conversion plus simple",
+        description: "Au lieu d'une page floue, on montre des usages concrets: donner, offrir un produit, lancer une cagnotte ou demander de l'aide.",
+      },
+      {
+        title: "Impact lisible",
+        description: "Les preuves, les recaps et les statuts rendent l'impact visible et renforcent la confiance dans la plateforme.",
+      },
+    ],
+    trustTitle: "Confiance, operations et IA",
+    trustCards: [
       {
         title: "Paiements & securite",
-        description: "PayDunya, fonds securises, validation conditionnelle, anti-fraude et garde-fous de conformite.",
+        items: ["PayDunya", "Fonds securises", "Validation conditionnelle", "Conformite et anti-fraude"],
       },
       {
-        title: "IA solidaire",
-        description: "Matching intelligent, recommandations, aide a la redaction et priorisation des demandes sensibles.",
+        title: "Back-office & moderation",
+        items: [
+          "Validation des comptes et organisateurs",
+          "Moderation des campagnes, produits a offrir et demandes",
+          "Suivi des transactions et justificatifs",
+          "Stats d'usage et d'impact",
+        ],
+      },
+      {
+        title: "IA utile",
+        items: [
+          "Matching donateur / cause / besoin",
+          "Detection d'anomalies",
+          "Aide a la redaction",
+          "Priorisation des demandes sensibles",
+        ],
       },
     ],
-    journeyTitle: "Un parcours plus humain et plus fiable",
-    journey: [
-      {
-        step: "01",
-        title: "Publier une cause ou un besoin",
-        description: "Campagne, appel a dons ou demande d'entraide avec contexte, preuves et objectif clair.",
-      },
-      {
-        step: "02",
-        title: "Recevoir du soutien",
-        description: "Dons, partage, mobilisation locale et recommandations intelligentes pour accelerer la mise en relation.",
-      },
-      {
-        step: "03",
-        title: "Suivre les etapes",
-        description: "Progression, mises a jour, validation admin et pieces de transparence pour rassurer tout le monde.",
-      },
-      {
-        step: "04",
-        title: "Mesurer l'impact",
-        description: "Resultats, remerciements, historique d'impact et boucle de confiance pour les prochaines actions.",
-      },
-    ],
-    audienceTitle: "Pour qui ?",
-    audienceSubtitle: "Une meme plateforme pour tous les acteurs de la solidarite.",
-    audience: ["Donateurs", "Beneficiaires", "Createurs de cagnottes", "Associations & ONG", "Volontaires", "Admins / moderation"],
-    opsTitle: "Socle confiance & operations",
-    ops: [
-      "Paiement via PayDunya",
-      "Fonds securises et validation conditionnelle",
-      "Conformite & lutte anti-fraude",
-      "Back-office de moderation et statistiques",
-      "Suivi des transactions et demandes d'aide",
-      "Tableaux de bord impact / geographie / usage",
-    ],
-    aiTitle: "IA au service de la solidarite",
-    ai: [
-      "Matching intelligent entre besoins, projets et donateurs",
-      "Detection de fraudes et analyse de comportements suspects",
-      "Recommandations personnalisees pour renforcer l'engagement",
-      "Aide a la redaction et au suivi des campagnes",
-    ],
-    roadmapTitle: "Direction produit",
-    roadmapBody:
-      "On a deja une base tres claire: une verticale simple a comprendre, tres credible et orientee confiance. La prochaine etape sera de transformer ce cadre en experience premium et ultra-guidante.",
-    roadmapCta: "Revenir aux univers JONTAADO",
+    specKicker: "Vision produit",
+    specTitle: "Le cahier des charges reste la bonne base.",
+    specBody:
+      "On s'appuie dessus pour construire une verticale simple cote front aujourd'hui, puis un vrai produit demain: moderation, paiement, produits a offrir, suivi d'impact et matching intelligent.",
+    specCaption:
+      "Le panneau 'A propos de CARES' regroupe le cahier des charges, la structure produit, les statuts et la logique trust sans charger la page principale.",
+    nextTitle: "Direction produit",
+    nextBody:
+      "La bonne logique pour CARES: une verticale claire avec des dons, des produits a offrir, des cagnottes et des demandes d'aide, chacun avec son cycle de vie et son suivi.",
+    nextCta: "Explorer les autres univers",
+    panelKicker: "Experience pre-prod",
+    panelClose: "Fermer",
+    panelPreviewTitle: "Structure du parcours",
+    panelStatusTitle: "Statuts a suivre",
+    panelOpsTitle: "Ops & confiance",
+    panelFootnoteTitle: "Pourquoi ce flux compte",
+    aboutPanelTitle: "A propos de CARES",
+    aboutPanelBody:
+      "Ici on garde toute la matiere produit et le cahier des charges, sans forcer l'utilisateur a tout lire avant de comprendre ce qu'il peut faire.",
   },
   en: {
     back: "Back to stores",
     kicker: "JONTAADO CARES",
-    title: "Give. Support. Change lives.",
+    title: "Donate, offer useful items or request help in a simple and trust-first experience.",
     subtitle:
-      "JONTAADO's solidarity vertical brings donations, campaigns, local mutual aid and impact tracking into one trusted, actionable experience.",
-    badge: "Vertical in progress",
-    specKicker: "Reference brief",
-    specTitle: "A real solidarity product, not just a landing page",
-    specBody:
-      "Secure payments, moderation, useful AI, impact tracking and admin tooling are already part of the product direction.",
-    chips: ["Donations", "Campaigns", "Mutual aid", "Impact", "Transparency"],
-    metrics: [
-      { value: "4", label: "Core pillars", detail: "Donations, campaigns, aid, impact" },
-      { value: "24/7", label: "Targeted moderation", detail: "Flags, controls and validation" },
-      { value: "AI", label: "Field assistance", detail: "Matching, detection and recommendations" },
+      "CARES should feel like a clear vertical: I can donate, launch a campaign, request help or offer an item the same way a marketplace product is listed, but as a solidarity gift.",
+    preprod: "Guided pre-prod",
+    ctas: [
+      { label: "Donate", href: "#faire-un-don" },
+      { label: "Launch a campaign", href: "#lancer-une-cagnotte" },
+      { label: "Request help", href: "#demander-aide" },
     ],
-    modulesTitle: "What JONTAADO CARES should make effortless",
-    modulesSubtitle:
-      "Every module is designed to build trust, simplify action and keep impact readable for everyone involved.",
-    modules: [
+    explainerTitle: "A simple, clean logic",
+    explainerBody:
+      "Inside CARES, users do not publish a vague donation post. They support a cause, launch a campaign, submit a help request or offer an item with a real follow-up.",
+    chips: ["Verified donations", "Items to offer", "Campaigns", "Help requests", "Impact"],
+    metrics: [
+      { value: "4", label: "Useful actions", detail: "Donate, offer an item, launch a campaign, request help" },
+      { value: "0", label: "Price on a gifted item", detail: "Like a marketplace listing, but the product is offered" },
+      { value: "5", label: "Tracking stages", detail: "From submission to impact recap" },
+    ],
+    heroHighlights: [
+      "Offering clothes or useful goods works like a marketplace listing, but with a zero price and a solidarity destination.",
+      "Every donation, campaign or help request has statuses, proof and recap steps.",
+      "The product brief stays available in a real 'About CARES' panel instead of crowding the page.",
+    ],
+    aboutButtonLabel: "About CARES",
+    aboutButtonHint: "Open the brief, statuses and product logic without making the page heavy.",
+    useCasesTitle: "What users should be able to do in CARES",
+    useCasesSubtitle:
+      "We lead with concrete use cases. Users should understand in seconds whether they came to donate, offer something useful, mobilize support or request help.",
+    useCases: [
       {
-        title: "Solidarity donations",
-        description: "One-time or recurring donations for verified causes with categories, proof and a fast trusted flow.",
+        title: "Financial donation",
+        subtitle: "Support a cause quickly",
+        description:
+          "Choose a verified cause or campaign, pay in seconds, then receive a recap and follow how the donation is allocated.",
+        chips: ["Payment", "Receipt", "Allocation", "Impact"],
       },
       {
-        title: "Impact campaigns",
-        description: "Fundraisers for projects, emergencies or local aid with goals, progress and usage proof.",
+        title: "Item to offer",
+        subtitle: "Like a marketplace, but solidarity-first",
+        description:
+          "Publish clothes, food or useful objects the same way you would publish a marketplace product: title, photo, category, condition and location. The difference: price is zero and the item is meant to be given away.",
+        chips: ["Photo", "Category", "Condition", "Location", "Price 0"],
       },
       {
-        title: "Local assistance",
-        description: "Help requests and local mobilization for volunteers, associations, NGOs and neighbors.",
+        title: "Help request",
+        subtitle: "Open a tracked need",
+        description:
+          "Submit a local or urgent help request, get it verified and qualified, then match it with the right supporters, campaigns or gifted items.",
+        chips: ["Urgency", "Verification", "Matching", "Resolution"],
+      },
+    ],
+    productTitle: "The 3 main journeys that should feel obvious",
+    productSubtitle:
+      "Each main button maps to a real usage. The page should stay light: three strong entry points, then panels for details when people want to dig deeper.",
+    journeys: [
+      {
+        id: "faire-un-don",
+        label: "Donate",
+        eyebrow: "Donor side",
+        description:
+          "Choose a verified cause, contribute money or support a campaign, then follow allocation and impact.",
+        bullets: [
+          "Pick a verified cause or campaign",
+          "Simple payment with instant receipt",
+          "Track allocation and proof of usage",
+        ],
+        cta: "View the flow",
+        panelTitle: "Donor journey",
+        panelDescription:
+          "A donation is not a free-form published post. It is a contribution to a verified cause with a receipt, tracking and proof of impact.",
+        previewFields: [
+          { label: "Action", value: "Choose a verified cause, project or request" },
+          { label: "Payment", value: "Amount, payment method and instant receipt" },
+          { label: "Tracking", value: "Allocation, usage, impact recap and updates" },
+        ],
+        statusPath: ["Initiated", "Confirmed", "Allocated", "Used", "Impact published"],
+        opsBullets: [
+          "Cause and organizer verification before visibility",
+          "Transaction log and proof of usage",
+          "Donor notification at every key milestone",
+        ],
+        footerNote:
+          "Donors do not publish a listing. They trigger a fully tracked contribution with transparency from start to finish.",
+        panelPrimary: "Get notified when donations open",
       },
       {
-        title: "Transparency & impact",
-        description: "Fund tracking, supporting documents, field updates and measurable outcomes.",
+        id: "lancer-une-cagnotte",
+        label: "Launch a campaign",
+        eyebrow: "Project owner side",
+        description:
+          "Create a clear campaign with a goal, context, proof and an update plan that inspires trust from day one.",
+        bullets: [
+          "Goal, target amount and project context",
+          "Supporting proof and moderation before publishing",
+          "Track donations, milestones and impact updates",
+        ],
+        cta: "Prepare my campaign",
+        panelTitle: "Campaign creator journey",
+        panelDescription:
+          "A campaign becomes its own product object: goal, proof, updates, team, moderation and donation history.",
+        previewFields: [
+          { label: "Object created", value: "Campaign with goal, target amount and context" },
+          { label: "Trust", value: "Proof, verification, moderation and visibility control" },
+          { label: "Control", value: "Received donations, updates, milestones and impact publishing" },
+        ],
+        statusPath: ["Draft", "In review", "Live", "Under verification", "Closed"],
+        opsBullets: [
+          "Moderation before publishing and after reports",
+          "Campaign dashboard with progress and incoming donations",
+          "Impact publication required to strengthen trust",
+        ],
+        footerNote:
+          "Campaign creators do not just post text. They open a structured, moderated and measurable funding journey.",
+        panelPrimary: "Shape my future campaign",
       },
+      {
+        id: "demander-aide",
+        label: "Request help",
+        eyebrow: "Beneficiary side",
+        description:
+          "Submit a local or urgent help request, get matched with supporters, volunteers or gifted items, then follow the resolution clearly.",
+        bullets: [
+          "Describe the need and urgency level",
+          "Verification and matching with supporters or volunteers",
+          "Track the request until resolution",
+        ],
+        cta: "Understand the flow",
+        panelTitle: "Help request journey",
+        panelDescription:
+          "A help request opens a clear follow-up: verification, qualification, matching, received support, resolution and recap.",
+        previewFields: [
+          { label: "Need", value: "Help type, urgency, area and supporting proof" },
+          { label: "Matching", value: "Supporters, volunteers, campaigns or gifted items" },
+          { label: "Resolution", value: "Support received, coordination and closure" },
+        ],
+        statusPath: ["Submitted", "Verified", "Visible", "Support in progress", "Resolved"],
+        opsBullets: [
+          "Need qualification before distribution",
+          "Prioritization of sensitive or urgent requests",
+          "Received support log, proof and resolution recap",
+        ],
+        footerNote:
+          "Beneficiaries do not publish a simple post. They open a qualified support case routed to the right helpers.",
+        panelPrimary: "Prepare my help request",
+      },
+    ],
+    modelsTitle: "What CARES really manages",
+    modelsSubtitle:
+      "We are defining the real product structure: donations, gifted items, campaigns and help requests. Each object has its own moderation, matching and tracking logic.",
+    models: [
+      {
+        title: "Solidarity donation",
+        subtitle: "Transactional object",
+        description:
+          "The donation is attached to a verified cause, campaign or help request. It creates a receipt, a status and later a usage recap.",
+        chips: ["Donor", "Target cause", "Receipt", "Allocation"],
+        states: ["Initiated", "Confirmed", "Allocated", "Used"],
+      },
+      {
+        title: "Gifted item",
+        subtitle: "Solidarity marketplace object",
+        description:
+          "A gifted item looks like a classic marketplace listing: title, photo, category, condition, location and availability. The difference is that it is published to be given away, not sold.",
+        chips: ["Photo", "Condition", "Location", "Price 0", "Reservation"],
+        states: ["Draft", "Visible", "Reserved", "Delivered"],
+      },
+      {
+        title: "Campaign or help request",
+        subtitle: "Mobilization / need object",
+        description:
+          "Campaigns carry goals and help requests carry needs. Both exist to mobilize the right support with a readable follow-up.",
+        chips: ["Goal", "Urgency", "Verification", "Resolution"],
+        states: ["Submitted", "In review", "Live", "Closed"],
+      },
+    ],
+    statusesTitle: "Statuses users should be able to follow",
+    statusesSubtitle:
+      "Real product value comes from clarity. Every action needs a readable, reassuring lifecycle.",
+    statusColumns: [
+      {
+        title: "Donation status",
+        tone: "emerald",
+        items: ["Initiated", "Confirmed", "Allocated", "Used", "Impact published"],
+      },
+      {
+        title: "Gifted item status",
+        tone: "cyan",
+        items: ["Published", "Visible", "Reserved", "Delivered", "Closed"],
+      },
+      {
+        title: "Help request status",
+        tone: "amber",
+        items: ["Submitted", "Verified", "Visible", "Support in progress", "Resolved"],
+      },
+    ],
+    whyTitle: "Why this structure works",
+    whyCards: [
+      {
+        title: "Instant trust",
+        description: "Users understand what they can do, what will be verified, and how the journey will be tracked.",
+      },
+      {
+        title: "Simpler conversion",
+        description: "Instead of a vague page, we show concrete actions: donate, offer an item, launch a campaign or request help.",
+      },
+      {
+        title: "Readable impact",
+        description: "Proof, recaps and statuses make impact visible and strengthen trust in the platform.",
+      },
+    ],
+    trustTitle: "Trust, operations and AI",
+    trustCards: [
       {
         title: "Payments & security",
-        description: "PayDunya, secured funds, conditional release, anti-fraud and compliance guardrails.",
+        items: ["PayDunya", "Secured funds", "Conditional validation", "Compliance and anti-fraud"],
       },
       {
-        title: "Solidarity AI",
-        description: "Smart matching, recommendations, writing assistance and prioritization of sensitive needs.",
+        title: "Back office & moderation",
+        items: [
+          "Account and organizer validation",
+          "Campaign, gifted item and help request moderation",
+          "Transaction and proof tracking",
+          "Usage and impact analytics",
+        ],
+      },
+      {
+        title: "Useful AI",
+        items: [
+          "Donor / cause / need matching",
+          "Anomaly detection",
+          "Writing assistance",
+          "Sensitive request prioritization",
+        ],
       },
     ],
-    journeyTitle: "A more human, more reliable journey",
-    journey: [
-      {
-        step: "01",
-        title: "Publish a cause or request",
-        description: "Campaign, donation drive or mutual-aid request with context, proof and a clear objective.",
-      },
-      {
-        step: "02",
-        title: "Receive support",
-        description: "Donations, sharing, local mobilization and intelligent recommendations to speed up matching.",
-      },
-      {
-        step: "03",
-        title: "Track progress",
-        description: "Updates, admin validation and transparency proof to keep everyone reassured.",
-      },
-      {
-        step: "04",
-        title: "Measure impact",
-        description: "Results, thanks, impact history and a stronger trust loop for future initiatives.",
-      },
-    ],
-    audienceTitle: "Who is it for?",
-    audienceSubtitle: "One platform for the full solidarity ecosystem.",
-    audience: ["Donors", "Beneficiaries", "Campaign creators", "Associations & NGOs", "Volunteers", "Admins / moderation"],
-    opsTitle: "Trust & operations foundation",
-    ops: [
-      "PayDunya payments",
-      "Secured funds and conditional validation",
-      "Compliance and anti-fraud controls",
-      "Moderation back office and analytics",
-      "Tracking of transactions and help requests",
-      "Impact / geography / usage dashboards",
-    ],
-    aiTitle: "AI in service of solidarity",
-    ai: [
-      "Smart matching between needs, projects and donors",
-      "Fraud detection and suspicious behavior analysis",
-      "Personalized recommendations to deepen engagement",
-      "Writing assistance and campaign follow-up",
-    ],
-    roadmapTitle: "Product direction",
-    roadmapBody:
-      "The foundation is already clear: a solidarity vertical that feels credible, easy to grasp and trust-first. The next step is turning that structure into a premium, guided experience.",
-    roadmapCta: "Back to JONTAADO universes",
+    specKicker: "Product vision",
+    specTitle: "The product brief remains the right foundation.",
+    specBody:
+      "We use it to build a simple front-end vertical now, then a real product later: moderation, payments, gifted items, impact tracking and smart matching.",
+    specCaption:
+      "The 'About CARES' panel groups the brief, product structure, statuses and trust logic without making the main page heavy.",
+    nextTitle: "Product direction",
+    nextBody:
+      "The right logic for CARES: a clear vertical with donations, gifted items, campaigns and help requests, each with its own lifecycle and tracking.",
+    nextCta: "Explore other universes",
+    panelKicker: "Pre-prod experience",
+    panelClose: "Close",
+    panelPreviewTitle: "Journey structure",
+    panelStatusTitle: "Statuses to follow",
+    panelOpsTitle: "Ops & trust",
+    panelFootnoteTitle: "Why this flow matters",
+    aboutPanelTitle: "About CARES",
+    aboutPanelBody:
+      "This is where we keep the product material and the brief, without forcing users to read everything before understanding what they can do.",
   },
-} as const;
+};
 
 export default async function JontaadoCaresPage({
   params,
@@ -198,7 +531,7 @@ export default async function JontaadoCaresPage({
 }) {
   const { locale } = await params;
   const isFr = locale === "fr";
-  const content = copy[isFr ? "fr" : "en"];
+  const page = content[isFr ? "fr" : "en"];
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -217,201 +550,11 @@ export default async function JontaadoCaresPage({
           href="/stores"
           className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
         >
-          {content.back}
+          {page.back}
         </Link>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-24">
-        <section className="overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,_rgba(74,222,128,0.2),_transparent_35%),linear-gradient(135deg,rgba(16,24,39,0.98),rgba(10,14,19,0.98))] p-6 shadow-[0_25px_90px_-45px_rgba(34,197,94,0.45)] md:p-8">
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-stretch">
-            <div className="flex flex-col justify-between gap-6">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                    {content.kicker}
-                  </p>
-                  <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-100">
-                    {content.badge}
-                  </span>
-                </div>
-
-                <h1 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight md:text-5xl">
-                  {content.title}
-                </h1>
-                <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-                  {content.subtitle}
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-2">
-                  {content.chips.map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-emerald-300/15 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-100"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                {content.metrics.map((item) => (
-                  <article
-                    key={item.label}
-                    className="rounded-2xl border border-white/10 bg-zinc-950/55 px-4 py-4"
-                  >
-                    <p className="text-2xl font-semibold text-emerald-200">{item.value}</p>
-                    <p className="mt-2 text-sm font-medium text-white">{item.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-400">{item.detail}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-[0.86fr_1.14fr] xl:grid-cols-1">
-              <article className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-                <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-5">
-                  <Image
-                    src="/stores/cares.png"
-                    alt="JONTAADO CARES logo"
-                    width={720}
-                    height={320}
-                    className="mx-auto h-auto w-full max-w-[320px] object-contain"
-                    priority
-                  />
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-zinc-950/65 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">
-                    {content.specKicker}
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold text-white">{content.specTitle}</h2>
-                  <p className="mt-2 text-sm leading-6 text-zinc-300">{content.specBody}</p>
-                </div>
-              </article>
-
-              <article className="rounded-[1.75rem] border border-white/10 bg-zinc-900/65 p-5 backdrop-blur-sm">
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white p-2 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.45)]">
-                  <Image
-                    src="/stores/cares-spec.png"
-                    alt="Cahier des charges JONTAADO CARES"
-                    width={1200}
-                    height={1700}
-                    className="h-auto w-full rounded-xl object-cover"
-                  />
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm md:p-7">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-                {content.modulesTitle}
-              </p>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
-                {content.modulesSubtitle}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {content.modules.map((item) => (
-              <article
-                key={item.title}
-                className="group rounded-2xl border border-white/10 bg-zinc-950/60 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/30 hover:shadow-[0_18px_50px_-35px_rgba(34,197,94,0.45)]"
-              >
-                <h2 className="text-lg font-semibold text-white">{item.title}</h2>
-                <p className="mt-3 text-sm leading-6 text-zinc-300">{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <article className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-              {content.journeyTitle}
-            </p>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {content.journey.map((item) => (
-                <div
-                  key={item.step}
-                  className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5"
-                >
-                  <div className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-emerald-100">
-                    {item.step}
-                  </div>
-                  <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-zinc-300">{item.description}</p>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <div className="grid gap-6">
-            <article className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-                {content.audienceTitle}
-              </p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">{content.audienceSubtitle}</h2>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {content.audience.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-200"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="rounded-[2rem] border border-emerald-300/15 bg-[linear-gradient(135deg,rgba(16,24,39,0.92),rgba(7,17,12,0.96))] p-6 shadow-[0_20px_70px_-45px_rgba(34,197,94,0.5)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-                {content.roadmapTitle}
-              </p>
-              <p className="mt-4 text-sm leading-7 text-zinc-200">{content.roadmapBody}</p>
-              <Link
-                href="/stores"
-                className="mt-6 inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-400/15"
-              >
-                {content.roadmapCta}
-              </Link>
-            </article>
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <article className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-              {content.opsTitle}
-            </p>
-            <ul className="mt-5 space-y-3 text-sm text-zinc-300">
-              {content.ops.map((item) => (
-                <li key={item} className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 leading-6">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-
-          <article className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200">
-              {content.aiTitle}
-            </p>
-            <ul className="mt-5 space-y-3 text-sm text-zinc-300">
-              {content.ai.map((item) => (
-                <li key={item} className="rounded-2xl border border-white/10 bg-zinc-950/60 px-4 py-3 leading-6">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-        </section>
-      </main>
+      <CaresProductExperience page={page} />
 
       <Footer />
     </div>

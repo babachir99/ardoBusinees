@@ -31,12 +31,22 @@ export default async function PrestaPage({
             priority
           />
         </Link>
-        <Link
-          href="/stores"
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-        >
-          {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-        </Link>
+        <div className="flex items-center gap-2">
+          {canPublish ? (
+            <Link
+              href="/stores/jontaado-presta/dashboard"
+              className="rounded-full border border-amber-300/40 px-4 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-300/80"
+            >
+              {locale === "fr" ? "Mon dashboard PRESTA" : "My PRESTA dashboard"}
+            </Link>
+          ) : null}
+          <Link
+            href="/stores"
+            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          >
+            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
@@ -58,6 +68,7 @@ export default async function PrestaPage({
           canPublish={canPublish}
           currentUserId={session?.user?.id ?? null}
           currentUserRole={session?.user?.role ?? null}
+          dashboardHref={canPublish ? "/stores/jontaado-presta/dashboard" : null}
         />
       </main>
 
