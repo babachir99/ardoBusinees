@@ -2,6 +2,7 @@ import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
@@ -64,7 +65,7 @@ export default async function PrestaDashboardPage({
   }
 
   const today = startOfToday();
-  const trendDays = 90;
+  const trendDays = 365;
   const trendStart = new Date(today);
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
 
@@ -340,8 +341,9 @@ export default async function PrestaDashboardPage({
           }
           dates={trendDates}
           metrics={metrics}
-          rangeOptions={[7, 30, 90]}
+          rangeOptions={[7, 30, 90, 365]}
           defaultRange={30}
+          exportFilename="presta-dashboard.csv"
         />
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -356,6 +358,27 @@ export default async function PrestaDashboardPage({
               >
                 {isFr ? "Retour a l'espace" : "Back to space"}
               </Link>
+              <DashboardListExportButton
+                filename="presta-bookings.csv"
+                label={isFr ? "Exporter les reservations" : "Export bookings"}
+                disabledLabel={isFr ? "Aucune reservation" : "No bookings"}
+                columns={[
+                  { key: "client", label: isFr ? "Client" : "Client" },
+                  { key: "service", label: isFr ? "Service" : "Service" },
+                  { key: "city", label: isFr ? "Ville" : "City" },
+                  { key: "status", label: isFr ? "Statut" : "Status" },
+                  { key: "amount", label: isFr ? "Montant" : "Amount" },
+                  { key: "date", label: isFr ? "Date" : "Date" },
+                ]}
+                rows={recentBookings.map((booking) => ({
+                  client: booking.customer.name ?? (isFr ? "Client" : "Client"),
+                  service: booking.service.title,
+                  city: booking.service.city ?? "",
+                  status: booking.status,
+                  amount: formatMoney(booking.totalCents, booking.currency, locale),
+                  date: formatDate(locale, booking.createdAt),
+                }))}
+              />
             </div>
 
             {recentBookings.length === 0 ? (
@@ -394,6 +417,27 @@ export default async function PrestaDashboardPage({
             <h2 className="text-lg font-semibold text-white">
               {isFr ? "Services qui performent" : "Top performing services"}
             </h2>
+            <div className="mt-3">
+              <DashboardListExportButton
+                filename="presta-services.csv"
+                label={isFr ? "Exporter les services" : "Export services"}
+                disabledLabel={isFr ? "Aucun service" : "No service"}
+                columns={[
+                  { key: "title", label: isFr ? "Service" : "Service" },
+                  { key: "city", label: isFr ? "Ville" : "City" },
+                  { key: "price", label: isFr ? "Prix" : "Price" },
+                  { key: "bookings", label: isFr ? "Reservations" : "Bookings" },
+                  { key: "status", label: isFr ? "Statut" : "Status" },
+                ]}
+                rows={topServices.map((service) => ({
+                  title: service.title,
+                  city: service.city ?? "",
+                  price: formatMoney(service.basePriceCents, service.currency, locale),
+                  bookings: service._count.bookings,
+                  status: service.isActive ? (isFr ? "Actif" : "Active") : isFr ? "Pause" : "Paused",
+                }))}
+              />
+            </div>
             {topServices.length === 0 ? (
               <p className="mt-4 text-sm text-zinc-400">
                 {isFr ? "Publie un premier service pour voir les tendances." : "Publish your first service to unlock trends."}

@@ -45,12 +45,12 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_SHORTCUTS: Array<{ key: string; href: string; label: string }> = [
-  { key: "SELLER", href: "/seller", label: "roles.goSeller" },
-  { key: "PRESTA_PROVIDER", href: "/stores/jontaado-presta", label: "PRESTA" },
-  { key: "TIAK_COURIER", href: "/stores/jontaado-tiak-tiak", label: "roles.goCourier" },
-  { key: "COURIER", href: "/stores/jontaado-tiak-tiak", label: "roles.goCourier" },
-  { key: "GP_CARRIER", href: "/stores/jontaado-gp", label: "roles.goTransporter" },
-  { key: "TRANSPORTER", href: "/stores/jontaado-gp", label: "roles.goTransporter" },
+  { key: "SELLER", href: "/seller", label: "dashboard.seller" },
+  { key: "PRESTA_PROVIDER", href: "/stores/jontaado-presta/dashboard", label: "dashboard.presta" },
+  { key: "TIAK_COURIER", href: "/stores/jontaado-tiak-tiak/dashboard", label: "dashboard.tiak" },
+  { key: "COURIER", href: "/stores/jontaado-tiak-tiak/dashboard", label: "dashboard.tiak" },
+  { key: "GP_CARRIER", href: "/transporter", label: "dashboard.gp" },
+  { key: "TRANSPORTER", href: "/transporter", label: "dashboard.gp" },
   { key: "IMMO_AGENT", href: "/immo/my", label: "IMMO" },
 ];
 
@@ -66,6 +66,15 @@ function normalizeRoleKey(role: string): string {
 function mapPartnerRoleToKycRole(role: string): string {
   if (role === "PRESTA_PROVIDER") return "SELLER";
   return role;
+}
+
+function resolveShortcutLabel(label: string, isFr: boolean, t: (key: string) => string) {
+  if (label.startsWith("roles.")) return t(label);
+  if (label === "dashboard.seller") return isFr ? "Dashboard vendeur" : "Seller dashboard";
+  if (label === "dashboard.presta") return isFr ? "Dashboard PRESTA" : "PRESTA dashboard";
+  if (label === "dashboard.tiak") return isFr ? "Dashboard TIAK" : "TIAK dashboard";
+  if (label === "dashboard.gp") return isFr ? "Dashboard GP" : "GP dashboard";
+  return label;
 }
 
 type Favorite = {
@@ -753,7 +762,7 @@ export default function ProfilePanel() {
                     href={shortcut.href}
                     className="rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
                   >
-                    {shortcut.label.startsWith("roles.") ? t(shortcut.label) : shortcut.label}
+                    {resolveShortcutLabel(shortcut.label, isFr, t)}
                   </Link>
                 ))}
               </div>

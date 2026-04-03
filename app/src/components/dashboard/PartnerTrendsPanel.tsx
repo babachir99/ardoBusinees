@@ -20,6 +20,7 @@ type PartnerTrendsPanelProps = {
   metrics: PartnerTrendMetric[];
   rangeOptions?: number[];
   defaultRange?: number;
+  exportFilename?: string;
 };
 
 const defaultRanges = [7, 30, 90];
@@ -47,6 +48,7 @@ export default function PartnerTrendsPanel({
   metrics,
   rangeOptions = defaultRanges,
   defaultRange = 30,
+  exportFilename = "dashboard-stats.csv",
 }: PartnerTrendsPanelProps) {
   const isFr = locale === "fr";
   const availableRanges = rangeOptions.filter((value) => value <= (dates.length || value));
@@ -70,6 +72,33 @@ export default function PartnerTrendsPanel({
   }, [metrics, safeRange]);
 
   const visibleDates = useMemo(() => dates.slice(-safeRange), [dates, safeRange]);
+  const comparisons = useMemo(() => {
+    return metrics.map((metric) => {
+      const currentValues = metric.series.slice(-safeRange);
+      const previousValues = metric.series.slice(-safeRange * 2, -safeRange);
+      const currentTotal = currentValues.reduce((sum, value) => sum + value, 0);
+      const previousTotal = previousValues.reduce((sum, value) => sum + value, 0);
+      const delta = currentTotal - previousTotal;
+      const deltaRatio = previousTotal > 0 ? delta / previousTotal : null;
+
+      return {
+        key: metric.key,
+        currentTotal,
+        previousTotal,
+        delta,
+        deltaRatio,
+      };
+    });
+  }, [metrics, safeRange]);
+
+  const csvContent = useMemo(() => {
+    const header = ["date", ...metrics.map((metric) => metric.title)].join(";");
+    const rows = visibleDates.map((date, index) => {
+      const values = metrics.map((metric) => metric.series.slice(-safeRange)[index] ?? 0);
+      return [date.label, ...values].join(";");
+    });
+    return [header, ...rows].join("\n");
+  }, [metrics, safeRange, visibleDates]);
   const labelStep = safeRange >= 30 ? 3 : safeRange >= 14 ? 2 : 1;
 
   const formatTick = (metric: PartnerTrendMetric, value: number) => {
@@ -80,6 +109,18 @@ export default function PartnerTrendsPanel({
     return numberFormatter.format(value);
   };
 
+  const exportCsv = () => {
+    const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = exportFilename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -87,21 +128,69 @@ export default function PartnerTrendsPanel({
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <p className="mt-1 text-sm text-zinc-400">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950/40 px-2 py-1 text-[11px] text-zinc-300">
-          {safeRanges.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setRange(value)}
-              className={`rounded-full px-3 py-1 transition ${
-                range === value ? "bg-emerald-400 text-zinc-950" : "text-zinc-300 hover:text-white"
-              }`}
-            >
-              {value}
-              {isFr ? "j" : "d"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="rounded-full border border-white/10 bg-zinc-950/60 px-4 py-2 text-[11px] font-medium text-zinc-200 transition hover:border-white/30 hover:text-white"
+          >
+            {isFr ? "Exporter CSV" : "Export CSV"}
+          </button>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950/40 px-2 py-1 text-[11px] text-zinc-300">
+            {safeRanges.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setRange(value)}
+                className={`rounded-full px-3 py-1 transition ${
+                  range === value ? "bg-emerald-400 text-zinc-950" : "text-zinc-300 hover:text-white"
+                }`}
+              >
+                {value}
+                {isFr ? "j" : "d"}
+              </button>
+            ))}
+          </div>
         </div>
+      </div>
+
+      <div className={`grid gap-3 ${metrics.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2"}`}>
+        {metrics.map((metric) => {
+          const comparison = comparisons.find((item) => item.key === metric.key);
+          if (!comparison) return null;
+
+          const trendTone =
+            comparison.delta > 0
+              ? "text-emerald-300"
+              : comparison.delta < 0
+                ? "text-rose-300"
+                : "text-zinc-300";
+
+          return (
+            <div key={`${metric.key}-delta`} className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{metric.title}</p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <p className="text-lg font-semibold text-white">{formatTick(metric, comparison.currentTotal)}</p>
+                <p className={`text-xs font-medium ${trendTone}`}>
+                  {comparison.deltaRatio === null
+                    ? isFr
+                      ? "Nouvelle periode"
+                      : "New period"
+                    : `${comparison.deltaRatio >= 0 ? "+" : ""}${Math.round(comparison.deltaRatio * 100)}%`}
+                </p>
+              </div>
+              <p className="mt-2 text-xs text-zinc-400">
+                {comparison.previousTotal > 0
+                  ? isFr
+                    ? `vs ${formatTick(metric, comparison.previousTotal)} sur la periode precedente`
+                    : `vs ${formatTick(metric, comparison.previousTotal)} over the previous period`
+                  : isFr
+                    ? "Pas de periode precedente comparable"
+                    : "No comparable previous period"}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       <div className={`grid gap-4 ${metrics.length >= 3 ? "xl:grid-cols-3" : "md:grid-cols-2"}`}>

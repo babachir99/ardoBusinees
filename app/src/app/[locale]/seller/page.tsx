@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
+import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import SellerTrendsPanel from "@/components/seller/SellerTrendsPanel";
 import { hasAnyUserRole } from "@/lib/userRoles";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
@@ -238,7 +239,7 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  const rangeOptions = [30, 90, 365];
+  const rangeOptions = [7, 30, 90, 365];
   const resolvedSearch = searchParams ? await searchParams : {};
   const rangeParam = Number(resolvedSearch?.range ?? 30);
   const rangeDays = rangeOptions.includes(rangeParam) ? rangeParam : 30;
@@ -634,6 +635,7 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
           itemsSeries={itemsSeries}
           rangeOptions={rangeOptions}
           defaultRange={rangeDays}
+          exportFilename={`seller-dashboard-${rangeDays}d.csv`}
         />
 
         <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
@@ -649,6 +651,24 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
               >
                 {t("actions.manageProducts")}
               </Link>
+              <DashboardListExportButton
+                filename="seller-top-products.csv"
+                label={locale === "fr" ? "Exporter les produits" : "Export products"}
+                disabledLabel={locale === "fr" ? "Aucun produit" : "No product"}
+                columns={[
+                  { key: "title", label: locale === "fr" ? "Produit" : "Product" },
+                  { key: "price", label: locale === "fr" ? "Prix" : "Price" },
+                  { key: "units", label: locale === "fr" ? "Unites" : "Units" },
+                ]}
+                rows={topItems.map((item) => {
+                  const product = topProductMap.get(item.productId);
+                  return {
+                    title: product?.title ?? t("topProducts.unknown"),
+                    price: formatMoney(product?.priceCents ?? 0, product?.currency ?? "XOF", locale),
+                    units: item._sum.quantity ?? 0,
+                  };
+                })}
+              />
             </div>
             {topItems.length === 0 && (
               <p className="mt-4 text-sm text-zinc-400">{t("sections.empty")}</p>
@@ -699,6 +719,31 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
               <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-zinc-200">
                 {t("kpis.revenueRange", { days: rangeDays })}
               </span>
+              <DashboardListExportButton
+                filename="seller-top-clients.csv"
+                label={locale === "fr" ? "Exporter les clients" : "Export clients"}
+                disabledLabel={locale === "fr" ? "Aucun client" : "No client"}
+                columns={[
+                  { key: "segment", label: locale === "fr" ? "Segment" : "Segment" },
+                  { key: "name", label: locale === "fr" ? "Client" : "Client" },
+                  { key: "email", label: "Email" },
+                  { key: "value", label: locale === "fr" ? "Valeur" : "Value" },
+                ]}
+                rows={[
+                  ...topClientsByRevenue.map((client) => ({
+                    segment: locale === "fr" ? "Par revenu" : "By revenue",
+                    name: client.name,
+                    email: client.email || t("topClients.noEmail"),
+                    value: formatMoney(client.totalCents, "XOF", locale),
+                  })),
+                  ...topClientsByOrders.map((client) => ({
+                    segment: locale === "fr" ? "Par commandes" : "By orders",
+                    name: client.name,
+                    email: client.email || t("topClients.noEmail"),
+                    value: t("topClients.orders", { count: client.orders }),
+                  })),
+                ]}
+              />
             </div>
             {topClientsByRevenue.length === 0 && topClientsByOrders.length === 0 && (
               <p className="mt-4 text-sm text-zinc-400">{t("topClients.empty")}</p>
@@ -794,6 +839,32 @@ export default async function SellerPage({ searchParams }: SellerPageProps) {
               >
                 {t("actions.manageOrders")}
               </Link>
+              <DashboardListExportButton
+                filename="seller-recent-orders.csv"
+                label={locale === "fr" ? "Exporter les commandes" : "Export orders"}
+                disabledLabel={locale === "fr" ? "Aucune commande" : "No order"}
+                columns={[
+                  { key: "order", label: locale === "fr" ? "Commande" : "Order" },
+                  { key: "customer", label: locale === "fr" ? "Client" : "Client" },
+                  { key: "status", label: locale === "fr" ? "Statut" : "Status" },
+                  { key: "amount", label: locale === "fr" ? "Montant" : "Amount" },
+                  { key: "items", label: locale === "fr" ? "Articles" : "Items" },
+                  { key: "date", label: locale === "fr" ? "Date" : "Date" },
+                ]}
+                rows={recentOrders.map((order) => ({
+                  order: `#${order.id.slice(0, 8)}`,
+                  customer:
+                    order.buyerName ??
+                    order.buyerEmail ??
+                    order.user?.name ??
+                    order.user?.email ??
+                    t("recentOrders.unknown"),
+                  status: tSpace(`orders.status.${order.status.toLowerCase()}`),
+                  amount: formatMoney(order.totalCents, order.currency, locale),
+                  items: order.items.length,
+                  date: new Date(order.createdAt).toLocaleString(locale),
+                }))}
+              />
             </div>
             {recentOrders.length === 0 && (
               <p className="mt-4 text-sm text-zinc-400">{t("recentOrders.empty")}</p>

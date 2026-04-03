@@ -2,6 +2,7 @@ import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
@@ -64,7 +65,7 @@ export default async function TransporterDashboardPage({
   }
 
   const today = startOfToday();
-  const trendDays = 90;
+  const trendDays = 365;
   const trendStart = new Date(today);
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
 
@@ -387,8 +388,9 @@ export default async function TransporterDashboardPage({
               series: trendDates.map((point) => clientSetsByDay[point.key]?.size ?? 0),
             },
           ]}
-          rangeOptions={[7, 30, 90]}
+          rangeOptions={[7, 30, 90, 365]}
           defaultRange={30}
+          exportFilename="gp-dashboard.csv"
         />
 
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -403,6 +405,25 @@ export default async function TransporterDashboardPage({
               >
                 {locale === "fr" ? "Publier / gerer" : "Publish / manage"}
               </Link>
+              <DashboardListExportButton
+                filename="gp-trips.csv"
+                label={locale === "fr" ? "Exporter les trajets" : "Export trips"}
+                disabledLabel={locale === "fr" ? "Aucun trajet" : "No trips"}
+                columns={[
+                  { key: "route", label: locale === "fr" ? "Trajet" : "Route" },
+                  { key: "date", label: locale === "fr" ? "Date" : "Date" },
+                  { key: "kg", label: "Kg" },
+                  { key: "price", label: locale === "fr" ? "Prix" : "Price" },
+                  { key: "status", label: locale === "fr" ? "Statut" : "Status" },
+                ]}
+                rows={trips.map((trip) => ({
+                  route: `${trip.originCity} -> ${trip.destinationCity}`,
+                  date: formatDateOnly(locale, trip.flightDate),
+                  kg: trip.availableKg,
+                  price: formatMoney(trip.pricePerKgCents, trip.currency, locale),
+                  status: trip.status,
+                }))}
+              />
             </div>
 
             {trips.length === 0 ? (
@@ -451,6 +472,27 @@ export default async function TransporterDashboardPage({
                     {locale === "fr" ? "Prochain depart" : "Next departure"}: {formatDateOnly(locale, nextTrip.flightDate)}
                   </span>
                 ) : null}
+                <DashboardListExportButton
+                  filename="gp-clients.csv"
+                  label={locale === "fr" ? "Exporter les clients" : "Export clients"}
+                  disabledLabel={locale === "fr" ? "Aucun client" : "No client"}
+                  columns={[
+                    { key: "client", label: locale === "fr" ? "Client" : "Client" },
+                    { key: "route", label: locale === "fr" ? "Trajet" : "Route" },
+                    { key: "status", label: locale === "fr" ? "Statut" : "Status" },
+                    { key: "kg", label: "Kg" },
+                    { key: "amount", label: locale === "fr" ? "Montant" : "Amount" },
+                    { key: "date", label: locale === "fr" ? "Date" : "Date" },
+                  ]}
+                  rows={recentClientBookings.map((booking) => ({
+                    client: booking.customer.name ?? (locale === "fr" ? "Client" : "Customer"),
+                    route: `${booking.trip.originCity} -> ${booking.trip.destinationCity}`,
+                    status: booking.status,
+                    kg: booking.requestedKg,
+                    amount: formatMoney(booking.requestedKg * booking.trip.pricePerKgCents, booking.trip.currency, locale),
+                    date: formatDateOnly(locale, booking.createdAt),
+                  }))}
+                />
               </div>
               {recentClientBookings.length === 0 ? (
                 <p className="mt-4 text-sm text-zinc-400">
@@ -488,6 +530,27 @@ export default async function TransporterDashboardPage({
               <h2 className="text-lg font-semibold text-white">
                 {locale === "fr" ? "Avis recus" : "Received reviews"}
               </h2>
+              <div className="mt-3">
+                <DashboardListExportButton
+                  filename="gp-reviews.csv"
+                  label={locale === "fr" ? "Exporter les avis" : "Export reviews"}
+                  disabledLabel={locale === "fr" ? "Aucun avis" : "No review"}
+                  columns={[
+                    { key: "reviewer", label: locale === "fr" ? "Client" : "Client" },
+                    { key: "route", label: locale === "fr" ? "Trajet" : "Route" },
+                    { key: "rating", label: locale === "fr" ? "Note" : "Rating" },
+                    { key: "comment", label: locale === "fr" ? "Commentaire" : "Comment" },
+                    { key: "date", label: locale === "fr" ? "Date" : "Date" },
+                  ]}
+                  rows={recentReviews.map((review) => ({
+                    reviewer: review.reviewer.name ?? (locale === "fr" ? "Client" : "Customer"),
+                    route: `${review.trip.originCity} -> ${review.trip.destinationCity}`,
+                    rating: `${review.rating}/5`,
+                    comment: review.comment ?? "",
+                    date: new Date(review.createdAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US"),
+                  }))}
+                />
+              </div>
               {recentReviews.length === 0 ? (
                 <p className="mt-4 text-sm text-zinc-400">
                   {locale === "fr" ? "Aucun avis pour le moment." : "No reviews yet."}

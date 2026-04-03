@@ -2,6 +2,7 @@ import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
@@ -70,7 +71,7 @@ export default async function TiakDashboardPage({
   }
 
   const today = startOfToday();
-  const trendDays = 90;
+  const trendDays = 365;
   const trendStart = new Date(today);
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
 
@@ -320,8 +321,9 @@ export default async function TiakDashboardPage({
           }
           dates={trendDates}
           metrics={metrics}
-          rangeOptions={[7, 30, 90]}
+          rangeOptions={[7, 30, 90, 365]}
           defaultRange={30}
+          exportFilename="tiak-dashboard.csv"
         />
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -336,6 +338,25 @@ export default async function TiakDashboardPage({
               >
                 {isFr ? "Retour a l'espace" : "Back to space"}
               </Link>
+              <DashboardListExportButton
+                filename="tiak-deliveries.csv"
+                label={isFr ? "Exporter les courses" : "Export deliveries"}
+                disabledLabel={isFr ? "Aucune course" : "No delivery"}
+                columns={[
+                  { key: "client", label: isFr ? "Client" : "Client" },
+                  { key: "route", label: isFr ? "Trajet" : "Route" },
+                  { key: "status", label: isFr ? "Statut" : "Status" },
+                  { key: "amount", label: isFr ? "Montant" : "Amount" },
+                  { key: "date", label: isFr ? "Date" : "Date" },
+                ]}
+                rows={recentDeliveries.map((delivery) => ({
+                  client: delivery.customer?.name ?? (isFr ? "Client" : "Client"),
+                  route: formatRouteLabel(delivery.pickupAddress, delivery.dropoffAddress),
+                  status: delivery.status,
+                  amount: delivery.priceCents ? formatMoney(delivery.priceCents, delivery.currency, locale) : "-",
+                  date: formatDate(locale, delivery.createdAt),
+                }))}
+              />
             </div>
 
             {recentDeliveries.length === 0 ? (
@@ -375,6 +396,34 @@ export default async function TiakDashboardPage({
             <h2 className="text-lg font-semibold text-white">
               {isFr ? "Etat coursier" : "Courier snapshot"}
             </h2>
+            <div className="mt-3">
+              <DashboardListExportButton
+                filename="tiak-courier-snapshot.csv"
+                label={isFr ? "Exporter l'etat" : "Export snapshot"}
+                columns={[
+                  { key: "metric", label: isFr ? "Indicateur" : "Metric" },
+                  { key: "value", label: isFr ? "Valeur" : "Value" },
+                ]}
+                rows={[
+                  {
+                    metric: isFr ? "Disponibilite" : "Availability",
+                    value: courierProfile?.isActive ? (isFr ? "Actif" : "Active") : isFr ? "Pause" : "Paused",
+                  },
+                  {
+                    metric: isFr ? "Zones declarees" : "Declared coverage",
+                    value: courierProfile?.cities.length ? courierProfile.cities.join(", ") : isFr ? "Aucune" : "None",
+                  },
+                  {
+                    metric: isFr ? "Total verse" : "Total paid",
+                    value: formatMoney(totalPaidCents, payoutCurrency, locale),
+                  },
+                  {
+                    metric: isFr ? "En attente" : "Pending",
+                    value: formatMoney(pendingPayoutCents, payoutCurrency, locale),
+                  },
+                ]}
+              />
+            </div>
             <div className="mt-4 grid gap-3">
               <div className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4">
                 <p className="text-sm font-semibold text-white">{isFr ? "Disponibilite" : "Availability"}</p>
