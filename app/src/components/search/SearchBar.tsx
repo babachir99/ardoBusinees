@@ -3,6 +3,9 @@
 import { useRouter } from "@/i18n/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+const RECENT_SEARCHES_STORAGE_KEY = "jontaado_recent_searches";
+const MAX_RECENT_SEARCHES = 6;
+
 type SearchBarProps = {
   initialQuery?: string;
   initialCategory?: string;
@@ -16,6 +19,55 @@ type SearchBarProps = {
   autoNavigateOnFilters?: boolean;
   clearNavigates?: boolean;
 };
+
+type StoredRecentSearch = {
+  query: string;
+  category: string;
+  sort: string;
+  createdAt: number;
+};
+
+function storeRecentSearch(entry: Omit<StoredRecentSearch, "createdAt">) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const hasMeaningfulValue = Boolean(entry.query.trim() || entry.category || entry.sort !== "recent");
+  if (!hasMeaningfulValue) {
+    return;
+  }
+
+  let current: StoredRecentSearch[] = [];
+
+  try {
+    const raw = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+    current = raw ? (JSON.parse(raw) as StoredRecentSearch[]) : [];
+  } catch {
+    current = [];
+  }
+
+  const deduped = current.filter(
+    (item) =>
+      !(
+        item.query === entry.query.trim() &&
+        item.category === entry.category &&
+        item.sort === entry.sort
+      )
+  );
+
+  const next = [
+    {
+      query: entry.query.trim(),
+      category: entry.category,
+      sort: entry.sort,
+      createdAt: Date.now(),
+    },
+    ...deduped,
+  ].slice(0, MAX_RECENT_SEARCHES);
+
+  window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent("jontaado:recent-searches-updated", { detail: next }));
+}
 
 export default function SearchBar({
   initialQuery,
@@ -47,9 +99,14 @@ export default function SearchBar({
 
   const searchHref = paramsString ? `${targetPath}?${paramsString}` : targetPath;
 
+  const navigateToSearch = () => {
+    storeRecentSearch({ query, category, sort });
+    router.push(searchHref);
+  };
+
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    router.push(searchHref);
+    navigateToSearch();
   };
 
   useEffect(() => {
@@ -62,7 +119,7 @@ export default function SearchBar({
       return;
     }
 
-    router.push(searchHref);
+    navigateToSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoNavigateOnFilters, category, searchHref, sort]);
 

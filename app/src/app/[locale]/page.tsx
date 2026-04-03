@@ -6,10 +6,13 @@ import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
 import SearchBar from "@/components/search/SearchBar";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
+import HomeDynamicSignals from "@/components/home/HomeDynamicSignals";
+import HomePromoPopups from "@/components/home/HomePromoPopups";
 import ProductCardCarousel from "@/components/shop/ProductCardCarousel";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getHomePromoEntries } from "@/lib/homePromos";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -52,6 +55,18 @@ const homeProductSelect = {
   images: { orderBy: { position: "asc" }, take: 5, select: { url: true, alt: true } },
 } satisfies Prisma.ProductSelect;
 
+const homeLikedProductSelect = {
+  id: true,
+  sellerId: true,
+  slug: true,
+  title: true,
+  priceCents: true,
+  currency: true,
+  discountPercent: true,
+  seller: { select: { displayName: true } },
+  categories: { select: { categoryId: true } },
+} satisfies Prisma.ProductSelect;
+
 export default async function HomePage({
   params,
   searchParams,
@@ -79,6 +94,7 @@ export default async function HomePage({
     suggestions,
     sellerHints,
     sidebarRootCategories,
+    homePromoConfig,
   ] = await Promise.all([
     getServerSession(authOptions),
     prisma.product.findMany({
@@ -155,6 +171,7 @@ export default async function HomePage({
       },
       orderBy: { name: "asc" },
     }),
+    getHomePromoEntries(),
   ]);
 
   const now = new Date();
@@ -173,7 +190,7 @@ export default async function HomePage({
   const storeHints = stores.slice(0, 6).map((item) => ({ name: item.name }));
   const displayedProductIds = displayedProducts.map((product) => product.id);
 
-  const [operatorProfile, favoriteEntries] = await Promise.all([
+  const [operatorProfile, favoriteEntries, recentLikedEntries, popularLikedProducts] = await Promise.all([
     session?.user?.id
       ? prisma.user.findUnique({
           where: { id: session.user.id },
@@ -199,6 +216,29 @@ export default async function HomePage({
             productId: { in: displayedProductIds },
           },
           select: { productId: true },
+        })
+      : Promise.resolve([]),
+    session?.user?.id
+      ? prisma.favorite.findMany({
+          where: { userId: session.user.id },
+          orderBy: { createdAt: "desc" },
+          take: 4,
+          select: {
+            productId: true,
+            createdAt: true,
+            product: { select: homeLikedProductSelect },
+          },
+        })
+      : Promise.resolve([]),
+    !session?.user?.id
+      ? prisma.product.findMany({
+          where: { isActive: true },
+          orderBy: [{ favorites: { _count: "desc" } }, { createdAt: "desc" }],
+          take: 4,
+          select: {
+            ...homeLikedProductSelect,
+            _count: { select: { favorites: true } },
+          },
         })
       : Promise.resolve([]),
   ]);
@@ -233,6 +273,27 @@ export default async function HomePage({
   const orderedSidebarRoots = [...sidebarRootCategories].sort((a, b) =>
     a.name.localeCompare(b.name, locale)
   );
+  const homeLikedItems = session?.user?.id
+    ? recentLikedEntries.map((entry) => ({
+        productId: entry.productId,
+        slug: entry.product.slug,
+        title: entry.product.title,
+        priceCents: entry.product.priceCents,
+        currency: entry.product.currency,
+        discountPercent: entry.product.discountPercent,
+        sellerName: entry.product.seller?.displayName ?? null,
+        likedAt: entry.createdAt.toISOString(),
+      }))
+    : popularLikedProducts.map((product) => ({
+        productId: product.id,
+        slug: product.slug,
+        title: product.title,
+        priceCents: product.priceCents,
+        currency: product.currency,
+        discountPercent: product.discountPercent,
+        sellerName: product.seller?.displayName ?? null,
+        favoritesCount: product._count.favorites,
+      }));
 
 
   return (
@@ -400,6 +461,15 @@ export default async function HomePage({
               </Link>
             )}
           </div>
+
+          <div className="fade-up">
+            <HomeDynamicSignals
+              locale={locale}
+              isLoggedIn={Boolean(session?.user?.id)}
+              initialLikedItems={homeLikedItems}
+            />
+          </div>
+
           <div className="fade-up">
             <h2 className="text-2xl font-semibold">
               {query ? `Resultats pour "${query}"` : "Produits disponibles"}
@@ -488,6 +558,7 @@ export default async function HomePage({
           </div>
         </section>
       </main>
+      <HomePromoPopups locale={locale} promos={homePromoConfig.entries} />
       <Footer />
     </div>
   );

@@ -4,11 +4,13 @@ import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 import AdminTrendsPanel from "@/components/admin/AdminTrendsPanel";
 import AdminOpsHub from "@/components/admin/AdminOpsHub";
+import AdminHomePromosPanel from "@/components/admin/AdminHomePromosPanel";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import { hasUserRole } from "@/lib/userRoles";
+import { getHomePromoAccentOptions, getHomePromoEntries } from "@/lib/homePromos";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -214,6 +216,7 @@ export default async function AdminPage() {
     trustDisputesActiveCount,
     trustReportItems,
     trustDisputeItems,
+    homePromoConfig,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -419,6 +422,7 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
+    getHomePromoEntries(),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -781,6 +785,14 @@ export default async function AdminPage() {
             ))}
           </div>
         </section>
+
+        <AdminHomePromosPanel
+          locale={locale}
+          initialPromos={homePromoConfig.entries}
+          accentOptions={getHomePromoAccentOptions()}
+          lastUpdatedAt={homePromoConfig.lastUpdatedAt ? homePromoConfig.lastUpdatedAt.toISOString() : null}
+          lastUpdatedBy={homePromoConfig.lastUpdatedBy}
+        />
       </main>
       <Footer />
     </div>

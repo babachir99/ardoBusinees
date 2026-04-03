@@ -13,6 +13,7 @@ import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
+import RecentProductViewTracker from "@/components/home/RecentProductViewTracker";
 
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 type RelatedProductCard = {
@@ -431,6 +432,18 @@ export default async function ProductPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
+      <RecentProductViewTracker
+        product={{
+          id: product.id,
+          slug: product.slug,
+          title: product.title,
+          priceCents: product.priceCents,
+          currency: product.currency,
+          discountPercent: product.discountPercent,
+          sellerName: product.seller?.displayName ?? null,
+          imageUrl: product.images[0]?.url ?? null,
+        }}
+      />
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
         <Link href="/" className="flex items-center gap-3">
           <img

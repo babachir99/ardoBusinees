@@ -39,6 +39,18 @@ export default function FavoriteButton({
     load();
   }, [initialIsFavorite, productId]);
 
+  const announceFavoriteUpdate = (nextIsFavorite: boolean) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("jontaado:favorites-updated", {
+        detail: { productId, isFavorite: nextIsFavorite },
+      })
+    );
+  };
+
   const toggle = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -50,6 +62,7 @@ export default function FavoriteButton({
       });
       if (res.ok || res.status === 404) {
         setIsFavorite(false);
+        announceFavoriteUpdate(false);
       }
     } else {
       const res = await fetch("/api/favorites", {
@@ -59,6 +72,7 @@ export default function FavoriteButton({
       });
       if (res.ok) {
         setIsFavorite(true);
+        announceFavoriteUpdate(true);
       }
     }
     setLoading(false);
