@@ -34,12 +34,12 @@ export default async function PrestaPage({
           }
           accentClassName="from-amber-500/18 via-zinc-950/92 to-zinc-950"
           primaryAction={
-            <Link
+            <a
               href="#presta-market"
               className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
             >
               {locale === "fr" ? "Explorer PRESTA" : "Explore PRESTA"}
-            </Link>
+            </a>
           }
           secondaryAction={
             canPublish ? (

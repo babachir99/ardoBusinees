@@ -187,12 +187,12 @@ export default async function GpPage({
           }
           accentClassName="from-indigo-500/18 via-zinc-950/92 to-zinc-950"
           primaryAction={
-            <Link
+            <a
               href="#gp-search"
               className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
             >
               {locale === "fr" ? "Explorer les trajets" : "Explore trips"}
-            </Link>
+            </a>
           }
           secondaryAction={
             canOpenTransporterDashboard ? (
@@ -230,12 +230,12 @@ export default async function GpPage({
             )
           }
           right={
-            <Link
+            <a
               href="#gp-publish"
               className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300/35 hover:bg-white/10"
             >
               {locale === "fr" ? "Publier un trajet" : "Publish trip"}
-            </Link>
+            </a>
           }
         />
 

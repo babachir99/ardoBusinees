@@ -25,33 +25,36 @@ export default async function AppHeader({ locale }: AppHeaderProps) {
   ]);
 
   return (
-    <header className="sticky top-3 z-40 px-4 pt-4 sm:px-6">
-      <div className="mx-auto w-full max-w-7xl">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[1.75rem] border border-white/10 bg-zinc-950/72 px-3 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+    <header className="sticky top-3 z-40 w-full box-border">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <div className="flex w-full items-center gap-3 rounded-[1.5rem] border border-white/10 bg-zinc-950/68 px-3 py-2.5 shadow-[0_18px_50px_rgba(0,0,0,0.24)] backdrop-blur-md sm:gap-4">
           <Link href="/" className="inline-flex items-center">
             <Image
               src="/logo.png"
               alt="JONTAADO logo"
               width={160}
               height={160}
-              className="h-[54px] w-auto sm:h-[60px]"
+              className="h-[48px] w-auto sm:h-[54px]"
               priority
             />
           </Link>
 
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <SearchBar
               locale={locale}
               compact
               categories={categories}
               suggestions={recentProducts.map((item) => item.title)}
-              className="flex w-full items-center gap-1.5 rounded-full border border-white/10 bg-gradient-to-r from-zinc-950/80 via-zinc-950/65 to-zinc-950/80 px-2 py-1.5 text-xs text-zinc-300 shadow-none"
+              className="mx-auto w-full max-w-[500px]"
+              targetPath="/shop"
+              autoNavigateOnFilters={false}
+              clearNavigates={false}
             />
           </div>
 
           <UserHeaderActions
             locale={locale}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2.5 sm:gap-3"
             showAdminLink={false}
             showCart={false}
             showNotificationsLink
