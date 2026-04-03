@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
+import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 
 type JourneyField = {
   label: string;
@@ -114,8 +116,6 @@ const primaryButtonClass =
 const panelButtonClass =
   "rounded-full border border-emerald-300/25 bg-emerald-400/12 px-5 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/45 hover:bg-emerald-400/18";
 
-const panelButtonWideClass = `${panelButtonClass} w-full justify-center py-3.5`;
-
 export default function CaresProductExperience({ page }: { page: CaresPageContent }) {
   const [activeJourneyId, setActiveJourneyId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -152,67 +152,37 @@ export default function CaresProductExperience({ page }: { page: CaresPageConten
 
   return (
     <>
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-24">
-        <section className="overflow-hidden rounded-[2rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_top_left,_rgba(74,222,128,0.2),_transparent_34%),linear-gradient(135deg,rgba(16,24,39,0.98),rgba(8,12,18,0.98))] p-6 shadow-[0_30px_90px_-50px_rgba(34,197,94,0.45)] md:p-8">
-          <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr] xl:items-stretch">
-            <div className="flex flex-col justify-between gap-6">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
-                    {page.kicker}
-                  </p>
-                  <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold text-emerald-100">
-                    {page.preprod}
-                  </span>
-                </div>
-
-                <h1 className="mt-4 max-w-4xl text-3xl font-semibold leading-tight md:text-5xl">
-                  {page.title}
-                </h1>
-                <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300 md:text-base">
-                  {page.subtitle}
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-2">
-                  {page.chips.map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full border border-emerald-300/15 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-100"
-                    >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  {page.journeys.map((journey, index) => (
-                    <button
-                      key={journey.id}
-                      type="button"
-                      onClick={() => openJourney(journey.id)}
-                      className={index === 0 ? primaryButtonClass : panelButtonClass}
-                    >
-                      {page.ctas[index]?.label ?? journey.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                {page.metrics.map((metric) => (
-                  <article
-                    key={metric.label}
-                    className="rounded-2xl border border-white/10 bg-zinc-950/55 px-4 py-4"
-                  >
-                    <p className="text-2xl font-semibold text-emerald-200">{metric.value}</p>
-                    <p className="mt-2 text-sm font-medium text-white">{metric.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-400">{metric.detail}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-24 pt-6 sm:px-6">
+        <MarketplaceHero
+          badge={page.kicker}
+          title={page.title}
+          subtitle={page.subtitle}
+          accentClassName="from-emerald-500/18 via-zinc-950/92 to-zinc-950"
+          primaryAction={
+            <button
+              type="button"
+              onClick={() => openJourney(page.journeys[0]?.id ?? "faire-un-don")}
+              className={primaryButtonClass}
+            >
+              {page.ctas[0]?.label ?? page.journeys[0]?.label}
+            </button>
+          }
+          secondaryAction={
+            <button
+              type="button"
+              onClick={() => {
+                setActiveJourneyId(null);
+                setAboutOpen(true);
+              }}
+              className={panelButtonClass}
+            >
+              {page.aboutButtonLabel}
+            </button>
+          }
+          highlights={page.heroHighlights}
+          metrics={page.metrics.map((metric) => ({ value: metric.value, label: metric.label }))}
+          aside={
+            <div>
               <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-5">
                 <Image
                   src="/stores/last_cares.png"
@@ -231,31 +201,50 @@ export default function CaresProductExperience({ page }: { page: CaresPageConten
                 <p className="mt-3 text-sm leading-6 text-zinc-300">{page.explainerBody}</p>
               </div>
 
-              <div className="mt-4 grid gap-2">
-                {page.heroHighlights.map((highlight) => (
-                  <div
-                    key={highlight}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-200"
+              <div className="mt-4 flex flex-wrap gap-2">
+                {page.chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-emerald-300/15 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-100"
                   >
-                    {highlight}
-                  </div>
+                    {chip}
+                  </span>
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveJourneyId(null);
-                  setAboutOpen(true);
-                }}
-                className={`mt-5 inline-flex items-center ${panelButtonWideClass}`}
-              >
-                {page.aboutButtonLabel}
-              </button>
-              <p className="mt-2 text-center text-xs text-zinc-500">{page.aboutButtonHint}</p>
+              <p className="mt-4 text-center text-xs text-zinc-500">{page.aboutButtonHint}</p>
             </div>
-          </div>
-        </section>
+          }
+        />
+
+        <MarketplaceActions
+          left={
+            <>
+              {page.journeys.map((journey, index) => (
+                <button
+                  key={journey.id}
+                  type="button"
+                  onClick={() => openJourney(journey.id)}
+                  className={index === 0 ? primaryButtonClass : panelButtonClass}
+                >
+                  {page.ctas[index]?.label ?? journey.label}
+                </button>
+              ))}
+            </>
+          }
+          right={
+            <button
+              type="button"
+              onClick={() => {
+                setActiveJourneyId(null);
+                setAboutOpen(true);
+              }}
+              className={panelButtonClass}
+            >
+              {page.aboutButtonLabel}
+            </button>
+          }
+        />
 
         <section className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm md:p-7">
           <div>

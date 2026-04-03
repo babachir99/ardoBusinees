@@ -1,64 +1,86 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import Image from "next/image";
 import Footer from "@/components/layout/Footer";
+import AppHeader from "@/components/layout/AppHeader";
+import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
+import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 
-export default async function CarsPage() {
-  const t = await getTranslations("Verticals.cars");
+export default async function CarsPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const [{ locale }, t] = await Promise.all([params, getTranslations("Verticals.cars")]);
+  const isFr = locale === "fr";
+  const features = t.raw("features") as string[];
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/cars"
-            className="rounded-full border border-sky-300/40 px-4 py-2 text-xs font-semibold text-sky-200 transition hover:border-sky-300/70"
-          >
-            {t("title")}
-          </Link>
-          <Link
-            href="/stores"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {t("back")}
-          </Link>
-        </div>
-      </header>
+      <AppHeader locale={locale} />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-300/15 via-zinc-900 to-zinc-900 p-10 card-glow fade-up">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
-            {t("kicker")}
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold md:text-4xl">
-            {t("title")}
-          </h1>
-          <p className="mt-3 text-sm text-zinc-300">{t("subtitle")}</p>
-          <div className="mt-5 flex flex-wrap gap-2 text-xs">
-            <Link href="/cars" className="rounded-full border border-cyan-300/40 px-3 py-1 font-semibold text-cyan-200">Explorer CARS</Link>
-            <Link href="/cars/dealers" className="rounded-full border border-white/20 px-3 py-1 font-semibold text-white">Concessionnaires</Link>
-            <Link href="/cars/my" className="rounded-full border border-white/20 px-3 py-1 font-semibold text-white">Mes annonces</Link>
-          </div>
-        </section>
-
-        <section className="grid gap-6 md:grid-cols-3 fade-up">
-          {t.raw("features").map((feature: string, index: number) => (
-            <div
-              key={index}
-              className="rounded-2xl border border-white/10 bg-zinc-900/70 p-6"
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
+        <MarketplaceHero
+          badge="JONTAADO CARS"
+          title={t("title")}
+          subtitle={t("subtitle")}
+          accentClassName="from-rose-500/16 via-zinc-950/92 to-zinc-950"
+          primaryAction={
+            <Link
+              href="/cars"
+              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
             >
-              <p className="text-sm text-zinc-200">{feature}</p>
-            </div>
+              {isFr ? "Explorer CARS" : "Explore CARS"}
+            </Link>
+          }
+          secondaryAction={
+            <Link
+              href="/cars/dealers"
+              className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-sky-300/35 hover:bg-white/10"
+            >
+              {isFr ? "Concessionnaires" : "Dealers"}
+            </Link>
+          }
+          highlights={features.slice(0, 3)}
+        />
+
+        <MarketplaceActions
+          left={
+            <>
+              <Link
+                href="/cars"
+                className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]"
+              >
+                {isFr ? "Explorer" : "Explore"}
+              </Link>
+              <Link
+                href="/cars/dealers"
+                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/35 hover:bg-white/10"
+              >
+                {isFr ? "Concessionnaires" : "Dealers"}
+              </Link>
+              <Link
+                href="/cars/my"
+                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/35 hover:bg-white/10"
+              >
+                {isFr ? "Mes annonces" : "My listings"}
+              </Link>
+            </>
+          }
+        />
+
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {features.map((feature, index) => (
+            <MarketplaceCard
+              key={feature}
+              label={isFr ? `Experience ${index + 1}` : `Experience ${index + 1}`}
+              title={feature}
+              description={
+                isFr
+                  ? "Une promesse claire pour explorer, comparer et publier plus vite sans surcharge visuelle."
+                  : "A clear promise to explore, compare and publish faster without visual overload."
+              }
+            />
           ))}
         </section>
       </main>

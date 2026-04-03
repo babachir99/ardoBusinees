@@ -4,7 +4,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Link } from "@/i18n/navigation";
+import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
 import { type TiakCourierProfile, type TiakDelivery, type TiakPayout } from "@/components/tiak/types";
@@ -24,7 +24,6 @@ type Props = {
   isLoggedIn: boolean;
   currentUserId: string | null;
   currentUserRole: string | null;
-  canOpenDashboard?: boolean;
 };
 
 function scheduleIdleTask(task: () => void, timeout = 1200) {
@@ -125,7 +124,6 @@ export default function TiakStoreClient({
   isLoggedIn,
   currentUserId,
   currentUserRole,
-  canOpenDashboard = false,
 }: Props) {
   const [openDeliveries, setOpenDeliveries] = useState<TiakDelivery[]>([]);
   const [trackedDeliveries, setTrackedDeliveries] = useState<TiakDelivery[]>([]);
@@ -736,78 +734,11 @@ export default function TiakStoreClient({
   }, [hasBlockingPanelOpen]);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/55 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold text-white">
-              {locale === "fr" ? "Livraison locale express" : "Local express delivery"}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              {locale === "fr"
-                ? "Cree une demande, trouve un coursier et pilote les preuves en un flux simple."
-                : "Create a request, find a courier and manage proofs in a single flow."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void refreshAll()}
-              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
-            >
-              {locale === "fr" ? "Rafraichir" : "Refresh"}
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                document
-                  .getElementById("tiak-my-deliveries")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-              className="rounded-full border border-cyan-300/35 bg-cyan-300/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/65"
-            >
-              {locale === "fr" ? "Voir historique" : "View history"}
-            </button>
-            {isLoggedIn ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const nextOpen = !notificationsPanelOpen;
-                  setNotificationsPanelOpen(nextOpen);
-                  if (nextOpen) {
-                    markTiakNotificationsRead();
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-zinc-950/60 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:border-white/45"
-              >
-                {locale === "fr" ? "Notifications" : "Notifications"}
-                {unreadTiakNotificationsCount > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    {unreadTiakNotificationsCount > 99 ? "99+" : unreadTiakNotificationsCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="inline-flex items-center rounded-full border border-white/15 bg-zinc-950/70 px-3 py-1 text-xs text-zinc-200">
-            {locale === "fr" ? "Demandes ouvertes" : "Open requests"}: {openDeliveries.length}
-          </span>
-          <span className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
-            {locale === "fr" ? "Livraisons en cours" : "In progress"}: {inProgressCount}
-          </span>
-          {canViewEarnings ? (
-            <span className="inline-flex items-center rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
-              {locale === "fr" ? "Gains (mois)" : "Earnings (month)"}: {formatAmount(monthlyGainCents, "XOF")}
-            </span>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="sticky top-20 z-30 rounded-2xl border border-neutral-800/70 bg-neutral-900/60 p-5 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-colors duration-200 ease-out hover:border-emerald-400/25 hover:bg-neutral-900/70 motion-reduce:transition-none">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+    <div id="tiak-dispatch" className="space-y-6">
+      <MarketplaceActions
+        className="sticky top-[92px] z-30 rounded-[1.6rem] border border-neutral-800/70 bg-neutral-900/60 p-5 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-colors duration-200 ease-out hover:border-emerald-400/25 hover:bg-neutral-900/70 motion-reduce:transition-none"
+        left={
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="space-y-3">
             <div>
               <h3 className="text-lg font-semibold text-white">
@@ -829,17 +760,54 @@ export default function TiakStoreClient({
               <span className="inline-flex items-center rounded-full bg-neutral-800/50 px-3 py-1 text-xs text-neutral-200">
                 {locale === "fr" ? "Livreurs" : "Couriers"}: {availableCourierCount}
               </span>
+              {canViewEarnings ? (
+                <span className="inline-flex items-center rounded-full bg-emerald-400/12 px-3 py-1 text-xs text-emerald-100">
+                  {locale === "fr" ? "Gains" : "Earnings"}: {formatAmount(monthlyGainCents, "XOF")}
+                </span>
+              ) : null}
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {canOpenDashboard ? (
-              <Link
-                href="/stores/jontaado-tiak-tiak/dashboard"
-                className="inline-flex items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-5 py-2.5 text-sm font-medium text-emerald-100 transition hover:border-emerald-300/70 hover:bg-emerald-400/15"
+          </div>
+        }
+        right={
+          <>
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10"
+            >
+              {locale === "fr" ? "Rafraichir" : "Refresh"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById("tiak-my-deliveries")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+              className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/45 hover:bg-cyan-300/15"
+            >
+              {locale === "fr" ? "Historique" : "History"}
+            </button>
+            {isLoggedIn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextOpen = !notificationsPanelOpen;
+                  setNotificationsPanelOpen(nextOpen);
+                  if (nextOpen) {
+                    markTiakNotificationsRead();
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10"
               >
-                {locale === "fr" ? "Dashboard TIAK" : "TIAK dashboard"}
-              </Link>
+                {locale === "fr" ? "Notifications" : "Notifications"}
+                {unreadTiakNotificationsCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {unreadTiakNotificationsCount > 99 ? "99+" : unreadTiakNotificationsCount}
+                  </span>
+                ) : null}
+              </button>
             ) : null}
             <button
               type="button"
@@ -859,9 +827,9 @@ export default function TiakStoreClient({
               </svg>
               <span>{locale === "fr" ? "Demarrer une livraison" : "Start a delivery"}</span>
             </button>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-7">

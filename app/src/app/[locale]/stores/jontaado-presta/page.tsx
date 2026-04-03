@@ -1,7 +1,8 @@
-﻿import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import AppHeader from "@/components/layout/AppHeader";
+import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
 import { authOptions } from "@/lib/auth";
 import PrestaStoreClient from "@/components/presta/PrestaStoreClient";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
@@ -20,47 +21,42 @@ export default async function PrestaPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2">
-          {canPublish ? (
-            <Link
-              href="/stores/jontaado-presta/dashboard"
-              className="rounded-full border border-amber-300/40 px-4 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-300/80"
-            >
-              {locale === "fr" ? "Mon dashboard PRESTA" : "My PRESTA dashboard"}
-            </Link>
-          ) : null}
-          <Link
-            href="/stores"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-          </Link>
-        </div>
-      </header>
+      <AppHeader locale={locale} />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-amber-300/15 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">JONTAADO PRESTA</p>
-          <h1 className="mt-3 text-2xl font-semibold md:text-4xl">
-            {locale === "fr" ? "Services locaux" : "Local services"}
-          </h1>
-          <p className="mt-3 text-sm text-zinc-300">
-            {locale === "fr"
-              ? "Test V0: creation de services et reservations via API PRESTA."
-              : "V0 test: service publishing and booking through PRESTA API."}
-          </p>
-        </section>
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
+        <MarketplaceHero
+          badge="JONTAADO PRESTA"
+          title={locale === "fr" ? "Services locaux premium" : "Premium local services"}
+          subtitle={
+            locale === "fr"
+              ? "Explore les offres, publie un besoin et ouvre ton espace prestataire dans une interface plus simple, plus rapide et plus premium."
+              : "Explore offers, publish a need and open your provider space through a simpler, faster and more premium interface."
+          }
+          accentClassName="from-amber-500/18 via-zinc-950/92 to-zinc-950"
+          primaryAction={
+            <Link
+              href="#presta-market"
+              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
+            >
+              {locale === "fr" ? "Explorer PRESTA" : "Explore PRESTA"}
+            </Link>
+          }
+          secondaryAction={
+            canPublish ? (
+              <Link
+                href="/stores/jontaado-presta/dashboard"
+                className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-amber-300/35 hover:bg-white/10"
+              >
+                {locale === "fr" ? "Ouvrir le dashboard PRESTA" : "Open PRESTA dashboard"}
+              </Link>
+            ) : null
+          }
+          highlights={[
+            locale === "fr" ? "Offres et besoins dans un meme espace lisible." : "Offers and needs in one readable space.",
+            locale === "fr" ? "Publication de besoin plus guidee, moins intimidante." : "A more guided, less intimidating need composer.",
+            locale === "fr" ? "Acces dashboard plus clair pour les prestataires." : "Clearer dashboard access for providers.",
+          ]}
+        />
 
         <PrestaStoreClient
           locale={locale}
@@ -68,7 +64,6 @@ export default async function PrestaPage({
           canPublish={canPublish}
           currentUserId={session?.user?.id ?? null}
           currentUserRole={session?.user?.role ?? null}
-          dashboardHref={canPublish ? "/stores/jontaado-presta/dashboard" : null}
         />
       </main>
 
@@ -76,3 +71,4 @@ export default async function PrestaPage({
     </div>
   );
 }
+

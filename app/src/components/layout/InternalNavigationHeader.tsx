@@ -193,7 +193,13 @@ export default function InternalNavigationHeader({
     };
   }, [copy.home, locale, pathname]);
 
-  if (!meta) {
+  const rawPath = pathname || `/${locale}`;
+  const withoutLocale = rawPath.replace(new RegExp(`^/${locale}(?=/|$)`), "") || "/";
+  const hideForMarketplaceStores = /^\/stores\/jontaado-(cars|gp|immo|cares|presta|tiak-tiak)(\/|$)/.test(
+    withoutLocale
+  );
+
+  if (!meta || hideForMarketplaceStores) {
     return null;
   }
 

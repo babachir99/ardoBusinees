@@ -1,7 +1,10 @@
-import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import AppHeader from "@/components/layout/AppHeader";
+import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
+import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import GpTripPublishModal from "@/components/gp/GpTripPublishModal";
@@ -171,75 +174,87 @@ export default async function GpPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2">
-          {canOpenTransporterDashboard && (
+      <AppHeader locale={locale} />
+
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
+        <MarketplaceHero
+          badge="JONTAADO GP"
+          title={locale === "fr" ? "Transport de colis par voyageurs" : "Parcel transport by travelers"}
+          subtitle={
+            locale === "fr"
+              ? "Cherchez un trajet disponible selon ville, date de depart et budget, puis publiez vos propres capacites en quelques clics."
+              : "Search available trips by city, departure date and budget, then publish your own capacity in a few clicks."
+          }
+          accentClassName="from-indigo-500/18 via-zinc-950/92 to-zinc-950"
+          primaryAction={
             <Link
-              href="/transporter"
-              className="rounded-full border border-cyan-300/40 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/80"
+              href="#gp-search"
+              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
             >
-              {locale === "fr" ? "Mon dashboard GP" : "My GP dashboard"}
+              {locale === "fr" ? "Explorer les trajets" : "Explore trips"}
             </Link>
-          )}
-          <Link
-            href="/stores"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
+          }
+          secondaryAction={
+            canOpenTransporterDashboard ? (
+              <Link
+                href="/transporter"
+                className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-indigo-300/35 hover:bg-white/10"
+              >
+                {locale === "fr" ? "Ouvrir le dashboard GP" : "Open GP dashboard"}
+              </Link>
+            ) : null
+          }
+          metrics={[
+            { value: String(totalTrips), label: locale === "fr" ? "Annonces actives" : "Active listings" },
+            { value: String(activeTransporters.length), label: locale === "fr" ? "Transporteurs actifs" : "Active transporters" },
+            {
+              value: avgPriceValue !== null && avgCurrencyLabel ? `${avgPriceValue} ${avgCurrencyLabel}` : "-",
+              label: locale === "fr" ? "Prix moyen" : "Average price",
+            },
+          ]}
+        />
+
+        <MarketplaceActions
+          left={
+            canOpenTransporterDashboard ? (
+              <Link
+                href="/transporter"
+                className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]"
+              >
+                {locale === "fr" ? "Dashboard GP" : "GP dashboard"}
+              </Link>
+            ) : (
+              <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-200">
+                {locale === "fr" ? "Explorer GP" : "Explore GP"}
+              </span>
+            )
+          }
+          right={
+            <Link
+              href="#gp-publish"
+              className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300/35 hover:bg-white/10"
+            >
+              {locale === "fr" ? "Publier un trajet" : "Publish trip"}
+            </Link>
+          }
+        />
+
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <MarketplaceCard
+            label={locale === "fr" ? "Recherche" : "Search"}
+            title={locale === "fr" ? "Trouver le bon trajet" : "Find the right trip"}
+            description={
+              locale === "fr"
+                ? "Filtrez par ville, date, devise et budget pour aller droit au bon transporteur."
+                : "Filter by city, date, currency and budget to get straight to the right transporter."
+            }
+            className="rounded-[1.6rem] border border-white/10 bg-zinc-900/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.22)] backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-indigo-300/30 hover:shadow-[0_20px_60px_-32px_rgba(99,102,241,0.45)] motion-reduce:transition-none md:col-span-2 xl:col-span-2"
           >
-            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
-        <section className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/70 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">
-              {locale === "fr" ? "Annonces actives" : "Active listings"}
-            </p>
-            <p className="mt-2 text-xl font-semibold text-violet-200">{totalTrips}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/70 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">
-              {locale === "fr" ? "Transporteurs actifs" : "Active transporters"}
-            </p>
-            <p className="mt-2 text-xl font-semibold text-violet-200">{activeTransporters.length}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-zinc-900/70 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">
-              {locale === "fr" ? "Prix moyen" : "Average price"}
-            </p>
-            <p className="mt-2 text-xl font-semibold text-violet-200">
-              {avgPriceValue !== null && avgCurrencyLabel ? `${avgPriceValue} ${avgCurrencyLabel}` : "-"}
-            </p>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-400/20 via-zinc-900/90 to-zinc-950 p-5 shadow-[0_20px_80px_-40px_rgba(99,102,241,0.6)] md:p-8">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-200">JONTAADO GP</p>
-            <h1 className="text-2xl font-semibold md:text-4xl">
-              {locale === "fr"
-                ? "Transport de colis par voyageurs"
-                : "Parcel transport by travelers"}
-            </h1>
-            <p className="max-w-3xl text-sm text-zinc-300 md:text-base">
-              {locale === "fr"
-                ? "Cherchez un trajet disponible selon ville, date de depart et budget par devise."
-                : "Search available trips by cities, departure date and budget by currency."}
-            </p>
-          </div>
-
-          <form className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_0.95fr_0.8fr_0.8fr_0.8fr_auto]" method="GET">
+            <form
+              id="gp-search"
+              className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_0.95fr_0.8fr_0.8fr_0.8fr_auto]"
+              method="GET"
+            >
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
                 {locale === "fr" ? "Depart" : "Departure"}
@@ -322,29 +337,36 @@ export default async function GpPage({
                 {locale === "fr" ? "Rechercher" : "Search"}
               </button>
             </div>
-          </form>
-        </section>
+            </form>
+          </MarketplaceCard>
 
-        <section className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-zinc-900/60 p-4 md:flex-row md:items-center md:justify-between md:p-5">
-          <div>
-            <h2 className="text-base font-semibold text-white md:text-lg">
-              {locale === "fr" ? "Publier un nouveau trajet" : "Publish a new trip"}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              {locale === "fr"
-                ? "Definis les dates et le tarif dans ta devise, sans conversion automatique."
-                : "Set dates and price in your chosen currency, without automatic conversion."}
-            </p>
-          </div>
-          <GpTripPublishModal
-            locale={locale}
-            isLoggedIn={publishAccess.isLoggedIn}
-            hasGpProfile={publishAccess.hasGpProfile}
-            gpDisplayName={publishAccess.displayName}
-            defaultContactPhone={publishAccess.defaultContactPhone}
-            defaultPaymentMethods={publishAccess.defaultPaymentMethods}
-            profileHref="/profile"
-          />
+          <MarketplaceCard
+            label={locale === "fr" ? "Publication" : "Publishing"}
+            title={locale === "fr" ? "Publier un nouveau trajet" : "Publish a new trip"}
+            description={
+              locale === "fr"
+                ? "Definis les dates, le tarif et les moyens de paiement dans ta devise, sans surcharge."
+                : "Set dates, price and payment methods in your own currency without extra clutter."
+            }
+            className="rounded-[1.6rem] border border-white/10 bg-zinc-900/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.22)] backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-indigo-300/30 hover:shadow-[0_20px_60px_-32px_rgba(99,102,241,0.45)] motion-reduce:transition-none"
+          >
+            <div id="gp-publish" className="flex flex-col gap-4">
+              <p className="text-sm leading-6 text-zinc-400">
+                {locale === "fr"
+                  ? "Une seule entree claire pour proposer tes capacites et gerer tes reservations."
+                  : "A single clear entry point to publish your capacity and manage bookings."}
+              </p>
+              <GpTripPublishModal
+                locale={locale}
+                isLoggedIn={publishAccess.isLoggedIn}
+                hasGpProfile={publishAccess.hasGpProfile}
+                gpDisplayName={publishAccess.displayName}
+                defaultContactPhone={publishAccess.defaultContactPhone}
+                defaultPaymentMethods={publishAccess.defaultPaymentMethods}
+                profileHref="/profile"
+              />
+            </div>
+          </MarketplaceCard>
         </section>
 
         <section className="space-y-3">

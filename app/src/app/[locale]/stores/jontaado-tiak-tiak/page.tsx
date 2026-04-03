@@ -1,7 +1,8 @@
-import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
+import AppHeader from "@/components/layout/AppHeader";
+import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
 import TiakStoreClient from "@/components/tiak/TiakStoreClient";
 import { authOptions } from "@/lib/auth";
 import { hasAnyUserRole } from "@/lib/userRoles";
@@ -18,54 +19,48 @@ export default async function TiakTiakPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2">
-          {canOpenDashboard ? (
-            <Link
-              href="/stores/jontaado-tiak-tiak/dashboard"
-              className="rounded-full border border-emerald-300/40 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/80"
-            >
-              {locale === "fr" ? "Mon dashboard TIAK" : "My TIAK dashboard"}
-            </Link>
-          ) : null}
-          <Link
-            href="/stores"
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
-          >
-            {locale === "fr" ? "Retour aux boutiques" : "Back to stores"}
-          </Link>
-        </div>
-      </header>
+      <AppHeader locale={locale} />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-300/15 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">JONTAADO TIAK TIAK</p>
-          <h1 className="mt-3 text-2xl font-semibold md:text-4xl">
-            {locale === "fr" ? "Livraison locale express" : "Fast local delivery"}
-          </h1>
-          <p className="mt-3 text-sm text-zinc-300">
-            {locale === "fr"
-              ? "Test V0: demande de livraison, prise en charge courier et preuves de livraison."
-              : "V0 test: delivery requests, courier acceptance and proof events."}
-          </p>
-        </section>
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
+        <MarketplaceHero
+          badge="JONTAADO TIAK TIAK"
+          title={locale === "fr" ? "Livraison locale express" : "Fast local delivery"}
+          subtitle={
+            locale === "fr"
+              ? "Lance une mission, trouve un coursier, suis les preuves et pilote l'historique dans un flux premium et plus actionnable."
+              : "Launch a mission, find a courier, track proofs and manage history through a premium, more actionable flow."
+          }
+          accentClassName="from-emerald-500/18 via-zinc-950/92 to-zinc-950"
+          primaryAction={
+            <Link
+              href="#tiak-dispatch"
+              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
+            >
+              {locale === "fr" ? "Voir le dispatch" : "View dispatch"}
+            </Link>
+          }
+          secondaryAction={
+            canOpenDashboard ? (
+              <Link
+                href="/stores/jontaado-tiak-tiak/dashboard"
+                className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-emerald-300/35 hover:bg-white/10"
+              >
+                {locale === "fr" ? "Ouvrir le dashboard TIAK" : "Open TIAK dashboard"}
+              </Link>
+            ) : null
+          }
+          highlights={[
+            locale === "fr" ? "Dispatch compact avec actions plus claires." : "Compact dispatch with clearer actions.",
+            locale === "fr" ? "Historique et notifications plus faciles a piloter." : "History and notifications are easier to manage.",
+            locale === "fr" ? "Acces dashboard plus direct pour les coursiers." : "More direct dashboard access for couriers.",
+          ]}
+        />
 
         <TiakStoreClient
           locale={locale}
           isLoggedIn={Boolean(session?.user?.id)}
           currentUserId={session?.user?.id ?? null}
           currentUserRole={session?.user?.role ?? null}
-          canOpenDashboard={canOpenDashboard}
         />
       </main>
 
@@ -73,3 +68,4 @@ export default async function TiakTiakPage({
     </div>
   );
 }
+

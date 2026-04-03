@@ -14,6 +14,9 @@ type UserHeaderActionsProps = {
   showSellerLink?: boolean;
   showAdminLink?: boolean;
   sellerHref?: string;
+  showCart?: boolean;
+  showNotificationsLink?: boolean;
+  iconOnly?: boolean;
 };
 
 export default async function UserHeaderActions({
@@ -22,6 +25,9 @@ export default async function UserHeaderActions({
   showSellerLink = false,
   showAdminLink = true,
   sellerHref = "/seller",
+  showCart = true,
+  showNotificationsLink = false,
+  iconOnly = false,
 }: UserHeaderActionsProps) {
   const session = await getServerSession(authOptions);
   const inboxCount = session?.user?.id
@@ -66,8 +72,19 @@ export default async function UserHeaderActions({
     locale === "fr" ? "Se connecter / S'inscrire" : "Sign in / Sign up";
   const profileLabel = locale === "fr" ? "Profil" : "Profile";
   const inboxLabel = locale === "fr" ? "Messagerie" : "Messages";
+  const notificationsLabel = locale === "fr" ? "Notifications" : "Notifications";
   const sellLabel = locale === "fr" ? "Vendre" : "Sell";
   const cartLabel = locale === "fr" ? "Panier" : "Cart";
+  const logoutLabel = locale === "fr" ? "Se deconnecter" : "Sign out";
+  const iconButtonClass = iconOnly
+    ? "relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-base text-zinc-100 shadow-[0_10px_30px_rgba(0,0,0,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:border-emerald-300/35 hover:bg-white/10 hover:text-white"
+    : "relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50";
+  const profileButtonClass = iconOnly
+    ? "inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-400/90 text-xs font-semibold text-zinc-950 shadow-[0_10px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-emerald-300"
+    : "inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-400 text-xs font-semibold text-zinc-950";
+  const loginButtonClass = iconOnly
+    ? "inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-400 text-zinc-950 shadow-[0_10px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-emerald-300"
+    : "rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950";
 
   return (
     <div className={className ?? "flex items-center gap-2 text-sm"}>
@@ -106,7 +123,7 @@ export default async function UserHeaderActions({
       {session && (
         <Link
           href="/messages"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-zinc-900/70 text-base text-zinc-100 transition hover:border-white/50"
+          className={iconButtonClass}
           aria-label={inboxLabel}
           title={inboxLabel}
         >
@@ -130,12 +147,34 @@ export default async function UserHeaderActions({
         </Link>
       )}
 
-      <CartHeaderButton label={cartLabel} />
+      {showNotificationsLink && session ? (
+        <Link
+          href="/activity"
+          className={iconButtonClass}
+          aria-label={notificationsLabel}
+          title={notificationsLabel}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
+          >
+            <path d="M14.5 18a2.5 2.5 0 0 1-5 0" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M6 9a6 6 0 1 1 12 0v4.1c0 .7.24 1.38.68 1.93l.97 1.2a1 1 0 0 1-.78 1.63H5.13a1 1 0 0 1-.78-1.63l.97-1.2A3.1 3.1 0 0 0 6 13.1V9Z"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+      ) : null}
+
+      {showCart ? <CartHeaderButton label={cartLabel} /> : null}
 
       {session ? (
         <Link
           href="/profile"
-          className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-400 text-xs font-semibold text-zinc-950"
+          className={profileButtonClass}
           aria-label={profileLabel}
           title={profileLabel}
         >
@@ -152,13 +191,26 @@ export default async function UserHeaderActions({
       ) : (
         <Link
           href="/login"
-          className="rounded-full bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950"
+          className={loginButtonClass}
+          aria-label={loginLabel}
+          title={loginLabel}
         >
-          {loginLabel}
+          {iconOnly ? (
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4 fill-none stroke-current stroke-[1.8]"
+            >
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 20a7 7 0 0 1 14 0" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            loginLabel
+          )}
         </Link>
       )}
 
-      {session && <SignOutIconButton />}
+      {session && <SignOutIconButton label={logoutLabel} className={iconButtonClass} />}
     </div>
   );
 }
