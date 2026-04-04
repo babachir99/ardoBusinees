@@ -127,6 +127,20 @@ function storeRecentSearch(entry: Omit<StoredRecentSearch, "createdAt">) {
   window.dispatchEvent(new CustomEvent("jontaado:recent-searches-updated", { detail: next }));
 }
 
+function buildSearchHref(params: {
+  targetPath: string;
+  query: string;
+  category: string;
+  sort: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.query.trim()) searchParams.set("q", params.query.trim());
+  if (params.category) searchParams.set("category", params.category);
+  if (params.sort && params.sort !== "recent") searchParams.set("sort", params.sort);
+  const value = searchParams.toString();
+  return value ? `${params.targetPath}?${value}` : params.targetPath;
+}
+
 export default function SearchBar({
   initialQuery,
   initialCategory,
@@ -147,15 +161,22 @@ export default function SearchBar({
   const didMountRef = useRef(false);
   const isFr = locale === "fr";
 
-  const paramsString = useMemo(() => {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
-    if (category) params.set("category", category);
-    if (sort && sort !== "recent") params.set("sort", sort);
-    return params.toString();
-  }, [query, category, sort]);
+  const searchHref = useMemo(
+    () => buildSearchHref({ targetPath, query, category, sort }),
+    [targetPath, query, category, sort]
+  );
 
-  const searchHref = paramsString ? `${targetPath}?${paramsString}` : targetPath;
+  useEffect(() => {
+    setQuery(initialQuery ?? "");
+  }, [initialQuery]);
+
+  useEffect(() => {
+    setCategory(initialCategory ?? "");
+  }, [initialCategory]);
+
+  useEffect(() => {
+    setSort(initialSort ?? "recent");
+  }, [initialSort]);
 
   const navigateToSearch = ({ trackRecent }: { trackRecent: boolean }) => {
     if (trackRecent) {
@@ -179,9 +200,9 @@ export default function SearchBar({
       return;
     }
 
-    navigateToSearch({ trackRecent: false });
+    router.push(buildSearchHref({ targetPath, query, category, sort }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoNavigateOnFilters, category, searchHref, sort]);
+  }, [autoNavigateOnFilters, category, sort, router, targetPath]);
 
   const wrapperClass = compact
     ? "flex h-10 w-full items-center gap-2 rounded-full border border-white/10 bg-zinc-900/55 px-3 py-1 text-sm text-zinc-300 backdrop-blur-md transition-all duration-200 hover:border-white/15 focus-within:border-emerald-300/25 focus-within:bg-zinc-900/70"

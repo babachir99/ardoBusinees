@@ -282,6 +282,34 @@ function ArrowRightGlyph() {
   );
 }
 
+function CompassGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="m12.9 7.1-1.45 4.35-4.35 1.45 1.45-4.35L12.9 7.1Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function StoreGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M3 8.25 4.1 4.75h11.8L17 8.25M3.75 7.75v7.5h12.5v-7.5M7 10.75h6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function SparkHeartGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
@@ -321,6 +349,27 @@ function EmptyState({
         </div>
       </div>
     </div>
+  );
+}
+
+function IconActionLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      title={label}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -509,20 +558,18 @@ export default function HomeDynamicSignals({
 
   const likedTitle = useMemo(() => {
     if (isLoggedIn) {
-      return isFr ? "Favoris" : "Favorites";
+      return isFr ? "Vos coups de coeur" : "Your favorites";
     }
 
-    return isFr ? "Coups de coeur" : "Top favorites";
+    return isFr ? "Vos coups de coeur" : "Top favorites";
   }, [isFr, isLoggedIn]);
 
   const primaryCardClass =
     "min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(26,32,36,0.95)_0%,rgba(14,17,20,0.92)_100%)] px-4 py-4 shadow-[0_18px_42px_rgba(0,0,0,0.2)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(0,0,0,0.24)]";
   const secondaryCardClass =
     "min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(24,27,31,0.94)_0%,rgba(14,16,19,0.9)_100%)] px-4 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.16)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(0,0,0,0.22)]";
-  const actionClass =
-    "inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white";
   const secondaryRowClass =
-    "group rounded-2xl border border-white/10 bg-black/20 px-3 py-2 transition duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.04]";
+    "group relative rounded-2xl border border-white/10 bg-black/20 px-3 py-2 transition duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.04]";
   const compactListClass =
     "max-h-[8.1rem] space-y-2 overflow-y-auto pr-1 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
 
@@ -540,10 +587,10 @@ export default function HomeDynamicSignals({
     <>
       <section className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
         <div className={`${primaryCardClass} flex min-w-0 flex-col xl:h-[320px]`}>
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-xl font-semibold text-white">{likedTitle}</h3>
-              <p className="mt-1 max-w-xl text-sm text-zinc-400">
+              <p className="mt-0.5 max-w-lg text-sm text-zinc-400">
                 {isFr
                   ? "Retrouve tes produits sauvegardes et ajoute-les au panier en un geste."
                   : "Keep saved products close and add them to cart in one move."}
@@ -570,9 +617,20 @@ export default function HomeDynamicSignals({
                   <ArrowRightGlyph />
                 </button>
               </div>
-              <Link href={isLoggedIn ? "/favorites" : "/shop"} className={actionClass}>
-                {isLoggedIn ? (isFr ? "Mes favoris" : "My favorites") : isFr ? "Explorer" : "Explore"}
-              </Link>
+              <IconActionLink
+                href={isLoggedIn ? "/favorites" : "/shop"}
+                label={
+                  isLoggedIn
+                    ? isFr
+                      ? "Voir mes favoris"
+                      : "View my favorites"
+                    : isFr
+                      ? "Explorer"
+                      : "Explore"
+                }
+              >
+                {isLoggedIn ? <HeartGlyph /> : <CompassGlyph />}
+              </IconActionLink>
             </div>
           </div>
 
@@ -679,22 +737,18 @@ export default function HomeDynamicSignals({
 
         <div className="flex h-full min-w-0 min-h-0 flex-col gap-4 xl:h-[320px]">
           <div className={`${secondaryCardClass} flex min-h-0 flex-1 flex-col`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200/90">
-                  {isFr ? "Recherches recentes" : "Recent searches"}
-                </p>
-                <h3 className="mt-1 text-xl font-semibold text-white">
-                  {isFr ? "Recherches recentes" : "Recent searches"}
-                </h3>
-              </div>
-              <Link href="/shop" className={actionClass}>
-                {isFr ? "Explorer" : "Explore"}
-              </Link>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold text-white">
+                {isFr ? "Recherches recentes" : "Recent searches"}
+              </h3>
+              <IconActionLink href="/shop" label={isFr ? "Explorer" : "Explore"}>
+                <CompassGlyph />
+              </IconActionLink>
             </div>
 
             {recentSearches.length > 0 ? (
               <div className="relative mt-3 flex-1 min-h-0 overflow-hidden">
+                <div className="pointer-events-none absolute bottom-3 left-[13px] top-3 w-px rounded-full bg-gradient-to-b from-emerald-300/0 via-emerald-300/20 to-emerald-300/0" />
                 <div className={`${compactListClass} h-full`}>
                   {recentSearches.map((item) => (
                     <Link
@@ -703,14 +757,14 @@ export default function HomeDynamicSignals({
                       className={`${secondaryRowClass} min-h-[58px] overflow-hidden`}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200">
+                        <span className="relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
                           <SearchGlyph />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">
+                          <p className="truncate text-sm font-semibold leading-tight text-white">
                             {formatRecentSearchLabel(item, isFr)}
                           </p>
-                          <p className="mt-0.5 text-[11px] text-zinc-400">
+                          <p className="mt-0.5 text-[11px] leading-none text-zinc-400">
                             {formatCompactSignalDate(item.createdAt, locale)}
                           </p>
                         </div>
@@ -735,22 +789,18 @@ export default function HomeDynamicSignals({
           </div>
 
           <div className={`${secondaryCardClass} flex min-h-0 flex-1 flex-col`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-cyan-200/90">
-                  {isFr ? "Vu recemment" : "Recently viewed"}
-                </p>
-                <h3 className="mt-1 text-xl font-semibold text-white">
-                  {isFr ? "Vu recemment" : "Viewed recently"}
-                </h3>
-              </div>
-              <Link href="/shop" className={actionClass}>
-                {isFr ? "Voir le shop" : "Open shop"}
-              </Link>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold text-white">
+                {isFr ? "Vu recemment" : "Viewed recently"}
+              </h3>
+              <IconActionLink href="/shop" label={isFr ? "Voir le shop" : "Open shop"}>
+                <StoreGlyph />
+              </IconActionLink>
             </div>
 
             {recentViews.length > 0 ? (
               <div className="relative mt-3 flex-1 min-h-0 overflow-hidden">
+                <div className="pointer-events-none absolute bottom-3 left-[19px] top-3 w-px rounded-full bg-gradient-to-b from-cyan-300/0 via-cyan-300/20 to-cyan-300/0" />
                 <div className={`${compactListClass} h-full`}>
                   {recentViews.map((item) => {
                     const finalPrice = item.discountPercent
@@ -758,34 +808,34 @@ export default function HomeDynamicSignals({
                       : item.priceCents;
 
                     return (
-                    <Link
-                      key={`${item.id}-${item.viewedAt}`}
-                      href={`/shop/${item.slug}`}
-                      className={`${secondaryRowClass} min-h-[58px] overflow-hidden`}
-                    >
-                      <div className="flex min-w-0 items-start gap-3">
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl}
-                            alt={item.title}
-                            className="h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-300/15 bg-cyan-400/10 text-cyan-200">
+                      <Link
+                        key={`${item.id}-${item.viewedAt}`}
+                        href={`/shop/${item.slug}`}
+                        className={`${secondaryRowClass} min-h-[58px] overflow-hidden`}
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.title}
+                              className="relative z-[1] h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover shadow-[0_0_0_4px_rgba(15,16,19,0.9)]"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="relative z-[1] mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-300/15 bg-cyan-400/10 text-cyan-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
                               <EyeGlyph />
                             </span>
                           )}
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-1 text-sm font-medium text-white">{item.title}</p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                            <span className="text-sm font-semibold text-emerald-200">
-                              {formatMoney(finalPrice, item.currency, locale)}
-                            </span>
-                            <span className="text-[11px] text-zinc-400">
-                              {item.sellerName || (isFr ? "Selection JONTAADO" : "JONTAADO pick")}
-                            </span>
-                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-1 text-sm font-medium leading-tight text-white">{item.title}</p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                              <span className="text-sm font-semibold text-emerald-200">
+                                {formatMoney(finalPrice, item.currency, locale)}
+                              </span>
+                              <span className="text-[11px] text-zinc-400">
+                                {item.sellerName || (isFr ? "Selection JONTAADO" : "JONTAADO pick")}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </Link>
