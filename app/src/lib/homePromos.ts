@@ -11,6 +11,7 @@ export type HomePromoEntry = {
   href: string;
   cta: string;
   accentClassName: string;
+  priority: number;
   enabled: boolean;
   startAt: string | null;
   endAt: string | null;
@@ -26,6 +27,7 @@ const defaultHomePromos: HomePromoEntry[] = [
     href: "/stores/jontaado-cares",
     cta: "Decouvrir CARES",
     accentClassName: "from-emerald-400/22 via-emerald-500/8 to-zinc-950 border-emerald-300/20",
+    priority: 100,
     enabled: true,
     startAt: null,
     endAt: null,
@@ -39,6 +41,7 @@ const defaultHomePromos: HomePromoEntry[] = [
     href: "/stores/jontaado-presta",
     cta: "Voir les services",
     accentClassName: "from-amber-400/22 via-orange-500/8 to-zinc-950 border-amber-300/20",
+    priority: 80,
     enabled: true,
     startAt: null,
     endAt: null,
@@ -88,6 +91,15 @@ function sanitizeDateValue(value: unknown) {
   return parsed.toISOString();
 }
 
+function sanitizePriority(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(999, Math.trunc(parsed)));
+}
+
 function normalizePromo(entry: unknown, fallback: HomePromoEntry): HomePromoEntry {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
     return fallback;
@@ -102,6 +114,7 @@ function normalizePromo(entry: unknown, fallback: HomePromoEntry): HomePromoEntr
     href: sanitizeHref(raw.href, fallback.href),
     cta: sanitizeText(raw.cta, fallback.cta, 40),
     accentClassName: sanitizeAccent(raw.accentClassName, fallback.accentClassName),
+    priority: sanitizePriority(raw.priority, fallback.priority),
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : fallback.enabled,
     startAt: sanitizeDateValue(raw.startAt),
     endAt: sanitizeDateValue(raw.endAt),
@@ -114,7 +127,9 @@ export function resolveHomePromoEntries(rawEntries: unknown): HomePromoEntry[] {
     normalizePromo(input[index], fallback)
   );
 
-  return merged.slice(0, MAX_HOME_PROMOS);
+  return merged
+    .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))
+    .slice(0, MAX_HOME_PROMOS);
 }
 
 export async function getHomePromoEntries() {

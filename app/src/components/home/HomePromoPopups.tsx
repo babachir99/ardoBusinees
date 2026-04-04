@@ -2,7 +2,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { isHomePromoScheduledLive, type HomePromoEntry } from "@/lib/homePromos";
+import type { HomePromoEntry } from "@/lib/homePromos";
 
 const POPUP_DISMISS_STORAGE_KEY = "jontaado_home_promos_dismissed_until";
 const POPUP_REOPEN_DELAY_MS = 1000 * 60 * 60 * 8;
@@ -11,6 +11,30 @@ type HomePromoPopupsProps = {
   locale: string;
   promos: HomePromoEntry[];
 };
+
+function isHomePromoScheduledLive(entry: Pick<HomePromoEntry, "enabled" | "startAt" | "endAt">, now = new Date()) {
+  if (!entry.enabled) {
+    return false;
+  }
+
+  const nowMs = now.getTime();
+
+  if (entry.startAt) {
+    const startMs = new Date(entry.startAt).getTime();
+    if (!Number.isNaN(startMs) && startMs > nowMs) {
+      return false;
+    }
+  }
+
+  if (entry.endAt) {
+    const endMs = new Date(entry.endAt).getTime();
+    if (!Number.isNaN(endMs) && endMs < nowMs) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps) {
   const isFr = locale === "fr";

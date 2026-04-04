@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import type { HomePromoEntry } from "@/lib/homePromos";
@@ -183,6 +183,28 @@ export default function AdminHomePromosPanel({
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="space-y-1">
                   <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                    {isFr ? "Priorite" : "Priority"}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={999}
+                    value={promo.priority}
+                    onChange={(event) =>
+                      updatePromo(index, "priority", Math.max(0, Math.min(999, Number(event.target.value) || 0)))
+                    }
+                    className="h-10 w-full rounded-xl border border-white/10 bg-zinc-900/70 px-3 text-sm text-white outline-none focus:border-emerald-300/35"
+                  />
+                </label>
+                <div className="rounded-xl border border-dashed border-white/10 bg-zinc-900/50 px-3 py-2.5 text-xs text-zinc-400">
+                  {isFr
+                    ? "Plus la priorite est haute, plus la promo remonte dans le popup home."
+                    : "Higher priority pushes the promo first in the home popup."}
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
                     {isFr ? "Debut" : "Start"}
                   </span>
                   <input
@@ -222,3 +244,4 @@ export default function AdminHomePromosPanel({
     </section>
   );
 }
+

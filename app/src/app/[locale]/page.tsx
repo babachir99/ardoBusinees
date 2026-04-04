@@ -40,8 +40,28 @@ function resolveHomeStoreCard(store: { slug: string; name: string; type: string 
   };
 }
 
+function resolveProductVerticalKey(product: {
+  store?: { slug?: string | null; type?: string | null } | null;
+  type?: string | null;
+}) {
+  if (product.store?.slug) {
+    return CARES_STORE_SLUGS.has(product.store.slug) ? "jontaado-cares" : product.store.slug;
+  }
+
+  if (product.store?.type === "MARKETPLACE") {
+    return "jontaado-cares";
+  }
+
+  if (product.type) {
+    return product.type.toLowerCase();
+  }
+
+  return "unknown";
+}
+
 const homeProductSelect = {
   id: true,
+  sellerId: true,
   slug: true,
   title: true,
   type: true,
@@ -52,6 +72,9 @@ const homeProductSelect = {
   boostedUntil: true,
   createdAt: true,
   seller: { select: { displayName: true } },
+  store: { select: { slug: true, type: true } },
+  categories: { select: { categoryId: true } },
+  _count: { select: { favorites: true } },
   images: { orderBy: { position: "asc" }, take: 5, select: { url: true, alt: true } },
 } satisfies Prisma.ProductSelect;
 
@@ -60,12 +83,21 @@ const homeLikedProductSelect = {
   sellerId: true,
   slug: true,
   title: true,
+  type: true,
   priceCents: true,
   currency: true,
   discountPercent: true,
   seller: { select: { displayName: true } },
+  store: { select: { slug: true, type: true } },
   categories: { select: { categoryId: true } },
+  images: { orderBy: { position: "asc" }, take: 1, select: { url: true, alt: true } },
 } satisfies Prisma.ProductSelect;
+
+type HomeProduct = Prisma.ProductGetPayload<{ select: typeof homeProductSelect }>;
+type HomeLikedProduct = Prisma.ProductGetPayload<{ select: typeof homeLikedProductSelect }>;
+type HomePopularLikedProduct = Prisma.ProductGetPayload<{
+  select: typeof homeLikedProductSelect & { _count: { select: { favorites: true } } };
+}>;
 
 export default async function HomePage({
   params,
@@ -130,7 +162,7 @@ export default async function HomePage({
       orderBy,
       take: 24,
       select: homeProductSelect,
-    }),
+    }) as Prisma.PrismaPromise<HomeProduct[]>,
     prisma.store.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -179,7 +211,7 @@ export default async function HomePage({
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > now);
 
-  const sortedProducts = [...products].sort((a, b) => {
+  const sortedProducts: HomeProduct[] = [...products].sort((a, b) => {
     const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
     if (boostDiff !== 0) return boostDiff;
     if (sort === "price_asc") return a.priceCents - b.priceCents;
@@ -228,7 +260,7 @@ export default async function HomePage({
             createdAt: true,
             product: { select: homeLikedProductSelect },
           },
-        })
+        }) as Promise<Array<{ productId: string; createdAt: Date; product: HomeLikedProduct }>>
       : Promise.resolve([]),
     !session?.user?.id
       ? prisma.product.findMany({
@@ -239,7 +271,7 @@ export default async function HomePage({
             ...homeLikedProductSelect,
             _count: { select: { favorites: true } },
           },
-        })
+        }) as Prisma.PrismaPromise<HomePopularLikedProduct[]>
       : Promise.resolve([]),
   ]);
 
@@ -273,27 +305,177 @@ export default async function HomePage({
   const orderedSidebarRoots = [...sidebarRootCategories].sort((a, b) =>
     a.name.localeCompare(b.name, locale)
   );
+  const categoryLabelById = new Map(
+    orderedSidebarRoots.flatMap((root) => [
+      [root.id, root.name] as const,
+      ...root.children.map((child) => [child.id, child.name] as const),
+    ])
+  );
   const homeLikedItems = session?.user?.id
     ? recentLikedEntries.map((entry) => ({
         productId: entry.productId,
         slug: entry.product.slug,
         title: entry.product.title,
+        type: entry.product.type,
         priceCents: entry.product.priceCents,
         currency: entry.product.currency,
         discountPercent: entry.product.discountPercent,
         sellerName: entry.product.seller?.displayName ?? null,
+        imageUrl: entry.product.images[0]?.url ?? null,
+        imageAlt: entry.product.images[0]?.alt ?? null,
         likedAt: entry.createdAt.toISOString(),
       }))
     : popularLikedProducts.map((product) => ({
         productId: product.id,
         slug: product.slug,
         title: product.title,
+        type: product.type,
         priceCents: product.priceCents,
         currency: product.currency,
         discountPercent: product.discountPercent,
         sellerName: product.seller?.displayName ?? null,
+        imageUrl: product.images[0]?.url ?? null,
+        imageAlt: product.images[0]?.alt ?? null,
         favoritesCount: product._count.favorites,
       }));
+  const likedCategoryIds = Array.from(
+    new Set(
+      recentLikedEntries.flatMap((entry) =>
+        entry.product.categories.map((categoryEntry) => categoryEntry.categoryId)
+      )
+    )
+  );
+  const likedSellerIds = Array.from(
+    new Set(recentLikedEntries.map((entry) => entry.product.sellerId))
+  );
+  const likedVerticalKeys = Array.from(
+    new Set(recentLikedEntries.map((entry) => resolveProductVerticalKey(entry.product)))
+  );
+  const recommendationSignals = [
+    ...likedCategoryIds
+      .map((categoryId) => categoryLabelById.get(categoryId))
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 2),
+    ...likedVerticalKeys
+      .map((key) => {
+        if (key === "jontaado-cares") return "CARES";
+        if (key === "jontaado-presta") return "PRESTA";
+        if (key === "jontaado-gp") return "GP";
+        if (key === "jontaado-tiak-tiak") return "TIAK";
+        if (key === "jontaado-cars") return "CARS";
+        if (key === "jontaado-immo") return "IMMO";
+        return null;
+      })
+      .filter((value): value is "CARES" | "PRESTA" | "GP" | "TIAK" | "CARS" | "IMMO" => value !== null)
+      .slice(0, 2),
+  ].slice(0, 4);
+  const recommendationSeedIds = new Set([
+    ...displayedProductIds,
+    ...recentLikedEntries.map((entry) => entry.productId),
+  ]);
+
+  const recommendationOrFilters: Prisma.ProductWhereInput[] = [];
+  if (likedCategoryIds.length > 0) {
+    recommendationOrFilters.push({
+      categories: {
+        some: {
+          categoryId: { in: likedCategoryIds },
+        },
+      },
+    });
+  }
+  if (likedSellerIds.length > 0) {
+    recommendationOrFilters.push({
+      sellerId: { in: likedSellerIds },
+    });
+  }
+  if (likedVerticalKeys.includes("jontaado-cares")) {
+    recommendationOrFilters.push({
+      OR: [
+        { store: { is: { slug: { in: Array.from(CARES_STORE_SLUGS) } } } },
+        { store: { is: { type: "MARKETPLACE" } } },
+      ],
+    });
+  }
+  const explicitVerticalSlugs = likedVerticalKeys.filter(
+    (key) => key.startsWith("jontaado-") && key !== "jontaado-cares"
+  );
+  if (explicitVerticalSlugs.length > 0) {
+    recommendationOrFilters.push({
+      store: {
+        is: {
+          slug: { in: explicitVerticalSlugs },
+        },
+      },
+    });
+  }
+
+  let recommendedProducts: HomeProduct[] =
+    session?.user?.id && recommendationOrFilters.length > 0
+      ? ((await prisma.product.findMany({
+          where: {
+            isActive: true,
+            id: { notIn: Array.from(recommendationSeedIds) },
+            OR: recommendationOrFilters,
+          },
+          orderBy: [{ boostStatus: "desc" }, { createdAt: "desc" }],
+          take: 18,
+          select: homeProductSelect,
+        })) as HomeProduct[])
+      : [];
+
+  recommendedProducts = recommendedProducts
+    .sort((left, right) => {
+      const leftCategoryMatches = left.categories.filter((item) => likedCategoryIds.includes(item.categoryId)).length;
+      const rightCategoryMatches = right.categories.filter((item) => likedCategoryIds.includes(item.categoryId)).length;
+      const leftSellerBoost = likedSellerIds.includes(left.sellerId) ? 4 : 0;
+      const rightSellerBoost = likedSellerIds.includes(right.sellerId) ? 4 : 0;
+      const leftVerticalBoost = likedVerticalKeys.includes(resolveProductVerticalKey(left)) ? 3 : 0;
+      const rightVerticalBoost = likedVerticalKeys.includes(resolveProductVerticalKey(right)) ? 3 : 0;
+      const leftBoosted = Number(isBoosted(left)) * 2;
+      const rightBoosted = Number(isBoosted(right)) * 2;
+
+      const leftScore = leftCategoryMatches * 3 + leftSellerBoost + leftVerticalBoost + leftBoosted + Math.min(left._count.favorites, 6);
+      const rightScore = rightCategoryMatches * 3 + rightSellerBoost + rightVerticalBoost + rightBoosted + Math.min(right._count.favorites, 6);
+
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
+
+      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+    })
+    .slice(0, 4);
+
+  if (recommendedProducts.length < 4) {
+    const fillerIds = new Set([
+      ...Array.from(recommendationSeedIds),
+      ...recommendedProducts.map((product) => product.id),
+    ]);
+    const localFallback = sortedProducts
+      .filter((product) => !fillerIds.has(product.id))
+      .slice(0, 4 - recommendedProducts.length);
+
+    recommendedProducts = [...recommendedProducts, ...localFallback];
+
+    if (recommendedProducts.length < 4) {
+      const missingFallback = await prisma.product.findMany({
+        where: {
+          isActive: true,
+          id: {
+            notIn: [
+              ...Array.from(fillerIds),
+              ...recommendedProducts.map((product) => product.id),
+            ],
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 4 - recommendedProducts.length,
+        select: homeProductSelect,
+      });
+
+      recommendedProducts = [...recommendedProducts, ...missingFallback];
+    }
+  }
 
 
   return (
@@ -469,6 +651,91 @@ export default async function HomePage({
               initialLikedItems={homeLikedItems}
             />
           </div>
+
+          {recommendedProducts.length > 0 ? (
+            <div className="fade-up">
+              <div className="mb-4 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200/90">
+                    {locale === "fr" ? "Recommande pour vous" : "Recommended for you"}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    {locale === "fr"
+                      ? "Une selection qui colle mieux a votre rythme"
+                      : "A selection that better matches your rhythm"}
+                  </h2>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {locale === "fr"
+                      ? "Basee sur vos derniers signaux, vos favoris et les produits qui performent bien."
+                      : "Based on your recent signals, your favorites and products performing well."}
+                  </p>
+                  {recommendationSignals.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {recommendationSignals.map((signal) => (
+                        <span
+                          key={signal}
+                          className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium text-emerald-100"
+                        >
+                          {signal}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <Link
+                  href="/shop"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-300/35 hover:bg-white/10"
+                >
+                  {locale === "fr" ? "Voir plus" : "See more"}
+                </Link>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {recommendedProducts.map((product) => {
+                  const boosted = isBoosted(product);
+                  const finalPrice = product.discountPercent
+                    ? getDiscountedPrice(product.priceCents, product.discountPercent)
+                    : product.priceCents;
+
+                  return (
+                    <Link
+                      key={`recommended-${product.id}`}
+                      href={`/shop/${product.slug}`}
+                      className={`rounded-3xl border bg-zinc-900/70 p-5 transition ${
+                        boosted
+                          ? "border-emerald-300/45 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+                          : "border-white/10 hover:border-emerald-300/35"
+                      }`}
+                    >
+                      <div className="relative mb-4 h-28 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                        <ProductCardCarousel
+                          images={product.images}
+                          title={product.title}
+                          locale={locale}
+                        />
+                      </div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                        {product.seller?.displayName ?? "JONTAADO"}
+                      </p>
+                      <h3 className="mt-2 line-clamp-2 text-base font-semibold text-white">
+                        {product.title}
+                      </h3>
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-emerald-200">
+                          {formatMoney(finalPrice, product.currency, locale)}
+                        </span>
+                        {product.discountPercent ? (
+                          <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                            -{product.discountPercent}%
+                          </span>
+                        ) : null}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="fade-up">
             <h2 className="text-2xl font-semibold">

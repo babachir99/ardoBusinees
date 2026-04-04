@@ -27,12 +27,56 @@ type StoredRecentSearch = {
   createdAt: number;
 };
 
+function canonicalizeSearchTerm(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function areSearchVariants(a: string, b: string) {
+  const left = canonicalizeSearchTerm(a);
+  const right = canonicalizeSearchTerm(b);
+
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const shortest = Math.min(left.length, right.length);
+  if (shortest < 3) return false;
+
+  return left.startsWith(right) || right.startsWith(left);
+}
+
+function pickPreferredSearch(
+  current: StoredRecentSearch,
+  incoming: Omit<StoredRecentSearch, "createdAt"> & { createdAt?: number }
+) {
+  const currentQuery = current.query.trim();
+  const incomingQuery = incoming.query.trim();
+
+  if (incomingQuery.length > currentQuery.length) {
+    return {
+      query: incomingQuery,
+      category: incoming.category,
+      sort: incoming.sort,
+      createdAt: incoming.createdAt ?? Date.now(),
+    };
+  }
+
+  return current;
+}
+
 function storeRecentSearch(entry: Omit<StoredRecentSearch, "createdAt">) {
   if (typeof window === "undefined") {
     return;
   }
 
-  const hasMeaningfulValue = Boolean(entry.query.trim() || entry.category || entry.sort !== "recent");
+  const normalizedQuery = entry.query.trim();
+  const hasMeaningfulValue = Boolean(
+    normalizedQuery || entry.category || entry.sort !== "recent"
+  );
   if (!hasMeaningfulValue) {
     return;
   }
@@ -46,22 +90,36 @@ function storeRecentSearch(entry: Omit<StoredRecentSearch, "createdAt">) {
     current = [];
   }
 
-  const deduped = current.filter(
-    (item) =>
-      !(
-        item.query === entry.query.trim() &&
-        item.category === entry.category &&
-        item.sort === entry.sort
-      )
-  );
+  const duplicate = current.find((item) => {
+    if (!normalizedQuery) {
+      return item.query.trim() === "";
+    }
+
+    return areSearchVariants(item.query, normalizedQuery);
+  });
+
+  const deduped = current.filter((item) => {
+    if (!normalizedQuery) {
+      return item.query.trim() !== "";
+    }
+
+    return !areSearchVariants(item.query, normalizedQuery);
+  });
 
   const next = [
-    {
-      query: entry.query.trim(),
-      category: entry.category,
-      sort: entry.sort,
-      createdAt: Date.now(),
-    },
+    duplicate
+      ? pickPreferredSearch(duplicate, {
+          query: normalizedQuery,
+          category: entry.category,
+          sort: entry.sort,
+          createdAt: Date.now(),
+        })
+      : {
+          query: normalizedQuery,
+          category: entry.category,
+          sort: entry.sort,
+          createdAt: Date.now(),
+        },
     ...deduped,
   ].slice(0, MAX_RECENT_SEARCHES);
 
@@ -99,14 +157,16 @@ export default function SearchBar({
 
   const searchHref = paramsString ? `${targetPath}?${paramsString}` : targetPath;
 
-  const navigateToSearch = () => {
-    storeRecentSearch({ query, category, sort });
+  const navigateToSearch = ({ trackRecent }: { trackRecent: boolean }) => {
+    if (trackRecent) {
+      storeRecentSearch({ query, category, sort });
+    }
     router.push(searchHref);
   };
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    navigateToSearch();
+    navigateToSearch({ trackRecent: true });
   };
 
   useEffect(() => {
@@ -119,7 +179,7 @@ export default function SearchBar({
       return;
     }
 
-    navigateToSearch();
+    navigateToSearch({ trackRecent: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoNavigateOnFilters, category, searchHref, sort]);
 
