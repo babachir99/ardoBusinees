@@ -10,7 +10,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import { hasUserRole } from "@/lib/userRoles";
-import { getHomePromoAccentOptions, getHomePromoEntries } from "@/lib/homePromos";
+import {
+  getHomePromoAccentOptions,
+  getHomePromoAudienceOptions,
+  getHomePromoEntries,
+  getHomePromoPlacementOptions,
+  getHomePromoTrackingSummary,
+} from "@/lib/homePromos";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -217,6 +223,7 @@ export default async function AdminPage() {
     trustReportItems,
     trustDisputeItems,
     homePromoConfig,
+    homePromoTrackingSummary,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -423,6 +430,12 @@ export default async function AdminPage() {
       })
       .catch(() => null),
     getHomePromoEntries(),
+    getHomePromoTrackingSummary().catch(() => ({
+      totals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
+      anonymousTotals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
+      ctr: 0,
+      byPromoId: {},
+    })),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -790,6 +803,9 @@ export default async function AdminPage() {
           locale={locale}
           initialPromos={homePromoConfig.entries}
           accentOptions={getHomePromoAccentOptions()}
+          placementOptions={getHomePromoPlacementOptions()}
+          audienceOptions={getHomePromoAudienceOptions()}
+          trackingSummary={homePromoTrackingSummary}
           lastUpdatedAt={homePromoConfig.lastUpdatedAt ? homePromoConfig.lastUpdatedAt.toISOString() : null}
           lastUpdatedBy={homePromoConfig.lastUpdatedBy}
         />

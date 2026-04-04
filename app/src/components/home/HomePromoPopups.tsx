@@ -1,8 +1,12 @@
 "use client";
 
-import { Link } from "@/i18n/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { HomePromoEntry } from "@/lib/homePromos";
+import { usePathname } from "next/navigation";
+import SponsoredPlacement, { sendSponsoredDismissEvent } from "@/components/ads/SponsoredPlacement";
+import {
+  filterHomePromosForPlacement,
+  type HomePromoEntry,
+} from "@/lib/homePromos.shared";
 
 const POPUP_DISMISS_STORAGE_KEY = "jontaado_home_promos_dismissed_until";
 const POPUP_REOPEN_DELAY_MS = 1000 * 60 * 60 * 8;
@@ -10,44 +14,21 @@ const POPUP_REOPEN_DELAY_MS = 1000 * 60 * 60 * 8;
 type HomePromoPopupsProps = {
   locale: string;
   promos: HomePromoEntry[];
+  isLoggedIn: boolean;
 };
 
-function isHomePromoScheduledLive(entry: Pick<HomePromoEntry, "enabled" | "startAt" | "endAt">, now = new Date()) {
-  if (!entry.enabled) {
-    return false;
-  }
-
-  const nowMs = now.getTime();
-
-  if (entry.startAt) {
-    const startMs = new Date(entry.startAt).getTime();
-    if (!Number.isNaN(startMs) && startMs > nowMs) {
-      return false;
-    }
-  }
-
-  if (entry.endAt) {
-    const endMs = new Date(entry.endAt).getTime();
-    if (!Number.isNaN(endMs) && endMs < nowMs) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps) {
+export default function HomePromoPopups({ locale, promos, isLoggedIn }: HomePromoPopupsProps) {
   const isFr = locale === "fr";
+  const pathname = usePathname() ?? "/";
   const activePromos = useMemo(
     () =>
-      promos
-        .filter((promo) => isHomePromoScheduledLive(promo))
+      filterHomePromosForPlacement(promos, { placement: "HOME_POPUP", isLoggedIn })
         .map((promo) => ({
           ...promo,
           tag: promo.tag || (isFr ? "A la une" : "Spotlight"),
           cta: promo.cta || (isFr ? "Ouvrir" : "Open"),
         })),
-    [isFr, promos]
+    [isFr, isLoggedIn, promos]
   );
 
   const [open, setOpen] = useState(false);
@@ -76,14 +57,23 @@ export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps
       return;
     }
 
-    const intervalId = window.setInterval(() => {
+    const activePromo = activePromos[activeIndex % activePromos.length];
+    const intervalId = window.setTimeout(() => {
       setActiveIndex((current) => (current + 1) % activePromos.length);
-    }, 5200);
+    }, Math.max(3000, (activePromo?.rotationSeconds ?? 6) * 1000));
 
-    return () => window.clearInterval(intervalId);
-  }, [activePromos.length, open]);
+    return () => window.clearTimeout(intervalId);
+  }, [activeIndex, activePromos, open]);
 
   const close = () => {
+    if (activePromos.length > 0) {
+      sendSponsoredDismissEvent({
+        promo: activePromos[activeIndex % activePromos.length],
+        locale,
+        pathname,
+      });
+    }
+
     try {
       window.localStorage.setItem(
         POPUP_DISMISS_STORAGE_KEY,
@@ -108,13 +98,7 @@ export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps
         className={`pointer-events-auto w-full max-w-sm overflow-hidden rounded-[1.7rem] border bg-gradient-to-br ${activePromo.accentClassName} shadow-[0_24px_80px_-32px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
       >
         <div className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="inline-flex rounded-full border border-white/10 bg-white/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-100">
-                {activePromo.tag}
-              </span>
-              <h3 className="mt-3 text-lg font-semibold text-white">{activePromo.title}</h3>
-            </div>
+          <div className="flex items-start justify-end gap-3">
             <button
               type="button"
               onClick={close}
@@ -126,10 +110,15 @@ export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps
               </svg>
             </button>
           </div>
+          <div className="-mt-1">
+            <SponsoredPlacement
+              locale={locale}
+              promo={activePromo}
+              variant="popup"
+            />
+          </div>
 
-          <p className="mt-3 text-sm leading-6 text-zinc-300">{activePromo.description}</p>
-
-          <div className="mt-5 flex items-center justify-between gap-3">
+          <div className="mt-5 flex items-center justify-start gap-3">
             <div className="flex items-center gap-1.5">
               {activePromos.map((promo, index) => (
                 <button
@@ -143,15 +132,6 @@ export default function HomePromoPopups({ locale, promos }: HomePromoPopupsProps
                 />
               ))}
             </div>
-
-            <Link
-              href={activePromo.href}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:scale-[1.02] hover:bg-emerald-300"
-              onClick={close}
-            >
-              {activePromo.cta}
-              <span aria-hidden="true">&rarr;</span>
-            </Link>
           </div>
         </div>
       </aside>

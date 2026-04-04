@@ -1,5 +1,6 @@
 ﻿import { Link } from "@/i18n/navigation";
 import Image from "next/image";
+import { Fragment } from "react";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -8,11 +9,13 @@ import SearchBar from "@/components/search/SearchBar";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
 import HomeDynamicSignals from "@/components/home/HomeDynamicSignals";
 import HomePromoPopups from "@/components/home/HomePromoPopups";
+import RotatingSponsoredPlacement from "@/components/ads/RotatingSponsoredPlacement";
 import ProductCardCarousel from "@/components/shop/ProductCardCarousel";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getHomePromoEntries } from "@/lib/homePromos";
+import { filterHomePromosForPlacement } from "@/lib/homePromos.shared";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -478,6 +481,14 @@ export default async function HomePage({
   }
 
   const hasActiveSearchIntent = Boolean(query || category || (sort && sort !== "recent"));
+  const homeInlinePromos = filterHomePromosForPlacement(homePromoConfig.entries, {
+    placement: "HOME_INLINE",
+    isLoggedIn: Boolean(session?.user?.id),
+  });
+  const homeProductCardPromos = filterHomePromosForPlacement(homePromoConfig.entries, {
+    placement: "HOME_PRODUCT_CARD",
+    isLoggedIn: Boolean(session?.user?.id),
+  });
 
   const dynamicSignalsSection = (
     <div className="fade-up">
@@ -589,75 +600,123 @@ export default async function HomePage({
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
-        {displayedProducts.map((product) => {
+        {displayedProducts.map((product, index) => {
           const boosted = isBoosted(product);
+          const chunkIndex = Math.floor(index / 6);
+          const shouldInsertProductCardPromo =
+            !hasActiveSearchIntent &&
+            homeProductCardPromos.length > 0 &&
+            (index + 1) % 6 === 0 &&
+            !(homeInlinePromos.length > 0 && chunkIndex === 0);
           return (
-            <Link
-              key={product.id}
-              href={`/shop/${product.slug}`}
-              className={`rounded-3xl border bg-zinc-900/70 p-6 transition ${
-                boosted
-                  ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
-                  : "border-white/10 hover:border-emerald-300/60"
-              }`}
-            >
-              <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
-                <FavoriteButton
-                  productId={product.id}
-                  initialIsFavorite={favoriteProductIds.has(product.id)}
-                  variant="icon"
-                  className="absolute left-3 top-3 z-20"
-                />
-                <ProductCardCarousel
-                  images={product.images}
-                  title={product.title}
-                  locale={locale}
-                />
-                {boosted && (
-                  <span
-                    className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
-                    title={locale === "fr" ? "Produit booste" : "Boosted product"}
-                    aria-label={locale === "fr" ? "Produit booste" : "Boosted product"}
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-3.5 w-3.5"
-                      aria-hidden="true"
+            <Fragment key={product.id}>
+              <Link
+                href={`/shop/${product.slug}`}
+                className={`rounded-3xl border bg-zinc-900/70 p-6 transition ${
+                  boosted
+                    ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
+                    : "border-white/10 hover:border-emerald-300/60"
+                }`}
+              >
+                <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                  <FavoriteButton
+                    productId={product.id}
+                    initialIsFavorite={favoriteProductIds.has(product.id)}
+                    variant="icon"
+                    className="absolute left-3 top-3 z-20"
+                  />
+                  <ProductCardCarousel
+                    images={product.images}
+                    title={product.title}
+                    locale={locale}
+                  />
+                  {boosted && (
+                    <span
+                      className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
+                      title={locale === "fr" ? "Produit booste" : "Boosted product"}
+                      aria-label={locale === "fr" ? "Produit booste" : "Boosted product"}
                     >
-                      <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>{product.type}</span>
-                <span>{product.seller?.displayName ?? "JONTAADO"}</span>
-              </div>
-              <h3 className="mt-3 text-lg font-semibold">{product.title}</h3>
-              {product.discountPercent ? (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-semibold text-emerald-200">
-                    {formatMoney(
-                      getDiscountedPrice(product.priceCents, product.discountPercent),
-                      product.currency,
-                      locale
-                    )}
-                  </span>
-                  <span className="text-xs text-zinc-500 line-through">
-                    {formatMoney(product.priceCents, product.currency, locale)}
-                  </span>
-                  <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
-                    -{product.discountPercent}%
-                  </span>
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
+                      </svg>
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <p className="mt-2 text-sm text-zinc-300">
-                  {formatMoney(product.priceCents, product.currency, locale)}
-                </p>
-              )}
-            </Link>
+                <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <span>{product.type}</span>
+                  <span>{product.seller?.displayName ?? "JONTAADO"}</span>
+                </div>
+                <h3 className="mt-3 text-lg font-semibold">{product.title}</h3>
+                {product.discountPercent ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-semibold text-emerald-200">
+                      {formatMoney(
+                        getDiscountedPrice(product.priceCents, product.discountPercent),
+                        product.currency,
+                        locale
+                      )}
+                    </span>
+                    <span className="text-xs text-zinc-500 line-through">
+                      {formatMoney(product.priceCents, product.currency, locale)}
+                    </span>
+                    <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                      -{product.discountPercent}%
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </p>
+                )}
+              </Link>
+
+              {!hasActiveSearchIntent && homeInlinePromos.length > 0 && index === 1 ? (
+                <div className="md:hidden">
+                  <RotatingSponsoredPlacement
+                    locale={locale}
+                    promos={homeInlinePromos}
+                    variant="inline"
+                  />
+                </div>
+              ) : null}
+
+              {!hasActiveSearchIntent && homeInlinePromos.length > 0 && index === 3 ? (
+                <div className="hidden md:block md:col-span-2 xl:hidden">
+                  <RotatingSponsoredPlacement
+                    locale={locale}
+                    promos={homeInlinePromos}
+                    variant="inline"
+                  />
+                </div>
+              ) : null}
+
+              {!hasActiveSearchIntent && homeInlinePromos.length > 0 && index === 5 ? (
+                <div className="hidden xl:block xl:col-span-3">
+                  <RotatingSponsoredPlacement
+                    locale={locale}
+                    promos={homeInlinePromos}
+                    variant="inline"
+                  />
+                </div>
+              ) : null}
+
+              {shouldInsertProductCardPromo ? (
+                <div>
+                  <RotatingSponsoredPlacement
+                    locale={locale}
+                    promos={homeProductCardPromos}
+                    variant="product-card"
+                    initialIndex={chunkIndex}
+                  />
+                </div>
+              ) : null}
+            </Fragment>
           );
         })}
       </div>
@@ -846,9 +905,16 @@ export default async function HomePage({
           )}
         </section>
       </main>
-      <HomePromoPopups locale={locale} promos={homePromoConfig.entries} />
+      <HomePromoPopups
+        locale={locale}
+        promos={homePromoConfig.entries}
+        isLoggedIn={Boolean(session?.user?.id)}
+      />
       <Footer />
     </div>
   );
 }
+
+
+
 

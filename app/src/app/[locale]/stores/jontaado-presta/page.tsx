@@ -3,8 +3,11 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
 import { authOptions } from "@/lib/auth";
 import PrestaStoreClient from "@/components/presta/PrestaStoreClient";
+import { getHomePromoEntries } from "@/lib/homePromos";
+import { filterHomePromosForPlacement } from "@/lib/homePromos.shared";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole } from "@/lib/userRoles";
 
@@ -14,10 +17,19 @@ export default async function PrestaPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const session = await getServerSession(authOptions);
+  const [session, homePromoConfig] = await Promise.all([
+    getServerSession(authOptions),
+    getHomePromoEntries(),
+  ]);
 
   const rules = getVerticalRules(Vertical.PRESTA);
   const canPublish = hasAnyUserRole(session?.user, rules.publishRoles);
+  const sponsoredInlinePromo =
+    filterHomePromosForPlacement(homePromoConfig.entries, {
+      placement: "STORE_INLINE",
+      isLoggedIn: Boolean(session?.user?.id),
+      storeSlug: "jontaado-presta",
+    })[0] ?? null;
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -57,6 +69,14 @@ export default async function PrestaPage({
             locale === "fr" ? "Acces dashboard plus clair pour les prestataires." : "Clearer dashboard access for providers.",
           ]}
         />
+
+        {sponsoredInlinePromo ? (
+          <SponsoredPlacement
+            locale={locale}
+            promo={sponsoredInlinePromo}
+            variant="inline"
+          />
+        ) : null}
 
         <PrestaStoreClient
           locale={locale}
