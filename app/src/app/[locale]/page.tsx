@@ -477,6 +477,193 @@ export default async function HomePage({
     }
   }
 
+  const hasActiveSearchIntent = Boolean(query || category || (sort && sort !== "recent"));
+
+  const dynamicSignalsSection = (
+    <div className="fade-up">
+      <HomeDynamicSignals
+        locale={locale}
+        isLoggedIn={Boolean(session?.user?.id)}
+        initialLikedItems={homeLikedItems}
+      />
+    </div>
+  );
+
+  const recommendationsSection =
+    recommendedProducts.length > 0 ? (
+      <div className="fade-up">
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200/90">
+              {locale === "fr" ? "Recommande pour vous" : "Recommended for you"}
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              {locale === "fr"
+                ? "Une selection qui colle mieux a votre rythme"
+                : "A selection that better matches your rhythm"}
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              {locale === "fr"
+                ? "Basee sur vos derniers signaux, vos favoris et les produits qui performent bien."
+                : "Based on your recent signals, your favorites and products performing well."}
+            </p>
+            {recommendationSignals.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recommendationSignals.map((signal) => (
+                  <span
+                    key={signal}
+                    className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium text-emerald-100"
+                  >
+                    {signal}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <Link
+            href="/shop"
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-300/35 hover:bg-white/10"
+          >
+            {locale === "fr" ? "Voir plus" : "See more"}
+          </Link>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {recommendedProducts.map((product) => {
+            const boosted = isBoosted(product);
+            const finalPrice = product.discountPercent
+              ? getDiscountedPrice(product.priceCents, product.discountPercent)
+              : product.priceCents;
+
+            return (
+              <Link
+                key={`recommended-${product.id}`}
+                href={`/shop/${product.slug}`}
+                className={`rounded-3xl border bg-zinc-900/70 p-5 transition ${
+                  boosted
+                    ? "border-emerald-300/45 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+                    : "border-white/10 hover:border-emerald-300/35"
+                }`}
+              >
+                <div className="relative mb-4 h-28 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                  <ProductCardCarousel
+                    images={product.images}
+                    title={product.title}
+                    locale={locale}
+                  />
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                  {product.seller?.displayName ?? "JONTAADO"}
+                </p>
+                <h3 className="mt-2 line-clamp-2 text-base font-semibold text-white">
+                  {product.title}
+                </h3>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-emerald-200">
+                    {formatMoney(finalPrice, product.currency, locale)}
+                  </span>
+                  {product.discountPercent ? (
+                    <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                      -{product.discountPercent}%
+                    </span>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  const resultsSection = (
+    <>
+      <div className="fade-up">
+        <h2 className="text-2xl font-semibold">
+          {query ? `Resultats pour "${query}"` : "Produits disponibles"}
+        </h2>
+        <p className="mt-2 text-sm text-zinc-300">
+          {query
+            ? `${displayedProducts.length} resultat(s) trouve(s).`
+            : "Les offres les plus recentes dans toutes les categories."}
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
+        {displayedProducts.map((product) => {
+          const boosted = isBoosted(product);
+          return (
+            <Link
+              key={product.id}
+              href={`/shop/${product.slug}`}
+              className={`rounded-3xl border bg-zinc-900/70 p-6 transition ${
+                boosted
+                  ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
+                  : "border-white/10 hover:border-emerald-300/60"
+              }`}
+            >
+              <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
+                <FavoriteButton
+                  productId={product.id}
+                  initialIsFavorite={favoriteProductIds.has(product.id)}
+                  variant="icon"
+                  className="absolute left-3 top-3 z-20"
+                />
+                <ProductCardCarousel
+                  images={product.images}
+                  title={product.title}
+                  locale={locale}
+                />
+                {boosted && (
+                  <span
+                    className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
+                    title={locale === "fr" ? "Produit booste" : "Boosted product"}
+                    aria-label={locale === "fr" ? "Produit booste" : "Boosted product"}
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>{product.type}</span>
+                <span>{product.seller?.displayName ?? "JONTAADO"}</span>
+              </div>
+              <h3 className="mt-3 text-lg font-semibold">{product.title}</h3>
+              {product.discountPercent ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-emerald-200">
+                    {formatMoney(
+                      getDiscountedPrice(product.priceCents, product.discountPercent),
+                      product.currency,
+                      locale
+                    )}
+                  </span>
+                  <span className="text-xs text-zinc-500 line-through">
+                    {formatMoney(product.priceCents, product.currency, locale)}
+                  </span>
+                  <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
+                    -{product.discountPercent}%
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-300">
+                  {formatMoney(product.priceCents, product.currency, locale)}
+                </p>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    </>
+  );
+
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -644,185 +831,19 @@ export default async function HomePage({
             )}
           </div>
 
-          <div className="fade-up">
-            <HomeDynamicSignals
-              locale={locale}
-              isLoggedIn={Boolean(session?.user?.id)}
-              initialLikedItems={homeLikedItems}
-            />
-          </div>
-
-          {recommendedProducts.length > 0 ? (
-            <div className="fade-up">
-              <div className="mb-4 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200/90">
-                    {locale === "fr" ? "Recommande pour vous" : "Recommended for you"}
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">
-                    {locale === "fr"
-                      ? "Une selection qui colle mieux a votre rythme"
-                      : "A selection that better matches your rhythm"}
-                  </h2>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    {locale === "fr"
-                      ? "Basee sur vos derniers signaux, vos favoris et les produits qui performent bien."
-                      : "Based on your recent signals, your favorites and products performing well."}
-                  </p>
-                  {recommendationSignals.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {recommendationSignals.map((signal) => (
-                        <span
-                          key={signal}
-                          className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium text-emerald-100"
-                        >
-                          {signal}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <Link
-                  href="/shop"
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:border-emerald-300/35 hover:bg-white/10"
-                >
-                  {locale === "fr" ? "Voir plus" : "See more"}
-                </Link>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {recommendedProducts.map((product) => {
-                  const boosted = isBoosted(product);
-                  const finalPrice = product.discountPercent
-                    ? getDiscountedPrice(product.priceCents, product.discountPercent)
-                    : product.priceCents;
-
-                  return (
-                    <Link
-                      key={`recommended-${product.id}`}
-                      href={`/shop/${product.slug}`}
-                      className={`rounded-3xl border bg-zinc-900/70 p-5 transition ${
-                        boosted
-                          ? "border-emerald-300/45 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
-                          : "border-white/10 hover:border-emerald-300/35"
-                      }`}
-                    >
-                      <div className="relative mb-4 h-28 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
-                        <ProductCardCarousel
-                          images={product.images}
-                          title={product.title}
-                          locale={locale}
-                        />
-                      </div>
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
-                        {product.seller?.displayName ?? "JONTAADO"}
-                      </p>
-                      <h3 className="mt-2 line-clamp-2 text-base font-semibold text-white">
-                        {product.title}
-                      </h3>
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="text-sm font-semibold text-emerald-200">
-                          {formatMoney(finalPrice, product.currency, locale)}
-                        </span>
-                        {product.discountPercent ? (
-                          <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
-                            -{product.discountPercent}%
-                          </span>
-                        ) : null}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="fade-up">
-            <h2 className="text-2xl font-semibold">
-              {query ? `Resultats pour "${query}"` : "Produits disponibles"}
-            </h2>
-            <p className="mt-2 text-sm text-zinc-300">
-              {query
-                ? `${displayedProducts.length} resultat(s) trouve(s).`
-                : "Les offres les plus recentes dans toutes les categories."}
-            </p>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
-            {displayedProducts.map((product) => {
-              const boosted = isBoosted(product);
-              return (
-              <Link
-                key={product.id}
-                href={`/shop/${product.slug}`}
-                className={`rounded-3xl border bg-zinc-900/70 p-6 transition ${
-                  boosted
-                    ? "border-emerald-300/60 shadow-[0_0_30px_rgba(16,185,129,0.15)]"
-                    : "border-white/10 hover:border-emerald-300/60"
-                }`}
-              >
-                <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
-                  <FavoriteButton
-                    productId={product.id}
-                    initialIsFavorite={favoriteProductIds.has(product.id)}
-                    variant="icon"
-                    className="absolute left-3 top-3 z-20"
-                  />
-                  <ProductCardCarousel
-                    images={product.images}
-                    title={product.title}
-                    locale={locale}
-                  />
-                  {boosted && (
-                    <span
-                      className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full bg-orange-400/20 text-orange-200"
-                      title={locale === "fr" ? "Produit booste" : "Boosted product"}
-                      aria-label={locale === "fr" ? "Produit booste" : "Boosted product"}
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-3.5 w-3.5"
-                        aria-hidden="true"
-                      >
-                        <path d="M11.2 1.9L4.5 10h3.9l-1 8.1L15.5 9h-4l-.3-7.1z" />
-                      </svg>
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>{product.type}</span>
-                  <span>{product.seller?.displayName ?? "JONTAADO"}</span>
-                </div>
-                <h3 className="mt-3 text-lg font-semibold">{product.title}</h3>
-                {product.discountPercent ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-semibold text-emerald-200">
-                      {formatMoney(
-                        getDiscountedPrice(
-                          product.priceCents,
-                          product.discountPercent
-                        ),
-                        product.currency,
-                        locale
-                      )}
-                    </span>
-                    <span className="text-xs text-zinc-500 line-through">
-                      {formatMoney(product.priceCents, product.currency, locale)}
-                    </span>
-                    <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
-                      -{product.discountPercent}%
-                    </span>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-zinc-300">
-                    {formatMoney(product.priceCents, product.currency, locale)}
-                  </p>
-                )}
-              </Link>
-            )})}
-          </div>
+          {hasActiveSearchIntent ? (
+            <>
+              {resultsSection}
+              {recommendationsSection}
+              {dynamicSignalsSection}
+            </>
+          ) : (
+            <>
+              {dynamicSignalsSection}
+              {recommendationsSection}
+              {resultsSection}
+            </>
+          )}
         </section>
       </main>
       <HomePromoPopups locale={locale} promos={homePromoConfig.entries} />
