@@ -4,19 +4,11 @@ import Image from "next/image";
 import Footer from "@/components/layout/Footer";
 import AdminTrendsPanel from "@/components/admin/AdminTrendsPanel";
 import AdminOpsHub from "@/components/admin/AdminOpsHub";
-import AdminHomePromosPanel from "@/components/admin/AdminHomePromosPanel";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import { hasUserRole } from "@/lib/userRoles";
-import {
-  getHomePromoAccentOptions,
-  getHomePromoAudienceOptions,
-  getHomePromoEntries,
-  getHomePromoPlacementOptions,
-  getHomePromoTrackingSummary,
-} from "@/lib/homePromos";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -222,8 +214,6 @@ export default async function AdminPage() {
     trustDisputesActiveCount,
     trustReportItems,
     trustDisputeItems,
-    homePromoConfig,
-    homePromoTrackingSummary,
   ] = await Promise.all([
     prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
     prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
@@ -429,13 +419,6 @@ export default async function AdminPage() {
         },
       })
       .catch(() => null),
-    getHomePromoEntries(),
-    getHomePromoTrackingSummary().catch(() => ({
-      totals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
-      anonymousTotals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
-      ctr: 0,
-      byPromoId: {},
-    })),
   ]);
 
   const formatAgeLabel = (date: Date) => {
@@ -781,6 +764,14 @@ export default async function AdminPage() {
                 cta: isFr ? "Ouvrir" : "Open",
                 href: "/admin/immo/monetization",
               },
+              {
+                title: isFr ? "Campagnes sponsorisees" : "Sponsored campaigns",
+                subtitle: isFr
+                  ? "Gestion pubs homepage, verticales et rotations"
+                  : "Manage homepage ads, verticals, and rotations",
+                cta: isFr ? "Gerer" : "Manage",
+                href: "/admin/campaigns",
+              },
             ].map((card) => (
               <article
                 key={card.title}
@@ -798,17 +789,6 @@ export default async function AdminPage() {
             ))}
           </div>
         </section>
-
-        <AdminHomePromosPanel
-          locale={locale}
-          initialPromos={homePromoConfig.entries}
-          accentOptions={getHomePromoAccentOptions()}
-          placementOptions={getHomePromoPlacementOptions()}
-          audienceOptions={getHomePromoAudienceOptions()}
-          trackingSummary={homePromoTrackingSummary}
-          lastUpdatedAt={homePromoConfig.lastUpdatedAt ? homePromoConfig.lastUpdatedAt.toISOString() : null}
-          lastUpdatedBy={homePromoConfig.lastUpdatedBy}
-        />
       </main>
       <Footer />
     </div>

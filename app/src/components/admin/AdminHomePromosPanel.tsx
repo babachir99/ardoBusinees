@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import RotatingSponsoredPlacement from "@/components/ads/RotatingSponsoredPlacement";
 import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
-import type { HomePromoEntry } from "@/lib/homePromos.shared";
+import { isHomePromoScheduledLive, type HomePromoEntry } from "@/lib/homePromos.shared";
 import type { HomePromoTrackingSummary } from "@/lib/homePromos";
 
 function toDateTimeLocalValue(value: string | null | undefined) {
@@ -79,6 +80,194 @@ const targetingOptions = [
   { value: "jontaado-tiak-tiak", fr: "TIAK", en: "TIAK" },
 ] as const;
 
+type PromoLifecycleFilter = "all" | "live" | "scheduled" | "ended";
+type PromoSortMode = "priority" | "recent" | "performance";
+const homepageFormatPlacements = [
+  "HOME_POPUP",
+  "HOME_INLINE",
+  "HOME_PRODUCT_CARD",
+] as const;
+
+function buildGeneratedPromoId() {
+  return `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function getPromoLifecycleStatus(promo: HomePromoEntry, now: Date): PromoLifecycleFilter | "draft" {
+  if (!promo.enabled) {
+    return "draft";
+  }
+
+  if (promo.startAt) {
+    const startMs = new Date(promo.startAt).getTime();
+    if (!Number.isNaN(startMs) && startMs > now.getTime()) {
+      return "scheduled";
+    }
+  }
+
+  if (promo.endAt) {
+    const endMs = new Date(promo.endAt).getTime();
+    if (!Number.isNaN(endMs) && endMs < now.getTime()) {
+      return "ended";
+    }
+  }
+
+  return isHomePromoScheduledLive(promo, now) ? "live" : "draft";
+}
+
+function getPlacementContextDescription(locale: string, promo: HomePromoEntry) {
+  const isFr = locale === "fr";
+  const targetedLabels = targetingOptions
+    .filter((option) => promo.targetStoreSlugs.includes(option.value))
+    .map((option) => (isFr ? option.fr : option.en));
+
+  switch (promo.placement) {
+    case "HOME_POPUP":
+      return isFr ? "Accueil > popup flottant en bas a droite" : "Homepage > floating popup bottom-right";
+    case "HOME_INLINE":
+      return isFr
+        ? "Accueil > bandeau large apres deux lignes de produits"
+        : "Homepage > wide banner after two product rows";
+    case "HOME_PRODUCT_CARD":
+      return isFr
+        ? "Accueil > carte sponsorisee integree dans la grille produits"
+        : "Homepage > sponsored card inside the product grid";
+    case "STORE_INLINE":
+      return targetedLabels.length > 0
+        ? `${isFr ? "Verticales" : "Verticals"} > ${targetedLabels.join(", ")}`
+        : isFr
+          ? "Verticales > bandeau sous le hero"
+          : "Verticals > banner below the hero";
+    default:
+      return promo.placement;
+  }
+}
+
+function getPromoStatusMeta(locale: string, promo: HomePromoEntry, now: Date) {
+  const isFr = locale === "fr";
+  const status = getPromoLifecycleStatus(promo, now);
+
+  switch (status) {
+    case "live":
+      return {
+        label: isFr ? "Active" : "Live",
+        className: "border-emerald-300/30 bg-emerald-400/12 text-emerald-100",
+      };
+    case "scheduled":
+      return {
+        label: isFr ? "Programmee" : "Scheduled",
+        className: "border-amber-300/25 bg-amber-400/10 text-amber-100",
+      };
+    case "ended":
+      return {
+        label: isFr ? "Terminee" : "Ended",
+        className: "border-zinc-300/15 bg-zinc-400/10 text-zinc-300",
+      };
+    default:
+      return {
+        label: isFr ? "Brouillon" : "Draft",
+        className: "border-sky-300/20 bg-sky-400/10 text-sky-100",
+      };
+  }
+}
+
+function buildDemoPreviewPromos(
+  locale: string,
+  accentOptions: string[]
+): Record<(typeof homepageFormatPlacements)[number], HomePromoEntry> {
+  const isFr = locale === "fr";
+  const popupAccent =
+    accentOptions[0] ??
+    "from-emerald-400/22 via-emerald-500/8 to-zinc-950 border-emerald-300/20";
+  const inlineAccent =
+    accentOptions[1] ??
+    accentOptions[0] ??
+    "from-amber-400/22 via-orange-500/8 to-zinc-950 border-amber-300/20";
+  const productAccent =
+    accentOptions[2] ??
+    accentOptions[0] ??
+    "from-cyan-400/22 via-sky-500/8 to-zinc-950 border-cyan-300/20";
+
+  return {
+    HOME_POPUP: {
+      id: "demo-popup",
+      tag: isFr ? "Popup premium" : "Premium popup",
+      title: isFr ? "Campagne hero flottante" : "Floating hero campaign",
+      description: isFr
+        ? "Parfait pour une prise de parole forte, avec visuel, badge et CTA court."
+        : "Ideal for a strong splash with visual, badge, and a short CTA.",
+      href: "/stores/jontaado-cares",
+      cta: isFr ? "Voir l'offre" : "See the offer",
+      accentClassName: popupAccent,
+      advertiserName: "JONTAADO ADS",
+      advertiserLogoUrl: "/logo.png",
+      imageUrl: "/stores/last_cares.png",
+      placement: "HOME_POPUP",
+      audience: "ALL",
+      targetStoreSlugs: [],
+      sponsoredLabel: isFr ? "Sponsorise" : "Sponsored",
+      openInNewTab: false,
+      impressionCap: null,
+      rotationSeconds: 6,
+      priority: 90,
+      enabled: true,
+      startAt: null,
+      endAt: null,
+    },
+    HOME_INLINE: {
+      id: "demo-inline",
+      tag: isFr ? "Bandeau accueil" : "Homepage banner",
+      title: isFr
+        ? "Grand bandeau apres deux lignes de produits"
+        : "Wide banner after two product rows",
+      description: isFr
+        ? "Le meilleur format pour raconter une offre, une promo ou un lancement de verticale."
+        : "Best format to tell the story of an offer, promo, or vertical launch.",
+      href: "/stores/jontaado-presta",
+      cta: isFr ? "Decouvrir" : "Discover",
+      accentClassName: inlineAccent,
+      advertiserName: "JONTAADO ADS",
+      advertiserLogoUrl: "/logo.png",
+      imageUrl: "/stores/presta.png",
+      placement: "HOME_INLINE",
+      audience: "ALL",
+      targetStoreSlugs: [],
+      sponsoredLabel: isFr ? "Sponsorise" : "Sponsored",
+      openInNewTab: false,
+      impressionCap: null,
+      rotationSeconds: 8,
+      priority: 80,
+      enabled: true,
+      startAt: null,
+      endAt: null,
+    },
+    HOME_PRODUCT_CARD: {
+      id: "demo-card",
+      tag: isFr ? "Carte native" : "Native card",
+      title: isFr ? "Bloc sponsorise au format produit" : "Sponsored block in product format",
+      description: isFr
+        ? "Le plus discret pour se fondre dans le feed tout en gardant un CTA net."
+        : "The most seamless way to blend into the feed with a clear CTA.",
+      href: "/stores/jontaado-cars",
+      cta: isFr ? "Reserver ce format" : "Book this format",
+      accentClassName: productAccent,
+      advertiserName: "JONTAADO ADS",
+      advertiserLogoUrl: "/logo.png",
+      imageUrl: "/stores/presta.png",
+      placement: "HOME_PRODUCT_CARD",
+      audience: "ALL",
+      targetStoreSlugs: [],
+      sponsoredLabel: isFr ? "Sponsorise" : "Sponsored",
+      openInNewTab: false,
+      impressionCap: null,
+      rotationSeconds: 8,
+      priority: 70,
+      enabled: true,
+      startAt: null,
+      endAt: null,
+    },
+  };
+}
+
 type AdminHomePromosPanelProps = {
   locale: string;
   initialPromos: HomePromoEntry[];
@@ -104,9 +293,138 @@ export default function AdminHomePromosPanel({
   const [promos, setPromos] = useState(initialPromos);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [lifecycleFilter, setLifecycleFilter] = useState<PromoLifecycleFilter>("all");
+  const [sortMode, setSortMode] = useState<PromoSortMode>("priority");
+
+  const now = useMemo(() => new Date(), []);
+  const filterCounts = useMemo(() => {
+    const counts: Record<PromoLifecycleFilter, number> = {
+      all: promos.length,
+      live: 0,
+      scheduled: 0,
+      ended: 0,
+    };
+
+    for (const promo of promos) {
+      const status = getPromoLifecycleStatus(promo, now);
+      if (status === "live" || status === "scheduled" || status === "ended") {
+        counts[status] += 1;
+      }
+    }
+
+    return counts;
+  }, [now, promos]);
+
+  const filteredPromos = useMemo(() => {
+    if (lifecycleFilter === "all") {
+      return promos.map((promo, index) => ({ promo, index }));
+    }
+
+    return promos
+      .map((promo, index) => ({ promo, index }))
+      .filter(({ promo }) => getPromoLifecycleStatus(promo, now) === lifecycleFilter);
+  }, [lifecycleFilter, now, promos]);
+
+  const sortedFilteredPromos = useMemo(() => {
+    const next = [...filteredPromos];
+
+    next.sort((left, right) => {
+      if (sortMode === "performance") {
+        const leftStats = trackingSummary.byPromoId[left.promo.id];
+        const rightStats = trackingSummary.byPromoId[right.promo.id];
+        const leftScore = (leftStats?.clicks ?? 0) * 1000 + (leftStats?.ctr ?? 0);
+        const rightScore = (rightStats?.clicks ?? 0) * 1000 + (rightStats?.ctr ?? 0);
+        if (rightScore !== leftScore) {
+          return rightScore - leftScore;
+        }
+      } else if (sortMode === "recent") {
+        const leftStamp = left.promo.startAt
+          ? new Date(left.promo.startAt).getTime()
+          : left.promo.endAt
+            ? new Date(left.promo.endAt).getTime()
+            : 0;
+        const rightStamp = right.promo.startAt
+          ? new Date(right.promo.startAt).getTime()
+          : right.promo.endAt
+            ? new Date(right.promo.endAt).getTime()
+            : 0;
+        if (rightStamp !== leftStamp) {
+          return rightStamp - leftStamp;
+        }
+      } else {
+        if (right.promo.priority !== left.promo.priority) {
+          return right.promo.priority - left.promo.priority;
+        }
+      }
+
+      return left.index - right.index;
+    });
+
+    return next;
+  }, [filteredPromos, sortMode, trackingSummary.byPromoId]);
+
+  const demoPreviewPromos = useMemo(
+    () => buildDemoPreviewPromos(locale, accentOptions),
+    [accentOptions, locale]
+  );
+
+  const placementStats = useMemo(() => {
+    return placementOptions.map((placement) => {
+      const placementPromos = promos.filter((promo) => promo.placement === placement);
+      const livePromos = placementPromos.filter((promo) => getPromoLifecycleStatus(promo, now) === "live");
+      const aggregate = placementPromos.reduce(
+        (accumulator, promo) => {
+          const stats = trackingSummary.byPromoId[promo.id];
+          if (!stats) {
+            return accumulator;
+          }
+
+          accumulator.impressions += stats.impressions;
+          accumulator.clicks += stats.clicks;
+          accumulator.anonymousImpressions += stats.anonymousImpressions;
+          accumulator.anonymousClicks += stats.anonymousClicks;
+          return accumulator;
+        },
+        {
+          impressions: 0,
+          clicks: 0,
+          anonymousImpressions: 0,
+          anonymousClicks: 0,
+        }
+      );
+
+      return {
+        placement,
+        configuredCount: placementPromos.length,
+        liveCount: livePromos.length,
+        impressions: aggregate.impressions,
+        clicks: aggregate.clicks,
+        anonymousImpressions: aggregate.anonymousImpressions,
+        anonymousClicks: aggregate.anonymousClicks,
+        ctr:
+          aggregate.impressions > 0
+            ? Math.round((aggregate.clicks / aggregate.impressions) * 1000) / 10
+            : 0,
+      };
+    });
+  }, [now, placementOptions, promos, trackingSummary.byPromoId]);
+
+  const liveRotationPreviews = useMemo(() => {
+    return homepageFormatPlacements.map((placement) => {
+      const activePromos = promos.filter(
+        (promo) => promo.placement === placement && isHomePromoScheduledLive(promo, now)
+      );
+
+      return {
+        placement,
+        promos: activePromos.length > 0 ? activePromos : [demoPreviewPromos[placement]],
+        usingFallback: activePromos.length === 0,
+      };
+    });
+  }, [demoPreviewPromos, now, promos]);
 
   const addPromo = () => {
-    const generatedId = `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const generatedId = buildGeneratedPromoId();
     setPromos((current) => [
       ...current,
       {
@@ -135,6 +453,29 @@ export default function AdminHomePromosPanel({
         endAt: null,
       },
     ]);
+  };
+
+  const duplicatePromo = (index: number) => {
+    setPromos((current) => {
+      const source = current[index];
+      if (!source) {
+        return current;
+      }
+
+      const duplicate: HomePromoEntry = {
+        ...source,
+        id: buildGeneratedPromoId(),
+        title: `${source.title} ${isFr ? "(copie)" : "(copy)"}`,
+        enabled: false,
+        startAt: null,
+        endAt: null,
+        priority: Math.max(0, source.priority - 1),
+      };
+
+      const next = [...current];
+      next.splice(index + 1, 0, duplicate);
+      return next;
+    });
   };
 
   const removePromo = (index: number) => {
@@ -197,8 +538,8 @@ export default function AdminHomePromosPanel({
           </h2>
           <p className="mt-1 text-xs text-zinc-400">
             {isFr
-              ? "Tu pilotes ici les campagnes popup et inline de la page d'accueil, sans toucher au header."
-              : "Manage homepage popup and inline campaigns here without touching the header."}
+              ? "Tu pilotes ici popup, inline, cartes sponsorisees et bandeaux verticaux, sans toucher au header."
+              : "Manage popup, inline, product-card, and vertical banners here without touching the header."}
           </p>
           {lastUpdatedAt ? (
             <p className="mt-2 text-[11px] text-zinc-500">
@@ -267,17 +608,246 @@ export default function AdminHomePromosPanel({
         ))}
       </div>
 
+      <div className="mt-5 grid gap-3 xl:grid-cols-4">
+        {placementStats.map((item) => (
+          <div
+            key={item.placement}
+            className="rounded-2xl border border-white/10 bg-zinc-950/55 px-4 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                  {getPlacementLabel(locale, item.placement)}
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">{item.impressions}</p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300">
+                {item.liveCount}/{item.configuredCount} {isFr ? "live" : "live"}
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-400">
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] px-2.5 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                  {isFr ? "Clics" : "Clicks"}
+                </p>
+                <p className="mt-1 font-semibold text-white">{item.clicks}</p>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] px-2.5 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">CTR</p>
+                <p className="mt-1 font-semibold text-white">{item.ctr}%</p>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] px-2.5 py-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                  {isFr ? "Invites" : "Guests"}
+                </p>
+                <p className="mt-1 font-semibold text-white">{item.anonymousImpressions}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/45 p-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              {isFr ? "Visuel des 3 formats homepage" : "Preview of the 3 homepage formats"}
+            </h3>
+            <p className="mt-1 text-xs text-zinc-400">
+              {isFr
+                ? "On garde les 3 formats, chacun avec son usage et son emplacement."
+                : "We keep all 3 formats, each with its own use case and location."}
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-100">
+            {isFr ? "Exemples sans tracking" : "Examples without tracking"}
+          </span>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          {homepageFormatPlacements.map((placement) => (
+            <div
+              key={`example-${placement}`}
+              className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4"
+            >
+              <div className="mb-3">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                  {getPlacementLabel(locale, placement)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {getPlacementContextDescription(locale, demoPreviewPromos[placement])}
+                </p>
+              </div>
+
+              {placement === "HOME_POPUP" ? (
+                <div
+                  className={`overflow-hidden rounded-[1.7rem] border bg-gradient-to-br ${demoPreviewPromos[placement].accentClassName} p-4 shadow-[0_20px_60px_-32px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
+                >
+                  <SponsoredPlacement
+                    locale={locale}
+                    promo={demoPreviewPromos[placement]}
+                    variant="popup"
+                    trackEvents={false}
+                  />
+                </div>
+              ) : (
+                <SponsoredPlacement
+                  locale={locale}
+                  promo={demoPreviewPromos[placement]}
+                  variant={getPreviewVariant(placement)}
+                  trackEvents={false}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-950/45 p-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              {isFr ? "Rotation live par bloc" : "Live rotation per slot"}
+            </h3>
+            <p className="mt-1 text-xs text-zinc-400">
+              {isFr
+                ? "Tu visualises ici ce qui tourne vraiment dans chaque slot. Si rien n'est live, on montre un exemple."
+                : "See what actually rotates in each slot. If nothing is live yet, we show a fallback example."}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          {liveRotationPreviews.map((preview) => (
+            <div
+              key={`rotation-${preview.placement}`}
+              className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                    {getPlacementLabel(locale, preview.placement)}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {preview.usingFallback
+                      ? isFr
+                        ? "Aucune campagne live pour ce format. Apercu demo affiche."
+                        : "No live campaign for this format yet. Demo preview shown."
+                      : isFr
+                        ? `${preview.promos.length} campagne(s) tourne(nt) dans ce slot.`
+                        : `${preview.promos.length} campaign(s) rotate in this slot.`}
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300">
+                  {preview.promos[0]?.rotationSeconds
+                    ? isFr
+                      ? `${preview.promos[0].rotationSeconds}s / pub`
+                      : `${preview.promos[0].rotationSeconds}s / ad`
+                    : isFr
+                      ? "Rotation auto"
+                      : "Auto rotation"}
+                </span>
+              </div>
+
+              <RotatingSponsoredPlacement
+                locale={locale}
+                promos={preview.promos}
+                variant={getPreviewVariant(preview.placement)}
+                trackEvents={false}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {([
+          ["all", isFr ? "Toutes" : "All"],
+          ["live", isFr ? "Actives" : "Live"],
+          ["scheduled", isFr ? "Programmees" : "Scheduled"],
+          ["ended", isFr ? "Terminees" : "Ended"],
+        ] as const).map(([value, label]) => {
+          const active = lifecycleFilter === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setLifecycleFilter(value)}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                active
+                  ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-100"
+                  : "border-white/10 bg-white/5 text-zinc-300 hover:border-white/20 hover:bg-white/10"
+              }`}
+            >
+              <span>{label}</span>
+              <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] text-inherit">
+                {filterCounts[value]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {([
+          ["priority", isFr ? "Priorite" : "Priority"],
+          ["recent", isFr ? "Plus recentes" : "Most recent"],
+          ["performance", isFr ? "Plus performantes" : "Best performing"],
+        ] as const).map(([value, label]) => {
+          const active = sortMode === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSortMode(value)}
+              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                active
+                  ? "border-cyan-300/35 bg-cyan-400/10 text-cyan-100"
+                  : "border-white/10 bg-white/5 text-zinc-300 hover:border-white/20 hover:bg-white/10"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        {promos.map((promo, index) => (
+        {sortedFilteredPromos.map(({ promo, index }) => (
           <article
             key={promo.id}
             className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-white">
-                {isFr ? `Promo ${index + 1}` : `Promo ${index + 1}`}
-              </p>
               <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-white">
+                  {isFr ? `Promo ${index + 1}` : `Promo ${index + 1}`}
+                </p>
+                {(() => {
+                  const statusMeta = getPromoStatusMeta(locale, promo, now);
+                  return (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] ${statusMeta.className}`}
+                    >
+                      {statusMeta.label}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => duplicatePromo(index)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-300 transition hover:border-cyan-300/35 hover:bg-cyan-400/10 hover:text-cyan-100"
+                  aria-label={isFr ? "Dupliquer la campagne" : "Duplicate campaign"}
+                  title={isFr ? "Dupliquer la campagne" : "Duplicate campaign"}
+                >
+                  <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current stroke-[1.8]">
+                    <rect x="7" y="4" width="9" height="9" rx="2" />
+                    <path d="M4 7V6a2 2 0 0 1 2-2h1" strokeLinecap="round" />
+                    <rect x="4" y="7" width="9" height="9" rx="2" />
+                  </svg>
+                </button>
                 <label className="inline-flex items-center gap-2 text-xs text-zinc-300">
                   <input
                     type="checkbox"
@@ -595,6 +1165,9 @@ export default function AdminHomePromosPanel({
                     <p className="mt-1 text-xs text-zinc-400">
                       {getPlacementLabel(locale, promo.placement)} · {getAudienceLabel(locale, promo.audience)}
                     </p>
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      {getPlacementContextDescription(locale, promo)}
+                    </p>
                   </div>
                   {promo.rotationSeconds ? (
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300">
@@ -624,6 +1197,13 @@ export default function AdminHomePromosPanel({
             </div>
           </article>
         ))}
+        {filteredPromos.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950/35 p-6 text-sm text-zinc-400 xl:col-span-2">
+            {isFr
+              ? "Aucune campagne dans ce filtre pour le moment."
+              : "No campaign matches this filter yet."}
+          </div>
+        ) : null}
       </div>
     </section>
   );

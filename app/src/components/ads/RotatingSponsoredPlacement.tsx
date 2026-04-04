@@ -7,13 +7,18 @@ import type { HomePromoEntry } from "@/lib/homePromos.shared";
 type RotatingSponsoredPlacementProps = {
   locale: string;
   promos: HomePromoEntry[];
-  variant: "inline" | "product-card";
+  variant: "popup" | "inline" | "product-card";
   initialIndex?: number;
   className?: string;
+  trackEvents?: boolean;
 };
 
-function getRotationMs(promo: HomePromoEntry | undefined, variant: "inline" | "product-card") {
-  const fallback = variant === "inline" ? 8000 : 7000;
+function getRotationMs(
+  promo: HomePromoEntry | undefined,
+  variant: "popup" | "inline" | "product-card"
+) {
+  const fallback =
+    variant === "popup" ? 6000 : variant === "inline" ? 8000 : 7000;
   if (!promo?.rotationSeconds) {
     return fallback;
   }
@@ -26,6 +31,7 @@ export default function RotatingSponsoredPlacement({
   variant,
   initialIndex = 0,
   className,
+  trackEvents = true,
 }: RotatingSponsoredPlacementProps) {
   const activePromos = useMemo(
     () => promos.filter((promo) => promo.enabled),
@@ -56,12 +62,27 @@ export default function RotatingSponsoredPlacement({
 
   return (
     <div className={className}>
-      <SponsoredPlacement
-        key={`${variant}-${activePromo.id}`}
-        locale={locale}
-        promo={activePromo}
-        variant={variant}
-      />
+      {variant === "popup" ? (
+        <div
+          className={`overflow-hidden rounded-[1.7rem] border bg-gradient-to-br ${activePromo.accentClassName} p-4 shadow-[0_20px_60px_-32px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
+        >
+          <SponsoredPlacement
+            key={`${variant}-${activePromo.id}`}
+            locale={locale}
+            promo={activePromo}
+            variant={variant}
+            trackEvents={trackEvents}
+          />
+        </div>
+      ) : (
+        <SponsoredPlacement
+          key={`${variant}-${activePromo.id}`}
+          locale={locale}
+          promo={activePromo}
+          variant={variant}
+          trackEvents={trackEvents}
+        />
+      )}
       {activePromos.length > 1 ? (
         <div className="mt-3 flex items-center justify-center gap-1.5">
           {activePromos.map((promo, index) => (
