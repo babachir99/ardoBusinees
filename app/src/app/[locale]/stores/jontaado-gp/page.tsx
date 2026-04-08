@@ -12,6 +12,7 @@ import GpTripCard from "@/components/gp/GpTripCard";
 import { resolveGpPublishAccess } from "@/components/gp/gpPublishAccess";
 import { hasAnyUserRole } from "@/lib/userRoles";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
+import { getGpMarketplaceSnapshot, getGpStoreSnapshot } from "@/lib/gpSnapshots";
 
 const currencyLabelMap: Record<string, string> = {
   XOF: "FCFA",
@@ -42,10 +43,7 @@ export default async function GpPage({
   const session = await getServerSession(authOptions);
 
   const [store, viewer] = await Promise.all([
-    prisma.store.findUnique({
-      where: { slug: "jontaado-gp" },
-      select: { id: true, name: true, description: true },
-    }),
+    getGpStoreSnapshot(),
     session?.user?.id
       ? prisma.user.findUnique({
           where: { id: session.user.id },
@@ -93,64 +91,14 @@ export default async function GpPage({
   const hasMinPrice = Number.isFinite(parsedMinPrice) && parsedMinPrice > 0;
   const hasMaxPrice = Number.isFinite(parsedMaxPrice) && parsedMaxPrice > 0;
 
-  const where: Record<string, unknown> = {
-    storeId: store.id,
-    isActive: true,
-    status: "OPEN",
-  };
-
-  if (normalizedFrom) {
-    where.originCity = { contains: normalizedFrom, mode: "insensitive" };
-  }
-
-  if (normalizedTo) {
-    where.destinationCity = { contains: normalizedTo, mode: "insensitive" };
-  }
-
-  if (normalizedDepartureDate) {
-    const start = new Date(`${normalizedDepartureDate}T00:00:00`);
-    if (!Number.isNaN(start.getTime())) {
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      where.flightDate = { gte: start, lt: end };
-    }
-  }
-
-  if (selectedCurrency !== "ALL") {
-    where.currency = selectedCurrency;
-
-    if (hasMinPrice || hasMaxPrice) {
-      where.pricePerKgCents = {
-        ...(hasMinPrice ? { gte: Math.trunc(parsedMinPrice) } : {}),
-        ...(hasMaxPrice ? { lte: Math.trunc(parsedMaxPrice) } : {}),
-      };
-    }
-  }
-
-  const [trips, totalTrips, activeTransporters, myBookings] = await Promise.all([
-    prisma.gpTrip.findMany({
-      where,
-      orderBy: [{ flightDate: "asc" }, { createdAt: "desc" }],
-      include: {
-        transporter: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            transporterRating: true,
-            transporterReviewCount: true,
-          },
-        },
-      },
-      take: 60,
-    }),
-    prisma.gpTrip.count({
-      where: { storeId: store.id, isActive: true, status: "OPEN" },
-    }),
-    prisma.gpTrip.findMany({
-      where: { storeId: store.id, isActive: true, status: "OPEN" },
-      distinct: ["transporterId"],
-      select: { transporterId: true },
+  const [marketplaceSnapshot, myBookings] = await Promise.all([
+    getGpMarketplaceSnapshot(store.id, {
+      from: normalizedFrom,
+      to: normalizedTo,
+      departureDate: normalizedDepartureDate,
+      minPrice: hasMinPrice ? String(Math.trunc(parsedMinPrice)) : "",
+      maxPrice: hasMaxPrice ? String(Math.trunc(parsedMaxPrice)) : "",
+      currency: selectedCurrency,
     }),
     session?.user?.id
       ? prisma.gpTripBooking.findMany({
@@ -162,6 +110,15 @@ export default async function GpPage({
         })
       : Promise.resolve([]),
   ]);
+
+  const trips = marketplaceSnapshot.trips.map((trip) => ({
+    ...trip,
+    flightDate: new Date(trip.flightDate),
+    deliveryStartAt: trip.deliveryStartAt ? new Date(trip.deliveryStartAt) : null,
+    deliveryEndAt: trip.deliveryEndAt ? new Date(trip.deliveryEndAt) : null,
+  }));
+  const totalTrips = marketplaceSnapshot.totalTrips;
+  const activeTransportersCount = marketplaceSnapshot.activeTransportersCount;
 
   const bookingStatusByTrip = new Map(myBookings.map((booking) => [booking.tripId, booking.status]));
   const publishAccess = resolveGpPublishAccess(viewer, Boolean(session?.user?.id));
@@ -206,7 +163,10 @@ export default async function GpPage({
           }
           metrics={[
             { value: String(totalTrips), label: locale === "fr" ? "Annonces actives" : "Active listings" },
-            { value: String(activeTransporters.length), label: locale === "fr" ? "Transporteurs actifs" : "Active transporters" },
+            {
+              value: String(activeTransportersCount),
+              label: locale === "fr" ? "Transporteurs actifs" : "Active transporters",
+            },
             {
               value: avgPriceValue !== null && avgCurrencyLabel ? `${avgPriceValue} ${avgCurrencyLabel}` : "-",
               label: locale === "fr" ? "Prix moyen" : "Average price",

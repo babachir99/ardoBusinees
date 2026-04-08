@@ -1,28 +1,15 @@
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
-import { prisma } from "@/lib/prisma";
 import SearchBar from "@/components/search/SearchBar";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
+import { getHeaderSearchSnapshot } from "@/lib/catalogSnapshots";
 
 type AppHeaderProps = {
   locale: string;
 };
 
 export default async function AppHeader({ locale }: AppHeaderProps) {
-  const [categories, recentProducts] = await Promise.all([
-    prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      take: 24,
-      select: { name: true, slug: true },
-    }),
-    prisma.product.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { title: true },
-    }),
-  ]);
+  const { categories, recentProducts } = await getHeaderSearchSnapshot();
 
   return (
     <header className="sticky top-3 z-40 w-full box-border">
@@ -59,6 +46,7 @@ export default async function AppHeader({ locale }: AppHeaderProps) {
             showCart={false}
             showNotificationsLink
             iconOnly
+            showInboxCount={false}
           />
         </div>
       </div>

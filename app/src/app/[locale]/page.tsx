@@ -16,6 +16,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getHomePromoEntries } from "@/lib/homePromos";
 import { filterHomePromosForPlacement } from "@/lib/homePromos.shared";
+import { getHomeShellSnapshot } from "@/lib/catalogSnapshots";
 
 const storeLogos: Record<string, string> = {
   "jontaado-immo": "/stores/immo.png",
@@ -124,11 +125,7 @@ export default async function HomePage({
   const [
     session,
     products,
-    stores,
-    categories,
-    suggestions,
-    sellerHints,
-    sidebarRootCategories,
+    homeShell,
     homePromoConfig,
   ] = await Promise.all([
     getServerSession(authOptions),
@@ -163,51 +160,14 @@ export default async function HomePage({
           : {}),
       },
       orderBy,
-      take: 24,
+      take: 12,
       select: homeProductSelect,
     }) as Prisma.PrismaPromise<HomeProduct[]>,
-    prisma.store.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, slug: true, name: true, type: true },
-    }),
-    prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { name: true, slug: true },
-    }),
-    prisma.product.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      select: { title: true },
-    }),
-    prisma.sellerProfile.findMany({
-      orderBy: { displayName: "asc" },
-      take: 6,
-      select: { displayName: true },
-    }),
-    prisma.category.findMany({
-      where: {
-        isActive: true,
-        parentId: null,
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        children: {
-          where: {
-            isActive: true,
-          },
-          orderBy: { name: "asc" },
-          select: { id: true, name: true, slug: true },
-        },
-      },
-      orderBy: { name: "asc" },
-    }),
+    getHomeShellSnapshot(),
     getHomePromoEntries(),
   ]);
+
+  const { stores, categories, suggestions, sellerHints, sidebarRootCategories } = homeShell;
 
   const now = new Date();
   const isBoosted = (product: typeof products[number]) =>
@@ -422,7 +382,7 @@ export default async function HomePage({
             OR: recommendationOrFilters,
           },
           orderBy: [{ boostStatus: "desc" }, { createdAt: "desc" }],
-          take: 18,
+          take: 8,
           select: homeProductSelect,
         })) as HomeProduct[])
       : [];
@@ -754,6 +714,8 @@ export default async function HomePage({
           locale={locale}
           showSellerLink
           className="flex items-center gap-2 text-sm xl:shrink-0"
+          showInboxCount={false}
+          showAdminTodoCount={false}
         />
       </header>
 

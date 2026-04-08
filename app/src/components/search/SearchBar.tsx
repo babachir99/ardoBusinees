@@ -160,6 +160,18 @@ export default function SearchBar({
   const [sort, setSort] = useState(initialSort ?? "recent");
   const didMountRef = useRef(false);
   const isFr = locale === "fr";
+  const uniqueSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+
+    return suggestions.filter((item) => {
+      const normalized = canonicalizeSearchTerm(item);
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+  }, [suggestions]);
 
   const searchHref = useMemo(
     () => buildSearchHref({ targetPath, query, category, sort }),
@@ -239,8 +251,8 @@ export default function SearchBar({
         className={`min-w-0 flex-1 bg-transparent text-zinc-100 outline-none placeholder:text-zinc-500 ${compact ? "text-sm" : "text-xs"}`}
       />
       <datalist id="search-suggestions">
-        {suggestions.map((item) => (
-          <option key={item} value={item} />
+        {uniqueSuggestions.map((item) => (
+          <option key={canonicalizeSearchTerm(item)} value={item} />
         ))}
       </datalist>
       <div className="hidden items-center gap-2 xl:flex">

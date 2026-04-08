@@ -13,10 +13,12 @@ type UserHeaderActionsProps = {
   className?: string;
   showSellerLink?: boolean;
   showAdminLink?: boolean;
+  showAdminTodoCount?: boolean;
   sellerHref?: string;
   showCart?: boolean;
   showNotificationsLink?: boolean;
   iconOnly?: boolean;
+  showInboxCount?: boolean;
 };
 
 export default async function UserHeaderActions({
@@ -24,18 +26,20 @@ export default async function UserHeaderActions({
   className,
   showSellerLink = false,
   showAdminLink = true,
+  showAdminTodoCount = true,
   sellerHref = "/seller",
   showCart = true,
   showNotificationsLink = false,
   iconOnly = false,
+  showInboxCount = true,
 }: UserHeaderActionsProps) {
   const session = await getServerSession(authOptions);
-  const inboxCount = session?.user?.id
+  const inboxCount = session?.user?.id && showInboxCount
     ? await getInboxUnreadCount(session.user.id)
     : 0;
 
   let adminTodoCount = 0;
-  if (showAdminLink && session?.user?.role === "ADMIN") {
+  if (showAdminLink && showAdminTodoCount && session?.user?.role === "ADMIN") {
     const last7Days = new Date();
     last7Days.setDate(last7Days.getDate() - 7);
 
@@ -99,15 +103,17 @@ export default async function UserHeaderActions({
           }
         >
           <span>Admin</span>
-          <span
-            className={`absolute -right-1.5 -top-1.5 inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-zinc-950 ${
-              adminTodoCount > 5
-                ? "bg-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.45)]"
-                : "bg-emerald-400 shadow-[0_2px_8px_rgba(16,185,129,0.45)]"
-            }`}
-          >
-            {adminTodoCount > 99 ? "99+" : adminTodoCount}
-          </span>
+          {showAdminTodoCount ? (
+            <span
+              className={`absolute -right-1.5 -top-1.5 inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-zinc-950 ${
+                adminTodoCount > 5
+                  ? "bg-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.45)]"
+                  : "bg-emerald-400 shadow-[0_2px_8px_rgba(16,185,129,0.45)]"
+              }`}
+            >
+              {adminTodoCount > 99 ? "99+" : adminTodoCount}
+            </span>
+          ) : null}
         </Link>
       )}
 
@@ -139,7 +145,7 @@ export default async function UserHeaderActions({
               strokeLinejoin="round"
             />
           </svg>
-          {inboxCount > 0 && (
+          {showInboxCount && inboxCount > 0 && (
             <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full bg-emerald-400 px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-zinc-950">
               {inboxCount > 99 ? "99+" : inboxCount}
             </span>

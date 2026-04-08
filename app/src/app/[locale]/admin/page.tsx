@@ -6,9 +6,9 @@ import AdminTrendsPanel from "@/components/admin/AdminTrendsPanel";
 import AdminOpsHub from "@/components/admin/AdminOpsHub";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import { hasUserRole } from "@/lib/userRoles";
+import { getAdminDashboardSnapshot } from "@/lib/adminDashboardSnapshot";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -40,102 +40,43 @@ export default async function AdminPage() {
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  const last30Days = new Date(now);
-  last30Days.setDate(last30Days.getDate() - 30);
-  const last7Days = new Date(now);
-  last7Days.setDate(last7Days.getDate() - 7);
   const trendDays = 30;
   const trendStart = new Date(todayStart);
   trendStart.setDate(trendStart.getDate() - (trendDays - 1));
 
-  const [
+  const {
     pendingKycCount,
     ordersTodayCount,
     pendingOrdersCount,
     inactiveProductsCount,
-    revenueTotal,
-    revenueMonth,
-    avgOrder,
+    revenueTotalCents,
+    revenueMonthCents,
+    avgOrderCents,
     recentOrders,
     recentUsers,
-    topItems,
-    topSellerStats,
-  ] = await Promise.all([
-    prisma.kycSubmission.count({ where: { status: "PENDING" } }),
-    prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
-    prisma.order.count({ where: { status: "PENDING" } }),
-    prisma.product.count({ where: { isActive: false } }),
-    prisma.order.aggregate({
-      _sum: { totalCents: true },
-      where: { paymentStatus: "PAID" },
-    }),
-    prisma.order.aggregate({
-      _sum: { totalCents: true },
-      where: { paymentStatus: "PAID", createdAt: { gte: last30Days } },
-    }),
-    prisma.order.aggregate({
-      _avg: { totalCents: true },
-      where: { paymentStatus: "PAID" },
-    }),
-    prisma.order.findMany({
-      where: { createdAt: { gte: trendStart } },
-      select: { totalCents: true, paymentStatus: true, createdAt: true },
-    }),
-    prisma.user.findMany({
-      where: { createdAt: { gte: trendStart } },
-      select: { createdAt: true },
-    }),
-    prisma.orderItem.groupBy({
-      by: ["productId"],
-      _sum: { quantity: true },
-      where: { order: { paymentStatus: "PAID" } },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: 5,
-    }),
-    prisma.order.groupBy({
-      by: ["sellerId"],
-      _sum: { totalCents: true },
-      _count: { _all: true },
-      where: { paymentStatus: "PAID", sellerId: { not: null } },
-      orderBy: { _sum: { totalCents: "desc" } },
-      take: 5,
-    }),
-  ]);
-
-  const topProductIds = topItems.map((item) => item.productId);
-  const topProducts = topProductIds.length
-    ? await prisma.product.findMany({
-        where: { id: { in: topProductIds } },
-        select: { id: true, title: true, slug: true, seller: { select: { displayName: true } } },
-      })
-    : [];
-  const topProductMap = new Map(topProducts.map((product) => [product.id, product]));
-
-  const topSellerIds = topSellerStats
-    .map((stat) => stat.sellerId)
-    .filter((id): id is string => Boolean(id));
-  const sellerProfiles = topSellerIds.length
-    ? await prisma.sellerProfile.findMany({
-        where: { id: { in: topSellerIds } },
-        select: {
-          id: true,
-          displayName: true,
-          slug: true,
-          user: { select: { name: true, email: true } },
-        },
-      })
-    : [];
-  const sellerMap = new Map(sellerProfiles.map((seller) => [seller.id, seller]));
-  const topSellers = topSellerStats.map((stat) => {
-    const seller = stat.sellerId ? sellerMap.get(stat.sellerId) : undefined;
-    return {
-      id: stat.sellerId ?? "",
-      name: seller?.displayName ?? seller?.user?.name ?? t("topSellers.unknownSeller"),
-      slug: seller?.slug ?? null,
-      revenueCents: stat._sum.totalCents ?? 0,
-      orders: stat._count._all ?? 0,
-    };
-  });
+    topProducts,
+    topSellers,
+    prestaPayoutReadyCount,
+    tiakPayoutReadyCount,
+    disputesActiveCount,
+    paymentLedgerFailed7dCount,
+    disputesActiveItems,
+    prestaPayoutReadyItems,
+    tiakPayoutReadyItems,
+    paymentFailedItems,
+    immoMonetizationIssueCount,
+    immoMonetizationItems,
+    autoMonetizationIssueCount,
+    autoMonetizationItems,
+    carsMonetizationIssueCount,
+    carsMonetizationItems,
+    trustReportsPendingCount,
+    trustDisputesActiveCount,
+    trustReportItems,
+    trustDisputeItems,
+    liveSponsoredCampaigns,
+    configuredSponsoredCampaigns,
+  } = await getAdminDashboardSnapshot();
 
   const dayKey = (date: Date) => {
     const year = date.getFullYear();
@@ -167,7 +108,7 @@ export default async function AdminPage() {
   ) as Record<string, number>;
 
   for (const order of recentOrders) {
-    const key = dayKey(order.createdAt);
+    const key = dayKey(new Date(order.createdAtMs));
     if (key in ordersByDay) {
       ordersByDay[key] += 1;
       if (order.paymentStatus === "PAID") {
@@ -177,7 +118,7 @@ export default async function AdminPage() {
   }
 
   for (const user of recentUsers) {
-    const key = dayKey(user.createdAt);
+    const key = dayKey(new Date(user.createdAtMs));
     if (key in usersByDay) {
       usersByDay[key] += 1;
     }
@@ -187,239 +128,13 @@ export default async function AdminPage() {
   const ordersSeries = trendDates.map((d) => ordersByDay[d.key] ?? 0);
   const usersSeries = trendDates.map((d) => usersByDay[d.key] ?? 0);
   const topProductMax = Math.max(
-    ...topItems.map((item) => item._sum.quantity ?? 0),
+    ...topProducts.map((item) => item.units),
     1
   );
   const topSellerMax = Math.max(
     ...topSellers.map((seller) => seller.revenueCents),
     1
   );
-
-  const [
-    prestaPayoutReadyCount,
-    tiakPayoutReadyCount,
-    disputesActiveCount,
-    paymentLedgerFailed7dCount,
-    disputesActiveItems,
-    prestaPayoutReadyItems,
-    tiakPayoutReadyItems,
-    paymentFailedItems,
-    immoMonetizationIssueCount,
-    immoMonetizationItems,
-    autoMonetizationIssueCount,
-    autoMonetizationItems,
-    carsMonetizationIssueCount,
-    carsMonetizationItems,
-    trustReportsPendingCount,
-    trustDisputesActiveCount,
-    trustReportItems,
-    trustDisputeItems,
-  ] = await Promise.all([
-    prisma.prestaPayout.count({ where: { status: "READY" } }).catch(() => null),
-    prisma.tiakPayout.count({ where: { status: "READY" } }).catch(() => null),
-    prisma.dispute.count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } }).catch(() => null),
-    prisma.paymentLedger
-      .count({ where: { status: "FAILED", createdAt: { gte: last7Days } } })
-      .catch(() => null),
-    prisma.dispute
-      .findMany({
-        where: { status: { in: ["OPEN", "IN_REVIEW"] } },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          contextType: true,
-          contextId: true,
-          status: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-    prisma.prestaPayout
-      .findMany({
-        where: { status: "READY" },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          bookingId: true,
-          status: true,
-          amountTotalCents: true,
-          currency: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-    prisma.tiakPayout
-      .findMany({
-        where: { status: "READY" },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          deliveryId: true,
-          status: true,
-          amountTotalCents: true,
-          currency: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-    prisma.paymentLedger
-      .findMany({
-        where: { status: "FAILED", createdAt: { gte: last7Days } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          contextType: true,
-          contextId: true,
-          status: true,
-          amountTotalCents: true,
-          currency: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-    prisma.immoMonetizationPurchase
-      .count({
-        where: {
-          status: { in: ["PENDING", "FAILED"] },
-          createdAt: { gte: last7Days },
-        },
-      })
-      .catch(() => null),
-    prisma.immoMonetizationPurchase
-      .findMany({
-        where: {
-          status: { in: ["PENDING", "FAILED", "CONFIRMED"] },
-          createdAt: { gte: last7Days },
-        },
-        orderBy: [{ createdAt: "asc" }],
-        take: 20,
-        select: {
-          id: true,
-          listingId: true,
-          status: true,
-          amountCents: true,
-          currency: true,
-          createdAt: true,
-          kind: true,
-          paymentLedger: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-        },
-      })
-      .catch(() => null),
-
-    prisma.autoMonetizationPurchase
-      .count({
-        where: {
-          status: { in: ["PENDING", "FAILED"] },
-          createdAt: { gte: last7Days },
-        },
-      })
-      .catch(() => null),
-    prisma.autoMonetizationPurchase
-      .findMany({
-        where: {
-          status: { in: ["PENDING", "FAILED", "CONFIRMED"] },
-          createdAt: { gte: last7Days },
-        },
-        orderBy: [{ createdAt: "asc" }],
-        take: 20,
-        select: {
-          id: true,
-          listingId: true,
-          status: true,
-          amountCents: true,
-          currency: true,
-          createdAt: true,
-          kind: true,
-          paymentLedger: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-        },
-      })
-      .catch(() => null),
-
-    prisma.carMonetizationPurchase
-      .count({
-        where: {
-          status: { in: ["PENDING", "FAILED"] },
-          createdAt: { gte: last7Days },
-        },
-      })
-      .catch(() => null),
-    prisma.carMonetizationPurchase
-      .findMany({
-        where: {
-          status: { in: ["PENDING", "FAILED", "CONFIRMED"] },
-          createdAt: { gte: last7Days },
-        },
-        orderBy: [{ createdAt: "asc" }],
-        take: 20,
-        select: {
-          id: true,
-          listingId: true,
-          status: true,
-          amountCents: true,
-          currency: true,
-          createdAt: true,
-          kind: true,
-          paymentLedger: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-        },
-      })
-      .catch(() => null),
-    prisma.report
-      .count({ where: { status: "PENDING" } })
-      .catch(() => null),
-    prisma.trustDispute
-      .count({ where: { status: { in: ["OPEN", "IN_REVIEW"] } } })
-      .catch(() => null),
-    prisma.report
-      .findMany({
-        where: { status: { in: ["PENDING", "UNDER_REVIEW"] } },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          reporterId: true,
-          reportedId: true,
-          status: true,
-          reason: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-    prisma.trustDispute
-      .findMany({
-        where: { status: { in: ["OPEN", "IN_REVIEW"] } },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        select: {
-          id: true,
-          vertical: true,
-          orderId: true,
-          userId: true,
-          status: true,
-          reason: true,
-          createdAt: true,
-        },
-      })
-      .catch(() => null),
-  ]);
 
   const formatAgeLabel = (date: Date) => {
     const diff = Math.max(0, now.getTime() - date.getTime());
@@ -450,115 +165,115 @@ export default async function AdminPage() {
       id: item.id,
       refLabel: `PRESTA - ${item.bookingId}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
       action: { kind: "release" as const, label: t("opsHub.actions.release"), releaseType: "PRESTA" as const },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((tiakPayoutReadyItems ?? []).map((item) => ({
       type: "PAYOUT" as const,
       id: item.id,
       refLabel: `TIAK - ${item.deliveryId}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
       action: { kind: "release" as const, label: t("opsHub.actions.release"), releaseType: "TIAK" as const },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((disputesActiveItems ?? []).map((item) => ({
       type: "DISPUTE" as const,
       id: item.id,
       refLabel: `${item.contextType} - ${item.contextId}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.openDispute"),
         href: `/admin?opsFilter=DISPUTE&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((paymentFailedItems ?? []).map((item) => ({
       type: "PAYMENT_FAILED" as const,
       id: item.id,
       refLabel: `${item.contextType} - ${item.contextId}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountTotalCents, item.currency, locale),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.inspect"),
         href: `/admin?opsFilter=PAYMENT_FAILED&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((immoMonetizationItems ?? []).map((item) => ({
       type: "IMMO_MONETIZATION" as const,
       id: item.id,
       refLabel: `${item.kind} - ${item.listingId}`,
       status: item.paymentLedger?.status ?? item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountCents, item.currency, locale),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.inspect"),
         href: `/admin?opsFilter=IMMO_MONETIZATION&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((autoMonetizationItems ?? []).map((item) => ({
       type: "AUTO_MONETIZATION" as const,
       id: item.id,
       refLabel: `${item.kind} - ${item.listingId}`,
       status: item.paymentLedger?.status ?? item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountCents, item.currency, locale),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.inspect"),
         href: `/admin?opsFilter=AUTO_MONETIZATION&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((carsMonetizationItems ?? []).map((item) => ({
       type: "CARS_MONETIZATION" as const,
       id: item.id,
       refLabel: `${item.kind} - ${item.listingId}`,
       status: item.paymentLedger?.status ?? item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       amountLabel: formatMoney(item.amountCents, item.currency, locale),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.inspect"),
         href: `/admin?opsFilter=CARS_MONETIZATION&focus=${item.id}#ops-queue`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((trustReportItems ?? []).map((item) => ({
       type: "TRUST" as const,
       id: item.id,
       refLabel: `Report - ${item.reportedId}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.inspect"),
         href: `/admin/trust?tab=reports&focus=${item.id}`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
     ...((trustDisputeItems ?? []).map((item) => ({
       type: "TRUST" as const,
       id: item.id,
       refLabel: `Trust dispute - ${item.vertical}${item.orderId ? ` - ${item.orderId}` : ""}`,
       status: item.status,
-      ageLabel: formatAgeLabel(item.createdAt),
+      ageLabel: formatAgeLabel(new Date(item.createdAtMs)),
       action: {
         kind: "link" as const,
         label: t("opsHub.actions.openDispute"),
         href: `/admin/trust?tab=disputes&focus=${item.id}`,
       },
-      createdAtMs: item.createdAt.getTime(),
+      createdAtMs: item.createdAtMs,
     }))),
   ];
 
@@ -613,20 +328,19 @@ export default async function AdminPage() {
   const opsInsights = {
     productsHref: "/admin/products",
     sellersHref: "/admin/users",
-    products: topItems.map((item) => {
-      const product = topProductMap.get(item.productId);
-      const units = item._sum.quantity ?? 0;
+    products: topProducts.map((item) => {
+      const units = item.units;
       return {
-        id: item.productId,
-        title: product?.title ?? t("topProducts.unknownProduct"),
-        sellerName: product?.seller?.displayName ?? t("topProducts.unknownSeller"),
+        id: item.id,
+        title: item.title ?? t("topProducts.unknownProduct"),
+        sellerName: item.sellerName ?? t("topProducts.unknownSeller"),
         units,
         barPercent: Math.max(8, Math.round((units / topProductMax) * 100)),
       };
     }),
     sellers: topSellers.map((seller) => ({
-      id: seller.id || seller.name,
-      name: seller.name,
+      id: seller.id || seller.name || t("topSellers.unknownSeller"),
+      name: seller.name ?? t("topSellers.unknownSeller"),
       orders: seller.orders,
       revenueLabel: formatMoney(seller.revenueCents, "XOF", locale),
       barPercent: Math.max(8, Math.round((seller.revenueCents / topSellerMax) * 100)),
@@ -649,6 +363,15 @@ export default async function AdminPage() {
           />
         </Link>
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/campaigns"
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-200/40 hover:bg-emerald-400/15"
+          >
+            <span>{isFr ? "Campagnes" : "Campaigns"}</span>
+            <span className="rounded-full bg-emerald-300/20 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
+              {liveSponsoredCampaigns}
+            </span>
+          </Link>
           <Link
             href="/seller"
             className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
@@ -676,15 +399,15 @@ export default async function AdminPage() {
             {[
               {
                 label: t("kpis.revenueTotal"),
-                value: formatMoney(revenueTotal._sum.totalCents ?? 0, "XOF", locale),
+                value: formatMoney(revenueTotalCents, "XOF", locale),
               },
               {
                 label: t("kpis.revenueMonth"),
-                value: formatMoney(revenueMonth._sum.totalCents ?? 0, "XOF", locale),
+                value: formatMoney(revenueMonthCents, "XOF", locale),
               },
               {
                 label: t("kpis.avgOrder"),
-                value: formatMoney(Math.round(avgOrder._avg.totalCents ?? 0), "XOF", locale),
+                value: formatMoney(avgOrderCents, "XOF", locale),
               },
               {
                 label: t("kpis.ordersToday"),
@@ -777,8 +500,22 @@ export default async function AdminPage() {
                 key={card.title}
                 className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-white/35"
               >
-                <h3 className="text-sm font-semibold text-white">{card.title}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-white">{card.title}</h3>
+                  {card.href === "/admin/campaigns" ? (
+                    <span className="inline-flex min-w-8 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">
+                      {liveSponsoredCampaigns}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs text-zinc-400">{card.subtitle}</p>
+                {card.href === "/admin/campaigns" ? (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    {isFr
+                      ? `${configuredSponsoredCampaigns} campagne(s) configuree(s) · ${liveSponsoredCampaigns} active(s)`
+                      : `${configuredSponsoredCampaigns} campaign(s) configured · ${liveSponsoredCampaigns} live`}
+                  </p>
+                ) : null}
                 <Link
                   href={card.href}
                   className="mt-4 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"
