@@ -1,4 +1,4 @@
-import type { HomePromoEntry } from "@/lib/homePromos.shared";
+﻿import type { HomePromoEntry } from "@/lib/homePromos.shared";
 import { isHomePromoScheduledLive } from "@/lib/homePromos.shared";
 
 export const targetingOptions = [
@@ -267,3 +267,4 @@ export function buildDemoPreviewPromos(
     },
   };
 }
+

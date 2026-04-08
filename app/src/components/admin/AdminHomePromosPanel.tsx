@@ -1,5 +1,6 @@
-"use client";
+ï»¿"use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
@@ -23,7 +24,7 @@ type AdminHomePromosPanelProps = {
   placementOptions: HomePromoEntry["placement"][];
   audienceOptions: HomePromoEntry["audience"][];
   lastUpdatedAt?: string | null;
-  lastUpdatedBy?: string | null;
+  lastUpdatedBy?: { name?: string | null; email?: string | null } | string | null;
 };
 
 type PreviewMode = "popup" | "inline" | "product-card";
@@ -32,16 +33,19 @@ type SectionKey = "content" | "targeting" | "settings" | "planning";
 type AccordionSectionProps = {
   title: string;
   badge?: string;
+  icon?: ReactNode;
   open: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
-function createDraftPromo(locale: string, accentOptions: string[]): HomePromoEntry {
+function buildDraftPromoSeed(
+  locale: string,
+  accentOptions: string[]
+): Omit<HomePromoEntry, "id"> {
   const isFr = locale === "fr";
 
   return {
-    id: buildGeneratedPromoId(),
     tag: isFr ? "Sponsorise" : "Sponsored",
     title: isFr ? "Nouvelle campagne" : "New campaign",
     description: isFr
@@ -69,10 +73,29 @@ function createDraftPromo(locale: string, accentOptions: string[]): HomePromoEnt
   };
 }
 
+function createDraftPromo(locale: string, accentOptions: string[]): HomePromoEntry {
+  return {
+    id: buildGeneratedPromoId(),
+    ...buildDraftPromoSeed(locale, accentOptions),
+  };
+}
+
 function getPlacementFromPreview(previewMode: PreviewMode): HomePromoEntry["placement"] {
   if (previewMode === "popup") return "HOME_POPUP";
   if (previewMode === "product-card") return "HOME_PRODUCT_CARD";
   return "HOME_INLINE";
+}
+
+function getActorLabel(value: { name?: string | null; email?: string | null } | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return value.name ?? value.email ?? null;
 }
 
 function IconActionButton({
@@ -84,7 +107,7 @@ function IconActionButton({
 }: {
   label: string;
   title?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
 }) {
@@ -99,6 +122,141 @@ function IconActionButton({
     >
       {children}
     </button>
+  );
+}
+
+function CopyGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <rect x="7" y="4" width="9" height="11" rx="2" />
+      <path d="M5 13H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function TrashGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <path d="M3.5 5.5h13" />
+      <path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
+      <path d="M6.5 8v6.5" />
+      <path d="M10 8v6.5" />
+      <path d="M13.5 8v6.5" />
+      <path d="M5.5 5.5l.7 10a2 2 0 0 0 2 1.8h3.6a2 2 0 0 0 2-1.8l.7-10" />
+    </svg>
+  );
+}
+
+function InfoGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3.5 w-3.5">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 8.2h.01" />
+      <path d="M9.4 9.8h.6v3.1h.6" />
+    </svg>
+  );
+}
+
+function ContentGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <rect x="3.5" y="4" width="13" height="12" rx="2.5" />
+      <path d="M6.5 8h7" />
+      <path d="M6.5 11h5.5" />
+    </svg>
+  );
+}
+
+function TargetGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <circle cx="10" cy="10" r="5.5" />
+      <circle cx="10" cy="10" r="2" />
+      <path d="M10 2.8v2.1" />
+      <path d="M10 15.1v2.1" />
+      <path d="M17.2 10h-2.1" />
+      <path d="M4.9 10H2.8" />
+    </svg>
+  );
+}
+
+function SettingsGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <path d="M10 4.2V2.8" />
+      <path d="M10 17.2v-1.4" />
+      <path d="M4.8 6.1 3.7 5" />
+      <path d="m16.3 15-1.1-1.1" />
+      <path d="M4.2 10H2.8" />
+      <path d="M17.2 10h-1.4" />
+      <path d="M4.8 13.9 3.7 15" />
+      <path d="m16.3 5-1.1 1.1" />
+      <circle cx="10" cy="10" r="3.2" />
+    </svg>
+  );
+}
+
+function CalendarGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
+      <rect x="3.5" y="4.5" width="13" height="11.5" rx="2.5" />
+      <path d="M6.5 2.8v3" />
+      <path d="M13.5 2.8v3" />
+      <path d="M3.5 8h13" />
+    </svg>
+  );
+}
+
+function PresetMockup({ mode }: { mode: PreviewMode }) {
+  if (mode === "popup") {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-400/18 via-emerald-500/6 to-zinc-950 p-3">
+        <div className="mx-auto flex h-24 max-w-[180px] flex-col justify-between rounded-[1.35rem] border border-white/10 bg-zinc-950/70 p-3">
+          <div className="flex items-center justify-between">
+            <span className="h-2 w-12 rounded-full bg-white/20" />
+            <span className="h-2 w-2 rounded-full bg-emerald-300" />
+          </div>
+          <div className="space-y-2">
+            <span className="block h-3 w-24 rounded-full bg-white/20" />
+            <span className="block h-2 w-32 rounded-full bg-white/10" />
+            <span className="block h-2 w-20 rounded-full bg-white/10" />
+          </div>
+          <span className="inline-flex h-6 w-20 rounded-full bg-emerald-300/80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "product-card") {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-400/18 via-sky-500/6 to-zinc-950 p-3">
+        <div className="mx-auto flex h-24 max-w-[180px] flex-col rounded-[1.35rem] border border-white/10 bg-zinc-950/70 p-3">
+          <div className="flex items-center justify-between">
+            <span className="h-2 w-16 rounded-full bg-white/20" />
+            <span className="h-6 w-6 rounded-xl bg-white/10" />
+          </div>
+          <div className="mt-3 h-10 rounded-2xl bg-white/10" />
+          <div className="mt-3 space-y-2">
+            <span className="block h-2 w-28 rounded-full bg-white/15" />
+            <span className="block h-2 w-16 rounded-full bg-emerald-300/70" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-amber-400/18 via-orange-500/6 to-zinc-950 p-3">
+      <div className="mx-auto flex h-24 max-w-[220px] items-center gap-3 rounded-[1.35rem] border border-white/10 bg-zinc-950/70 p-3">
+        <div className="flex-1 space-y-2">
+          <span className="block h-2 w-16 rounded-full bg-white/20" />
+          <span className="block h-3 w-28 rounded-full bg-white/20" />
+          <span className="block h-2 w-20 rounded-full bg-white/10" />
+          <span className="inline-flex h-6 w-16 rounded-full bg-emerald-300/80" />
+        </div>
+        <div className="h-12 w-16 rounded-2xl bg-white/10" />
+      </div>
+    </div>
   );
 }
 
@@ -117,14 +275,14 @@ function FieldLabel({
           title={hint}
           className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[10px] text-zinc-500"
         >
-          ?
+          <InfoGlyph />
         </span>
       ) : null}
     </div>
   );
 }
 
-function AccordionSection({ title, badge, open, onToggle, children }: AccordionSectionProps) {
+function AccordionSection({ title, badge, icon, open, onToggle, children }: AccordionSectionProps) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/78 to-zinc-950/72 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
       <button
@@ -132,9 +290,16 @@ function AccordionSection({ title, badge, open, onToggle, children }: AccordionS
         onClick={onToggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-all duration-200 hover:bg-white/[0.03]"
       >
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-white">{title}</p>
-          {badge ? <p className="mt-1 text-xs text-zinc-400">{badge}</p> : null}
+        <div className="flex min-w-0 items-start gap-3">
+          {icon ? (
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-zinc-300">
+              {icon}
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-white">{title}</p>
+            {badge ? <p className="mt-1 text-xs text-zinc-400">{badge}</p> : null}
+          </div>
         </div>
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg text-zinc-300">
           {open ? "-" : "+"}
@@ -156,6 +321,7 @@ export default function AdminHomePromosPanel({
   lastUpdatedBy = null,
 }: AdminHomePromosPanelProps) {
   const isFr = locale === "fr";
+  const draftSeed = useMemo(() => buildDraftPromoSeed(locale, accentOptions), [accentOptions, locale]);
   const initialEntries =
     initialPromos.length > 0 ? initialPromos : [createDraftPromo(locale, accentOptions)];
 
@@ -167,7 +333,7 @@ export default function AdminHomePromosPanel({
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(lastUpdatedAt);
-  const [lastSavedBy, setLastSavedBy] = useState<string | null>(lastUpdatedBy);
+  const [lastSavedBy, setLastSavedBy] = useState<string | null>(getActorLabel(lastUpdatedBy));
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     content: true,
     targeting: false,
@@ -212,6 +378,75 @@ export default function AdminHomePromosPanel({
     }).format(new Date(lastSavedAt));
   }, [isFr, lastSavedAt, locale]);
 
+  const showGuidedStart =
+    !!selectedPromo &&
+    !selectedPromo.enabled &&
+    selectedPromo.title === draftSeed.title &&
+    selectedPromo.description === draftSeed.description &&
+    selectedPromo.href === draftSeed.href &&
+    selectedPromo.cta === draftSeed.cta &&
+    selectedPromo.placement === draftSeed.placement;
+
+  const previewChecks = useMemo(() => {
+    if (!selectedPromo) {
+      return [];
+    }
+
+    return [
+      {
+        label: isFr ? "Message" : "Copy",
+        complete: selectedPromo.title.trim().length > 4 && selectedPromo.description.trim().length > 16,
+      },
+      {
+        label: isFr ? "CTA" : "CTA",
+        complete: selectedPromo.cta.trim().length > 2 && selectedPromo.href.trim().length > 1,
+      },
+      {
+        label: isFr ? "Visuel" : "Visual",
+        complete: Boolean(selectedPromo.imageUrl || selectedPromo.advertiserLogoUrl),
+      },
+      {
+        label: isFr ? "Ciblage" : "Targeting",
+        complete:
+          selectedPromo.audience !== "ALL" || selectedPromo.targetStoreSlugs.length > 0 || selectedPromo.placement !== "HOME_INLINE",
+      },
+    ];
+  }, [isFr, selectedPromo]);
+
+  const stepProgress = useMemo(() => {
+    if (!selectedPromo) {
+      return [];
+    }
+
+    const items = [
+      {
+        key: "content",
+        label: isFr ? "Contenu" : "Content",
+        complete: selectedPromo.title.trim().length > 4 && selectedPromo.description.trim().length > 16,
+      },
+      {
+        key: "targeting",
+        label: isFr ? "Ciblage" : "Targeting",
+        complete: Boolean(selectedPromo.placement) && Boolean(selectedPromo.audience),
+      },
+      {
+        key: "settings",
+        label: isFr ? "Parametres" : "Settings",
+        complete: selectedPromo.priority > 0 && Boolean(selectedPromo.accentClassName),
+      },
+      {
+        key: "planning",
+        label: isFr ? "Planning" : "Planning",
+        complete: Boolean(selectedPromo.startAt || selectedPromo.endAt || selectedPromo.enabled),
+      },
+    ] as const;
+
+    return items;
+  }, [isFr, selectedPromo]);
+
+  const completedSteps = stepProgress.filter((step) => step.complete).length;
+  const progressPercent = stepProgress.length > 0 ? Math.round((completedSteps / stepProgress.length) * 100) : 0;
+
   function toggleSection(section: SectionKey) {
     setOpenSections((current) => ({
       ...current,
@@ -228,6 +463,75 @@ export default function AdminHomePromosPanel({
   function updateSelectedPromo<K extends keyof HomePromoEntry>(key: K, value: HomePromoEntry[K]) {
     setPromos((current) =>
       current.map((promo) => (promo.id === selectedPromoId ? { ...promo, [key]: value } : promo))
+    );
+  }
+
+  function applyPreset(mode: PreviewMode) {
+    if (!selectedPromo) {
+      return;
+    }
+
+    const presetMap: Record<PreviewMode, Partial<HomePromoEntry>> = {
+      popup: {
+        placement: "HOME_POPUP",
+        title: isFr ? "Lancement premium a la une" : "Premium launch in focus",
+        description: isFr
+          ? "Une prise de parole courte, forte et ultra-visible pour annoncer une offre ou une nouveaute."
+          : "A short, high-impact splash to announce an offer or a new release.",
+        cta: isFr ? "Voir l'offre" : "See the offer",
+        href: "/stores/jontaado-cares",
+        imageUrl: "/stores/last_cares.png",
+        accentClassName:
+          accentOptions[0] ??
+          "from-emerald-400/22 via-emerald-500/8 to-zinc-950 border-emerald-300/20",
+      },
+      inline: {
+        placement: "HOME_INLINE",
+        title: isFr ? "Bandeau sponsorise apres deux lignes" : "Sponsored banner after two rows",
+        description: isFr
+          ? "Le format le plus confortable pour raconter une promo, un lancement ou une verticale."
+          : "The cleanest format to tell the story of a promo, a launch, or a vertical.",
+        cta: isFr ? "Decouvrir" : "Discover",
+        href: "/stores/jontaado-presta",
+        imageUrl: "/stores/presta.png",
+        accentClassName:
+          accentOptions[1] ??
+          accentOptions[0] ??
+          "from-amber-400/22 via-orange-500/8 to-zinc-950 border-amber-300/20",
+      },
+      "product-card": {
+        placement: "HOME_PRODUCT_CARD",
+        title: isFr ? "Carte native dans le feed produit" : "Native card in the product feed",
+        description: isFr
+          ? "Un format discret, dense et naturel pour rejoindre la grille produits sans casser la lecture."
+          : "A dense, native-looking format that blends into the product grid without breaking flow.",
+        cta: isFr ? "En savoir plus" : "Learn more",
+        href: "/stores/jontaado-cars",
+        imageUrl: "/stores/cars.png",
+        accentClassName:
+          accentOptions[2] ??
+          accentOptions[0] ??
+          "from-cyan-400/22 via-sky-500/8 to-zinc-950 border-cyan-300/20",
+      },
+    };
+
+    const preset = presetMap[mode];
+    setPreviewMode(mode);
+    setPromos((current) =>
+      current.map((promo) =>
+        promo.id === selectedPromo.id
+          ? {
+              ...promo,
+              ...preset,
+            }
+          : promo
+      )
+    );
+    setOpenSections({ content: true, targeting: true, settings: false, planning: false });
+    setFeedback(
+      isFr
+        ? "Preset applique. Il ne reste plus qu'a ajuster le message et le ciblage."
+        : "Preset applied. You only need to fine-tune the message and targeting."
     );
   }
 
@@ -258,6 +562,32 @@ export default function AdminHomePromosPanel({
     setSelectedPromoId(duplicate.id);
     setPreviewMode(getPreviewVariant(duplicate.placement));
     setFeedback(isFr ? "Campagne dupliquee localement." : "Campaign duplicated locally.");
+  }
+
+  function duplicateFromFormat(mode: PreviewMode) {
+    if (!selectedPromo) {
+      return;
+    }
+
+    const duplicate: HomePromoEntry = {
+      ...selectedPromo,
+      id: buildGeneratedPromoId(),
+      placement: getPlacementFromPreview(mode),
+      title: `${selectedPromo.title} ${isFr ? "- Variante" : "- Variant"}`,
+      enabled: false,
+      startAt: null,
+      endAt: null,
+    };
+
+    setPromos((current) => [duplicate, ...current]);
+    setSelectedPromoId(duplicate.id);
+    setPreviewMode(mode);
+    setOpenSections({ content: true, targeting: true, settings: false, planning: false });
+    setFeedback(
+      isFr
+        ? "Variante dupliquee dans ce format. Il ne reste plus qu'a l'ajuster."
+        : "Variant duplicated in this format. You can now fine-tune it."
+    );
   }
 
   function removeSelectedPromo() {
@@ -320,7 +650,9 @@ export default function AdminHomePromosPanel({
         throw new Error(payload?.error ?? "SAVE_FAILED");
       }
 
-      const normalizedEntries = Array.isArray(payload?.entries) ? payload.entries : nextPromos;
+      const normalizedEntries: HomePromoEntry[] = Array.isArray(payload?.entries)
+        ? (payload.entries as HomePromoEntry[])
+        : nextPromos;
       setPromos(normalizedEntries);
       setSelectedPromoId((current) =>
         normalizedEntries.some((promo) => promo.id === current)
@@ -328,7 +660,7 @@ export default function AdminHomePromosPanel({
           : (normalizedEntries[0]?.id ?? "")
       );
       setLastSavedAt(payload?.lastUpdatedAt ?? new Date().toISOString());
-      setLastSavedBy(payload?.lastUpdatedBy ?? lastSavedBy ?? null);
+      setLastSavedBy(getActorLabel(payload?.lastUpdatedBy) ?? lastSavedBy ?? null);
       setFeedback(
         enabled
           ? isFr
@@ -374,7 +706,7 @@ export default function AdminHomePromosPanel({
               </h2>
               <p className="mt-1 text-sm text-zinc-400">
                 {isFr
-                  ? "L'essentiel a gauche, l'aperçu en direct a droite."
+                  ? "L'essentiel a gauche, l'apercu en direct a droite."
                   : "Keep essentials on the left and the live preview on the right."}
               </p>
             </div>
@@ -416,6 +748,57 @@ export default function AdminHomePromosPanel({
             >
               {isFr ? "+ Nouvelle campagne" : "+ New campaign"}
             </button>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/15 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                  {isFr ? "Progression" : "Progress"}
+                </p>
+                <p className="mt-1 text-sm text-zinc-300">
+                  {isFr
+                    ? `${completedSteps}/4 etapes pretes pour publication`
+                    : `${completedSteps}/4 steps ready to publish`}
+                </p>
+              </div>
+              <span className="rounded-full border border-emerald-300/15 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                {progressPercent}%
+              </span>
+            </div>
+
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-emerald-400 to-cyan-300 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {stepProgress.map((step, index) => (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => toggleSection(step.key as SectionKey)}
+                  className={`rounded-2xl border px-3 py-2 text-left transition-all duration-200 ${
+                    step.complete
+                      ? "border-emerald-300/15 bg-emerald-400/8 text-emerald-100"
+                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                        step.complete ? "bg-emerald-300/20 text-emerald-100" : "bg-white/10 text-zinc-400"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="text-sm">{step.label}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
@@ -468,13 +851,13 @@ export default function AdminHomePromosPanel({
                 label={isFr ? "Dupliquer la campagne" : "Duplicate campaign"}
                 onClick={duplicateSelectedPromo}
               >
-                ?
+                <CopyGlyph />
               </IconActionButton>
               <IconActionButton
                 label={isFr ? "Supprimer la campagne" : "Delete campaign"}
                 onClick={removeSelectedPromo}
               >
-                ×
+                <TrashGlyph />
               </IconActionButton>
             </div>
           </div>
@@ -497,9 +880,64 @@ export default function AdminHomePromosPanel({
           </div>
         </div>
 
+        {showGuidedStart ? (
+          <div className="rounded-2xl border border-emerald-300/15 bg-gradient-to-br from-emerald-400/8 via-zinc-900/75 to-zinc-950/72 p-4 shadow-[0_18px_44px_rgba(0,0,0,0.2)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="max-w-2xl">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/80">
+                  {isFr ? "Demarrage guide" : "Guided start"}
+                </p>
+                <h4 className="mt-2 text-lg font-semibold text-white">
+                  {isFr ? "Choisis d'abord le bon format" : "Start by choosing the right format"}
+                </h4>
+                <p className="mt-2 text-sm text-zinc-300">
+                  {isFr
+                    ? "On te pre-remplit une base propre, puis tu ajustes le copy, le ciblage et la diffusion."
+                    : "We prefill a clean base for you, then you refine the copy, targeting, and schedule."}
+                </p>
+              </div>
+              <span className="rounded-full border border-emerald-300/15 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                {isFr ? "1 minute pour lancer" : "1 minute to launch"}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {([
+                {
+                  key: "popup",
+                  title: isFr ? "Popup hero" : "Hero popup",
+                  body: isFr ? "Ideal pour une campagne courte, forte et tres visible." : "Best for a short, high-impact message.",
+                },
+                {
+                  key: "inline",
+                  title: isFr ? "Bandeau accueil" : "Homepage banner",
+                  body: isFr ? "Le plus simple pour raconter une promo apres 2 lignes de produits." : "Great to tell the story of a promo after two product rows.",
+                },
+                {
+                  key: "product-card",
+                  title: isFr ? "Carte native" : "Native card",
+                  body: isFr ? "Le plus discret pour se fondre dans le feed produit." : "The most seamless option for the product feed.",
+                },
+              ] as const).map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => applyPreset(preset.key)}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/25 hover:bg-black/28 hover:shadow-[0_18px_34px_rgba(16,185,129,0.1)]"
+                >
+                  <PresetMockup mode={preset.key} />
+                  <p className="text-sm font-semibold text-white">{preset.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">{preset.body}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <AccordionSection
           title={isFr ? "Contenu" : "Content"}
           badge={isFr ? "Titre, message, visuels et CTA" : "Title, message, visuals, and CTA"}
+          icon={<ContentGlyph />}
           open={openSections.content}
           onToggle={() => toggleSection("content")}
         >
@@ -574,6 +1012,7 @@ export default function AdminHomePromosPanel({
         <AccordionSection
           title={isFr ? "Ciblage" : "Targeting"}
           badge={isFr ? "Format, audience et verticales" : "Format, audience, and verticals"}
+          icon={<TargetGlyph />}
           open={openSections.targeting}
           onToggle={() => toggleSection("targeting")}
         >
@@ -649,6 +1088,7 @@ export default function AdminHomePromosPanel({
         <AccordionSection
           title={isFr ? "Parametres" : "Settings"}
           badge={isFr ? "Priorite, rotation et limites" : "Priority, rotation, and limits"}
+          icon={<SettingsGlyph />}
           open={openSections.settings}
           onToggle={() => toggleSection("settings")}
         >
@@ -742,6 +1182,7 @@ export default function AdminHomePromosPanel({
         <AccordionSection
           title={isFr ? "Planning" : "Planning"}
           badge={isFr ? "Fenetre de diffusion" : "Delivery window"}
+          icon={<CalendarGlyph />}
           open={openSections.planning}
           onToggle={() => toggleSection("planning")}
         >
@@ -773,7 +1214,7 @@ export default function AdminHomePromosPanel({
       </div>
 
       <aside className="min-w-0 self-start xl:sticky xl:top-24">
-        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/78 to-zinc-950/72 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/78 to-zinc-950/72 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/15 hover:shadow-[0_22px_60px_rgba(0,0,0,0.24)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
@@ -782,6 +1223,10 @@ export default function AdminHomePromosPanel({
               <h3 className="mt-2 text-xl font-semibold text-white">
                 {isFr ? "Apercu campagne" : "Campaign preview"}
               </h3>
+              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                <span className="h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                {isFr ? "Mise a jour en direct" : "Live updates"}
+              </div>
             </div>
             <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-300">
               {getPlacementLabel(locale, previewPromo.placement)}
@@ -812,9 +1257,50 @@ export default function AdminHomePromosPanel({
             })}
           </div>
 
-          <div className="mt-4 rounded-[1.75rem] border border-white/10 bg-black/20 p-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => duplicateFromFormat(previewMode)}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/25 hover:bg-white/[0.08]"
+            >
+              <CopyGlyph />
+              <span>{isFr ? "Dupliquer dans ce format" : "Duplicate in this format"}</span>
+            </button>
+            <span className="text-xs text-zinc-500">
+              {isFr
+                ? "Pratique pour tester une meme campagne en popup, bandeau ou carte."
+                : "Useful to test the same campaign as a popup, banner, or native card."}
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {previewChecks.map((check) => (
+              <div
+                key={check.label}
+                className={`rounded-2xl border px-3 py-2 text-sm transition-all duration-200 ${
+                  check.complete
+                    ? "border-emerald-300/15 bg-emerald-400/8 text-emerald-100"
+                    : "border-white/10 bg-black/15 text-zinc-400"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                      check.complete ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.5)]" : "bg-zinc-600"
+                    }`}
+                  />
+                  <span>{check.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-[1.75rem] border border-white/10 bg-black/20 p-3 transition-all duration-300">
             {previewMode === "popup" ? (
-              <div className={`overflow-hidden rounded-[1.6rem] border bg-gradient-to-br ${previewPromo.accentClassName} p-4 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.55)]`}>
+              <div
+                key={`${selectedPromo.id}-${previewMode}-${previewPromo.accentClassName}`}
+                className={`overflow-hidden rounded-[1.6rem] border bg-gradient-to-br ${previewPromo.accentClassName} p-4 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.55)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_56px_-30px_rgba(0,0,0,0.6)]`}
+              >
                 <SponsoredPlacement
                   locale={locale}
                   promo={previewPromo}
@@ -823,12 +1309,17 @@ export default function AdminHomePromosPanel({
                 />
               </div>
             ) : (
-              <SponsoredPlacement
-                locale={locale}
-                promo={previewPromo}
-                variant={previewMode}
-                trackEvents={false}
-              />
+              <div
+                key={`${selectedPromo.id}-${previewMode}-${previewPromo.accentClassName}`}
+                className="transition-all duration-300 hover:-translate-y-0.5"
+              >
+                <SponsoredPlacement
+                  locale={locale}
+                  promo={previewPromo}
+                  variant={previewMode}
+                  trackEvents={false}
+                />
+              </div>
             )}
           </div>
 
@@ -864,3 +1355,4 @@ export default function AdminHomePromosPanel({
     </section>
   );
 }
+

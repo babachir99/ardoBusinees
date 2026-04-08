@@ -2,20 +2,20 @@ import { Link } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { getServerSession } from "next-auth";
 import Footer from "@/components/layout/Footer";
-import AdminHomePromosPanel from "@/components/admin/AdminHomePromosPanel";
+import AdminCampaignsDashboard from "@/components/admin/AdminCampaignsDashboard";
 import { authOptions } from "@/lib/auth";
 import { hasUserRole } from "@/lib/userRoles";
 import {
   getHomePromoAccentOptions,
-  getHomePromoAudienceOptions,
   getHomePromoEntries,
   getHomePromoPlacementOptions,
+  getHomePromoTrackingSummary,
 } from "@/lib/homePromos";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminCampaignsPage() {
+export default async function AdminCampaignsDashboardPage() {
   const session = await getServerSession(authOptions);
   const locale = await getLocale();
   const isFr = locale.toLowerCase().startsWith("fr");
@@ -30,8 +30,8 @@ export default async function AdminCampaignsPage() {
             </h1>
             <p className="mt-2 text-sm text-zinc-300">
               {isFr
-                ? "Connecte-toi avec un compte admin pour gerer les campagnes sponsorisees."
-                : "Sign in with an admin account to manage sponsored campaigns."}
+                ? "Connecte-toi avec un compte admin pour consulter les performances campagnes."
+                : "Sign in with an admin account to review campaign performance."}
             </p>
             <Link
               href="/login"
@@ -46,7 +46,15 @@ export default async function AdminCampaignsPage() {
     );
   }
 
-  const homePromoConfig = await getHomePromoEntries();
+  const [homePromoConfig, homePromoTrackingSummary] = await Promise.all([
+    getHomePromoEntries(),
+    getHomePromoTrackingSummary().catch(() => ({
+      totals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
+      anonymousTotals: { IMPRESSION: 0, CLICK: 0, DISMISS: 0 },
+      ctr: 0,
+      byPromoId: {},
+    })),
+  ]);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -55,15 +63,15 @@ export default async function AdminCampaignsPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
               <p className="text-[11px] uppercase tracking-[0.24em] text-emerald-200/80">
-                {isFr ? "Gestion admin" : "Admin management"}
+                {isFr ? "Dashboard campagnes" : "Campaign dashboard"}
               </p>
               <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
-                {isFr ? "Creer campagne" : "Create campaign"}
+                {isFr ? "Performance des campagnes" : "Campaign performance"}
               </h1>
               <p className="mt-3 text-sm leading-6 text-zinc-300 md:text-base">
                 {isFr
-                  ? "Une page d'edition plus simple: configuration a gauche, preview sticky a droite, stats dans un dashboard dedie."
-                  : "A simpler editing flow: configuration on the left, sticky preview on the right, and metrics in a dedicated dashboard."}
+                  ? "Toutes les stats restent ici: formats, rotation live et performances des campagnes sponsorisees."
+                  : "Keep every metric here: formats, live rotation, and sponsored campaign performance."}
               </p>
             </div>
 
@@ -75,23 +83,21 @@ export default async function AdminCampaignsPage() {
                 {isFr ? "Retour admin" : "Back to admin"}
               </Link>
               <Link
-                href="/admin/campaigns/dashboard"
+                href="/admin/campaigns"
                 className="inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-400/15"
               >
-                {isFr ? "Dashboard campagnes" : "Campaign dashboard"}
+                {isFr ? "Retour a l'edition" : "Back to editor"}
               </Link>
             </div>
           </div>
         </section>
 
-        <AdminHomePromosPanel
+        <AdminCampaignsDashboard
           locale={locale}
-          initialPromos={homePromoConfig.entries}
+          promos={homePromoConfig.entries}
+          trackingSummary={homePromoTrackingSummary}
           accentOptions={getHomePromoAccentOptions()}
           placementOptions={getHomePromoPlacementOptions()}
-          audienceOptions={getHomePromoAudienceOptions()}
-          lastUpdatedAt={homePromoConfig.lastUpdatedAt ? homePromoConfig.lastUpdatedAt.toISOString() : null}
-          lastUpdatedBy={homePromoConfig.lastUpdatedBy}
         />
       </main>
       <Footer />

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
 import RotatingSponsoredPlacement from "@/components/ads/RotatingSponsoredPlacement";
@@ -167,7 +167,7 @@ export default function AdminCampaignsDashboard({
             </h3>
             <p className="mt-1 text-xs text-zinc-400">
               {isFr
-                ? "Les trois formats principaux restent visibles ici pour valider l’usage attendu."
+                ? "Les trois formats principaux restent visibles ici pour valider l'usage attendu."
                 : "Keep the three main formats visible here to validate the intended use."}
             </p>
           </div>
@@ -218,7 +218,7 @@ export default function AdminCampaignsDashboard({
             </h3>
             <p className="mt-1 text-xs text-zinc-400">
               {isFr
-                ? "On affiche ici ce qui tourne reellement. S’il n’y a rien en live, on garde un exemple."
+                ? "On affiche ici ce qui tourne reellement. S'il n'y a rien en live, on garde un exemple."
                 : "This shows what actually rotates. If nothing is live yet, a demo stays visible."}
             </p>
           </div>
@@ -269,3 +269,4 @@ export default function AdminCampaignsDashboard({
     </section>
   );
 }
+
