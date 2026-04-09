@@ -2,6 +2,7 @@
 
 import { signOut } from "next-auth/react";
 import { useEffect, useRef } from "react";
+import { announceAuthStateChanged } from "@/components/auth/authStateEvents";
 
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
@@ -54,6 +55,7 @@ export default function IdleSessionGuard({
       }
 
       signOutStartedRef.current = true;
+      announceAuthStateChanged();
       void signOut({
         callbackUrl: `/${locale}?reason=inactive`,
       });

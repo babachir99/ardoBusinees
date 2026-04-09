@@ -1,6 +1,7 @@
 import type { ProductType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
+import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
 
 export type PersistedCartItem = {
   id: string;
@@ -79,6 +80,8 @@ function resolveMaxQuantity(type: ProductType, stockQuantity: number | null) {
 }
 
 async function ensureProductForCart(productId: string) {
+  await releaseExpiredPendingLocalOrders({ productIds: [productId] });
+
   const product = await prisma.product.findUnique({
     where: { id: productId },
     select: {
@@ -102,6 +105,43 @@ async function ensureProductForCart(productId: string) {
   }
 
   return product;
+}
+
+async function fetchUserCartWithProducts(userId: string) {
+  return prisma.userCart.findUnique({
+    where: { userId },
+    include: {
+      items: {
+        orderBy: [{ updatedAt: "desc" }],
+        include: {
+          product: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              priceCents: true,
+              discountPercent: true,
+              currency: true,
+              type: true,
+              isActive: true,
+              stockQuantity: true,
+              seller: { select: { displayName: true } },
+            },
+          },
+          offer: {
+            select: {
+              id: true,
+              productId: true,
+              buyerId: true,
+              status: true,
+              quantity: true,
+              amountCents: true,
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 async function ensureAcceptedOffer(params: {
@@ -195,42 +235,18 @@ async function sanitizeCartItemInput(userId: string, input: UpsertCartItemInput)
 }
 
 export async function getCartItemsForUser(userId: string): Promise<PersistedCartItem[]> {
-  const cart = await prisma.userCart.findUnique({
-    where: { userId },
-    include: {
-      items: {
-        orderBy: [{ updatedAt: "desc" }],
-        include: {
-          product: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              priceCents: true,
-              discountPercent: true,
-              currency: true,
-              type: true,
-              isActive: true,
-              stockQuantity: true,
-              seller: { select: { displayName: true } },
-            },
-          },
-          offer: {
-            select: {
-              id: true,
-              productId: true,
-              buyerId: true,
-              status: true,
-              quantity: true,
-              amountCents: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  let cart = await fetchUserCartWithProducts(userId);
 
   if (!cart) return [];
+
+  const productIds = Array.from(new Set(cart.items.map((entry) => entry.productId)));
+  if (productIds.length > 0) {
+    const releasedCount = await releaseExpiredPendingLocalOrders({ productIds });
+    if (releasedCount > 0) {
+      cart = await fetchUserCartWithProducts(userId);
+      if (!cart) return [];
+    }
+  }
 
   const toDelete: string[] = [];
   const toUpdate: Array<{ id: string; quantity: number }> = [];
@@ -364,7 +380,7 @@ export async function updateCartItemQuantityForUser(
 
   if (!cart) return [];
 
-  const item = await prisma.userCartItem.findUnique({
+  let item = await prisma.userCartItem.findUnique({
     where: { cartId_lineId: { cartId: cart.id, lineId } },
     include: {
       product: {
@@ -386,6 +402,39 @@ export async function updateCartItemQuantityForUser(
       },
     },
   });
+
+  if (!item) return getCartItemsForUser(userId);
+
+  if (item.product?.id) {
+    const releasedCount = await releaseExpiredPendingLocalOrders({
+      productIds: [item.product.id],
+    });
+
+    if (releasedCount > 0) {
+      item = await prisma.userCartItem.findUnique({
+        where: { cartId_lineId: { cartId: cart.id, lineId } },
+        include: {
+          product: {
+            select: {
+              id: true,
+              type: true,
+              stockQuantity: true,
+              isActive: true,
+            },
+          },
+          offer: {
+            select: {
+              id: true,
+              status: true,
+              buyerId: true,
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+    }
+  }
 
   if (!item) return getCartItemsForUser(userId);
 

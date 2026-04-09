@@ -9,6 +9,7 @@ import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { slugify } from "@/lib/slug";
+import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
@@ -115,7 +116,7 @@ export default async function ProductPage({
   const slugCandidates =
     normalizedSlug && normalizedSlug !== slug ? [slug, normalizedSlug] : [slug];
 
-  const product = await prisma.product.findFirst({
+  let product = await prisma.product.findFirst({
     where: {
       isActive: true,
       OR: slugCandidates.map((candidate) => ({ slug: candidate })),
@@ -137,6 +138,35 @@ export default async function ProductPage({
 
   if (!product) {
     notFound();
+  }
+
+  if (product.type === "LOCAL") {
+    const releasedCount = await releaseExpiredPendingLocalOrders({
+      productIds: [product.id],
+    });
+
+    if (releasedCount > 0) {
+      const refreshedProduct = await prisma.product.findUnique({
+        where: { id: product.id },
+        include: {
+          seller: {
+            include: {
+              user: { select: { email: true, phone: true, image: true } },
+            },
+          },
+          images: { orderBy: { position: "asc" } },
+          categories: {
+            include: {
+              category: { select: { id: true, name: true, slug: true } },
+            },
+          },
+        },
+      });
+
+      if (refreshedProduct) {
+        product = refreshedProduct;
+      }
+    }
   }
 
   if (product.slug !== slug) {

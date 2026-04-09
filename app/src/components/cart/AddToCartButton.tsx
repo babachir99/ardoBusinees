@@ -83,7 +83,7 @@ export default function AddToCartButton({
       }
     }
 
-    addItem(
+    const result = await addItem(
       {
         id,
         slug,
@@ -98,6 +98,13 @@ export default function AddToCartButton({
       },
       quantity
     );
+
+    if (!result.ok) {
+      if (result.reason === "out_of_stock") {
+        setIsSoldOut(true);
+      }
+      return;
+    }
 
     setAdded(true);
     setTimeout(() => setAdded(false), 1400);

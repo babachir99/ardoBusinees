@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import ProfileEditForm from "@/components/profile/ProfileEditForm";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/profile/edit",
+    title: isFr ? "Modifier le profil | Espace prive" : "Edit profile | Private space",
+    description: isFr
+      ? "Mets a jour les informations de ton compte depuis ton espace prive."
+      : "Update your account information from your private space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function ProfileEditPage() {
   const session = await getServerSession(authOptions);

@@ -6,6 +6,7 @@ import { PaymentLedgerStatus, PaymentStatus, PrestaBookingStatus } from "@prisma
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { assertAllowedHost, assertSameOrigin } from "@/lib/request-security";
 import { NotificationService } from "@/lib/notifications/NotificationService";
+import { groupLocalItemsByProduct, incrementLocalProductStock } from "@/lib/order-stock";
 
 function normalizeCallbackStatus(value: unknown): "PAID" | "FAILED" | null {
   const status = String(value ?? "").trim().toUpperCase();
@@ -152,6 +153,13 @@ export async function POST(request: NextRequest) {
           status: true,
           paymentStatus: true,
           paymentMethod: true,
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+              type: true,
+            },
+          },
         },
       });
 
@@ -312,21 +320,28 @@ export async function POST(request: NextRequest) {
           }
         }
       } else {
+        const failedOrderStatus = order.status === "PENDING" ? "CANCELED" : order.status;
         const failedOrderTransition = await tx.order.updateMany({
           where: {
             id: order.id,
             paymentStatus: "PENDING",
           },
           data: {
+            status: failedOrderStatus,
             paymentStatus: "FAILED",
           },
         });
 
         if (failedOrderTransition.count === 1) {
+          const localItemsByProduct = groupLocalItemsByProduct(order.items);
+          if (localItemsByProduct.size > 0) {
+            await incrementLocalProductStock(tx, localItemsByProduct);
+          }
+
           await tx.orderEvent.create({
             data: {
               orderId: order.id,
-              status: order.status,
+              status: failedOrderStatus,
               note: `Payment callback failed (${updatedPayment.provider})`,
             },
           });

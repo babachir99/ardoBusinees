@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
     where: { userId: session.user.id },
     include: {
       product: {
-        include: { images: true, seller: { select: { displayName: true } } },
+        include: {
+          images: true,
+          seller: { select: { displayName: true } },
+        },
       },
     },
     orderBy: { createdAt: "desc" },

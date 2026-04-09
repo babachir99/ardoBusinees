@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
 import { assertAllowedHost } from "@/lib/request-security";
 import { NotificationService } from "@/lib/notifications/NotificationService";
+import { groupLocalItemsByProduct, incrementLocalProductStock } from "@/lib/order-stock";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -735,30 +736,67 @@ export async function POST(request: NextRequest) {
         }
         if (currentLedger.orderId) {
           await tx.payment.updateMany({
-          where: {
-            orderId: currentLedger.orderId,
-            status: { not: "FAILED" },
-          },
-          data: { status: "FAILED" },
-        });
+            where: {
+              orderId: currentLedger.orderId,
+              status: { not: "FAILED" },
+            },
+            data: { status: "FAILED" },
+          });
 
-        await tx.order.updateMany({
-          where: {
-            id: currentLedger.orderId,
-            paymentStatus: { not: "FAILED" },
-          },
-          data: { paymentStatus: "FAILED" },
-        });
+          const order = await tx.order.findUnique({
+            where: { id: currentLedger.orderId },
+            select: {
+              id: true,
+              status: true,
+              paymentStatus: true,
+              items: {
+                select: {
+                  productId: true,
+                  quantity: true,
+                  type: true,
+                },
+              },
+            },
+          });
 
-        await tx.tiakDelivery.updateMany({
-          where: {
-            orderId: currentLedger.orderId,
-            OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
-          },
-          data: {
-            paymentStatus: "FAILED",
-          },
-        });
+          if (order) {
+            const failedOrderStatus = order.status === "PENDING" ? "CANCELED" : order.status;
+            const failedOrderTransition = await tx.order.updateMany({
+              where: {
+                id: order.id,
+                paymentStatus: { not: "FAILED" },
+              },
+              data: {
+                status: failedOrderStatus,
+                paymentStatus: "FAILED",
+              },
+            });
+
+            if (failedOrderTransition.count === 1) {
+              const localItemsByProduct = groupLocalItemsByProduct(order.items);
+              if (localItemsByProduct.size > 0) {
+                await incrementLocalProductStock(tx, localItemsByProduct);
+              }
+
+              await tx.orderEvent.create({
+                data: {
+                  orderId: order.id,
+                  status: failedOrderStatus,
+                  note: `PayDunya webhook failed (${providerName})`,
+                },
+              });
+            }
+          }
+
+          await tx.tiakDelivery.updateMany({
+            where: {
+              orderId: currentLedger.orderId,
+              OR: [{ paymentStatus: null }, { paymentStatus: "PENDING" }],
+            },
+            data: {
+              paymentStatus: "FAILED",
+            },
+          });
         }
       }
 

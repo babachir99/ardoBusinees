@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionUserId } from "@/components/auth/SessionScopeProvider";
 import {
   createContext,
   useCallback,
@@ -41,10 +42,13 @@ function makeLineId(input: {
 }
 
 type AddItemInput = Omit<CartItem, "quantity" | "lineId">;
+type CartActionResult =
+  | { ok: true }
+  | { ok: false; reason: "out_of_stock" | "unauthorized" | "error"; message?: string };
 
 type CartContextValue = {
   items: CartItem[];
-  addItem: (item: AddItemInput, quantity?: number) => void;
+  addItem: (item: AddItemInput, quantity?: number) => Promise<CartActionResult>;
   removeItem: (lineId: string) => void;
   updateQuantity: (lineId: string, quantity: number) => void;
   clear: () => void;
@@ -156,12 +160,36 @@ function readCartForKey(key: string): CartItem[] {
   return [];
 }
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [scope, setScope] = useState<CartScope>({
-    mode: "guest",
-    storageKey: GUEST_STORAGE_KEY,
-  });
+function resolveScopeFromUserId(userId?: string | null): CartScope {
+  if (!userId) {
+    return {
+      mode: "guest",
+      storageKey: GUEST_STORAGE_KEY,
+    };
+  }
+
+  return {
+    mode: "user",
+    userId,
+    storageKey: storageKeyForUserId(userId),
+  };
+}
+
+export function CartProvider({
+  children,
+  sessionUserId = null,
+}: {
+  children: React.ReactNode;
+  sessionUserId?: string | null;
+}) {
+  const liveSessionUserId = useSessionUserId();
+  const effectiveSessionUserId = liveSessionUserId ?? sessionUserId;
+  const initialScope = resolveScopeFromUserId(effectiveSessionUserId);
+  const [scope, setScope] = useState<CartScope>(initialScope);
   const [items, setItems] = useState<CartItem[]>([]);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(
+    initialScope.storageKey
+  );
 
   const scopeRef = useRef<CartScope>(scope);
   const previousScopeRef = useRef<CartScope | null>(null);
@@ -204,28 +232,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resolveScope = useCallback(async () => {
-    let nextScope: CartScope = {
-      mode: "guest",
-      storageKey: GUEST_STORAGE_KEY,
-    };
+    let nextScope = resolveScopeFromUserId(effectiveSessionUserId);
 
     try {
       const response = await fetch("/api/profile", { cache: "no-store" });
       if (response.ok) {
         const payload = (await response.json()) as { id?: string } | null;
-        if (payload?.id) {
-          nextScope = {
-            mode: "user",
-            userId: payload.id,
-            storageKey: storageKeyForUserId(payload.id),
-          };
-        }
+        nextScope = resolveScopeFromUserId(payload?.id ?? null);
+      } else if (response.status === 401) {
+        nextScope = resolveScopeFromUserId(null);
       }
     } catch {
-      nextScope = {
-        mode: "guest",
-        storageKey: GUEST_STORAGE_KEY,
-      };
+      // keep server-derived scope as fallback when the profile probe fails
     }
 
     setScope((current) => {
@@ -238,13 +256,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       return nextScope;
     });
-  }, []);
-
+  }, [effectiveSessionUserId]);
 
   useEffect(() => {
     const rafId = window.requestAnimationFrame(() => {
       void resolveScope();
     });
+
+    const handleAuthStateChanged = () => {
+      void resolveScope();
+    };
 
     const handleFocus = () => {
       void resolveScope();
@@ -256,11 +277,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    window.addEventListener("jontaado:auth-state-changed", handleAuthStateChanged);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.cancelAnimationFrame(rafId);
+      window.removeEventListener("jontaado:auth-state-changed", handleAuthStateChanged);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -272,9 +295,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     previousScopeRef.current = scope;
 
     const hydrateCart = async () => {
+      if (previousScope && previousScope.storageKey !== scope.storageKey && !cancelled) {
+        setItems([]);
+      }
+
       if (scope.mode === "guest") {
+        if (previousScope?.mode === "user") {
+          try {
+            window.localStorage.removeItem(GUEST_STORAGE_KEY);
+            window.localStorage.removeItem(BASE_STORAGE_KEY);
+          } catch {
+            // ignore storage errors
+          }
+        }
+
         if (!cancelled) {
-          setItems(readCartForKey(scope.storageKey));
+          setItems(previousScope?.mode === "user" ? [] : readCartForKey(scope.storageKey));
+          setHydratedStorageKey(scope.storageKey);
         }
         return;
       }
@@ -288,8 +325,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       if (remoteItems) {
         setItems(remoteItems);
+        setHydratedStorageKey(scope.storageKey);
       } else {
         setItems(readCartForKey(scope.storageKey));
+        setHydratedStorageKey(scope.storageKey);
       }
     };
 
@@ -301,30 +340,41 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [scope, fetchUserCart, mergeGuestCartIntoUser]);
 
   useEffect(() => {
+    if (hydratedStorageKey !== scope.storageKey) {
+      return;
+    }
+
     try {
       window.localStorage.setItem(scope.storageKey, JSON.stringify(items));
     } catch {
       // ignore storage errors
     }
-  }, [items, scope.storageKey]);
+  }, [hydratedStorageKey, items, scope.storageKey]);
 
   const syncUserCartResponse = useCallback(
-    async (response: Response) => {
+    async (response: Response): Promise<CartActionResult> => {
       if (!response.ok) {
         if (response.status === 401) {
           await resolveScope();
+          return { ok: false, reason: "unauthorized" };
         }
-        return;
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        const message = String(payload?.error ?? "").trim();
+        if (response.status === 409 || /out of stock|stock/i.test(message)) {
+          return { ok: false, reason: "out_of_stock", message };
+        }
+        return { ok: false, reason: "error", message: message || undefined };
       }
 
       const payload = (await response.json()) as { items?: unknown };
       setItems(normalizeCartItems(payload.items));
+      return { ok: true };
     },
     [resolveScope]
   );
 
   const addItem = useCallback(
-    (item: AddItemInput, quantity = 1) => {
+    async (item: AddItemInput, quantity = 1): Promise<CartActionResult> => {
       const requestedQty = Math.max(1, Math.floor(quantity));
       const incomingMax = toSafeMaxQuantity(item.maxQuantity);
       const lineId = makeLineId({
@@ -362,10 +412,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               : entry
           );
         });
-        return;
+        return { ok: true };
       }
 
-      void (async () => {
+      try {
         const response = await fetch("/api/cart", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -378,8 +428,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           }),
         });
 
-        await syncUserCartResponse(response);
-      })();
+        return await syncUserCartResponse(response);
+      } catch {
+        return { ok: false, reason: "error" };
+      }
     },
     [syncUserCartResponse]
   );

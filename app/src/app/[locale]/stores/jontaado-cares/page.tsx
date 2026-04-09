@@ -1,8 +1,31 @@
+import type { Metadata } from "next";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import CaresProductExperience, {
   type CaresPageContent,
 } from "@/components/cares/CaresProductExperience";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-cares",
+    title: isFr
+      ? "JONTAADO CARES | Dons, cagnottes et aide solidaire"
+      : "JONTAADO CARES | Donations, fundraisers and community help",
+    description: isFr
+      ? "Donne, offre un produit utile, lance une cagnotte ou demande de l'aide depuis la verticale solidaire JONTAADO CARES."
+      : "Donate, offer a useful product, start a fundraiser or request help from the JONTAADO CARES solidarity vertical.",
+    imagePath: "/stores/last_cares.png",
+  });
+}
 
 const content: Record<"fr" | "en", CaresPageContent & { back: string }> = {
   fr: {

@@ -9,6 +9,7 @@ import {
   PRODUCT_DELETE_CONFLICT_MESSAGE,
 } from "@/lib/product-delete";
 import { NotificationService } from "@/lib/notifications/NotificationService";
+import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,6 +76,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  await releaseExpiredPendingLocalOrders({ productIds: [id] });
+
   const product = await prisma.product.findUnique({
     where: { id: id },
     include: {

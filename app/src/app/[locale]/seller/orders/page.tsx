@@ -1,9 +1,31 @@
+import type { Metadata } from "next";
 import SellerOrdersPanel from "@/components/seller/SellerOrdersPanel";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/seller/orders",
+    title: isFr ? "Commandes vendeur | Espace prive" : "Seller orders | Private space",
+    description: isFr
+      ? "Retrouve et gere les commandes de ta boutique depuis ton espace vendeur prive."
+      : "Review and manage your shop orders from your private seller space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function SellerOrdersPage() {
   const session = await getServerSession(authOptions);

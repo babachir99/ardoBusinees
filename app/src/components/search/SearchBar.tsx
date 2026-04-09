@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "@/i18n/navigation";
+import { useSessionUserId } from "@/components/auth/SessionScopeProvider";
 import {
   canonicalizeSearchTerm,
   storeRecentSearch,
@@ -51,6 +52,8 @@ export default function SearchBar({
   storageScope,
 }: SearchBarProps) {
   const router = useRouter();
+  const sessionUserId = useSessionUserId();
+  const effectiveStorageScope = storageScope ?? sessionUserId ?? null;
   const [query, setQuery] = useState(initialQuery ?? "");
   const [category, setCategory] = useState(initialCategory ?? "");
   const [sort, setSort] = useState(initialSort ?? "recent");
@@ -88,7 +91,7 @@ export default function SearchBar({
 
   const navigateToSearch = ({ trackRecent }: { trackRecent: boolean }) => {
     if (trackRecent) {
-      storeRecentSearch(storageScope, { query, category, sort });
+      storeRecentSearch(effectiveStorageScope, { query, category, sort });
     }
     router.push(searchHref);
   };

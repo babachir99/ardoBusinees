@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
@@ -5,6 +6,27 @@ import Footer from "@/components/layout/Footer";
 import NewProductForm from "@/components/seller/NewProductForm";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/seller/products/new",
+    title: isFr ? "Nouveau produit vendeur | Espace prive" : "New seller product | Private space",
+    description: isFr
+      ? "Cree une nouvelle fiche produit depuis ton espace vendeur prive."
+      : "Create a new product listing from your private seller space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function NewProductPage() {
   const session = await getServerSession(authOptions);

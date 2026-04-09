@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionUserId } from "@/components/auth/SessionScopeProvider";
 import { useEffect, useState, type MouseEvent } from "react";
 import { useTranslations } from "next-intl";
 
@@ -21,23 +22,25 @@ export default function FavoriteButton({
   className,
 }: FavoriteButtonProps) {
   const t = useTranslations("Favorites");
+  const sessionUserId = useSessionUserId();
   const [isFavorite, setIsFavorite] = useState(initialIsFavorite ?? false);
   const [loading, setLoading] = useState(false);
+  const visibleIsFavorite = sessionUserId ? isFavorite : false;
 
   useEffect(() => {
-    if (typeof initialIsFavorite === "boolean") {
-      return;
-    }
+    if (!sessionUserId) return;
 
     const load = async () => {
       const res = await fetch(`/api/favorites?productId=${productId}`);
       if (res.ok) {
         const data = (await res.json()) as { isFavorite: boolean };
         setIsFavorite(data.isFavorite);
+        return;
       }
+
     };
-    load();
-  }, [initialIsFavorite, productId]);
+    void load();
+  }, [productId, sessionUserId]);
 
   const announceFavoriteUpdate = (nextIsFavorite: boolean) => {
     if (typeof window === "undefined") {
@@ -56,7 +59,7 @@ export default function FavoriteButton({
     event.stopPropagation();
 
     setLoading(true);
-    if (isFavorite) {
+    if (visibleIsFavorite) {
       const res = await fetch(`/api/favorites?productId=${productId}`, {
         method: "DELETE",
       });
@@ -78,7 +81,7 @@ export default function FavoriteButton({
     setLoading(false);
   };
 
-  const buttonLabel = isFavorite ? removeLabel ?? t("remove") : addLabel ?? t("add");
+  const buttonLabel = visibleIsFavorite ? removeLabel ?? t("remove") : addLabel ?? t("add");
   const isIcon = variant === "icon";
 
   return (
@@ -87,12 +90,12 @@ export default function FavoriteButton({
       onClick={toggle}
       disabled={loading}
       aria-label={buttonLabel}
-      aria-pressed={isFavorite}
+      aria-pressed={visibleIsFavorite}
       title={buttonLabel}
       className={`inline-flex items-center justify-center transition disabled:opacity-60 ${
         isIcon
           ? `h-9 w-9 rounded-full border ${
-              isFavorite
+              visibleIsFavorite
                 ? "border-rose-300/70 bg-rose-500/15 text-rose-300"
                 : "border-white/20 bg-zinc-950/75 text-zinc-200 hover:border-white/40"
             }`
@@ -102,7 +105,7 @@ export default function FavoriteButton({
       <svg
         aria-hidden="true"
         viewBox="0 0 24 24"
-        className={`h-4 w-4 ${isFavorite ? "fill-current" : "fill-none stroke-current"}`}
+        className={`h-4 w-4 ${visibleIsFavorite ? "fill-current" : "fill-none stroke-current"}`}
       >
         <path
           d="M12 20.25c-4.9-2.7-8-5.6-8-9.25a4.75 4.75 0 0 1 8-3.43A4.75 4.75 0 0 1 20 11c0 3.65-3.1 6.55-8 9.25Z"

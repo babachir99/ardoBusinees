@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import Image from "next/image";
@@ -8,14 +9,36 @@ import { prisma } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format";
 import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import SellerTrendsPanel from "@/components/seller/SellerTrendsPanel";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 import { hasAnyUserRole } from "@/lib/userRoles";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type SellerPageProps = {
+  params?: Promise<{ locale: string }>;
   searchParams?: Promise<{ range?: string; paid?: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/seller",
+    title: isFr ? "Dashboard vendeur | Espace prive" : "Seller dashboard | Private space",
+    description: isFr
+      ? "Suis tes ventes, tes produits et tes commandes depuis ton espace vendeur prive."
+      : "Track sales, products and orders from your private seller space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function SellerPage({ searchParams }: SellerPageProps) {
   const session = await getServerSession(authOptions);

@@ -1,12 +1,34 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import { authOptions } from "@/lib/auth";
 import GpShipmentsTimelineClient from "@/components/gp/GpShipmentsTimelineClient";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/gp/shipments",
+    title: isFr ? "Expeditions GP | Suivi prive" : "GP shipments | Private tracking",
+    description: isFr
+      ? "Retrouve le suivi detaille de tes expeditions GP dans un espace prive reserve aux participants."
+      : "Review detailed GP shipment tracking in a private space reserved for participants.",
+    imagePath: "/stores/gp.png",
+    noIndex: true,
+  });
+}
 
 function canAccess(role: string | undefined) {
   return ["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER", "CUSTOMER"].includes(role ?? "");

@@ -149,6 +149,8 @@ export async function GET(request: NextRequest) {
       priceCents: product.priceCents,
       discountPercent: product.discountPercent,
       currency: product.currency,
+      type: product.type,
+      stockQuantity: product.stockQuantity,
       seller: product.seller,
       images: product.images,
       ratingAvg,

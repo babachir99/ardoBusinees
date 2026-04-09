@@ -4,7 +4,9 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
+import AuthSessionProvider from "@/components/auth/AuthSessionProvider";
 import IdleSessionGuard from "@/components/auth/IdleSessionGuard";
+import { SessionScopeProvider } from "@/components/auth/SessionScopeProvider";
 import { routing } from "@/i18n/routing";
 import { authOptions } from "@/lib/auth";
 import { CartProvider } from "@/components/cart/CartProvider";
@@ -60,13 +62,17 @@ export default async function LocaleLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <NextIntlClientProvider messages={messages}>
-          <CartProvider>
-            <IdleSessionGuard locale={locale} userId={session?.user?.id ?? null} />
-            <InternalNavigationHeader locale={locale} />
-            {children}
-          </CartProvider>
-        </NextIntlClientProvider>
+        <AuthSessionProvider session={session}>
+          <NextIntlClientProvider messages={messages}>
+            <SessionScopeProvider initialUserId={session?.user?.id ?? null}>
+              <CartProvider sessionUserId={session?.user?.id ?? null}>
+                <IdleSessionGuard locale={locale} userId={session?.user?.id ?? null} />
+                <InternalNavigationHeader locale={locale} />
+                {children}
+              </CartProvider>
+            </SessionScopeProvider>
+          </NextIntlClientProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

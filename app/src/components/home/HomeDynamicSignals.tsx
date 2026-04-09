@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { useSessionUserId } from "@/components/auth/SessionScopeProvider";
 import { useCart } from "@/components/cart/CartProvider";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { Link } from "@/i18n/navigation";
@@ -65,7 +66,7 @@ type EmptyStateProps = {
   children: ReactNode;
 };
 
-type SignalToastKind = "cart_added";
+type SignalToastKind = "cart_added" | "cart_sold_out";
 
 function buildSearchHref(item: RecentSearchItem) {
   const params = new URLSearchParams();
@@ -286,17 +287,57 @@ function AddToCartIconButton({
   item,
   locale,
   onAdded,
+  onSoldOut,
 }: {
   item: HomeLikedItem;
   locale: string;
   onAdded: () => void;
+  onSoldOut: () => void;
 }) {
   const { addItem } = useCart();
   const isFr = locale === "fr";
   const [added, setAdded] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isSoldOut, setIsSoldOut] = useState(false);
 
-  const handleAdd = () => {
-    addItem(
+  const resolveLiveLocalStock = async (): Promise<number | undefined> => {
+    try {
+      const response = await fetch(`/api/products/${item.productId}`, { cache: "no-store" });
+      if (!response.ok) return undefined;
+
+      const payload = (await response.json()) as {
+        isActive?: boolean;
+        stockQuantity?: number | null;
+      };
+
+      if (payload?.isActive === false) return 0;
+
+      const stockRaw = Number(payload?.stockQuantity);
+      if (!Number.isFinite(stockRaw)) return undefined;
+      return Math.max(0, Math.floor(stockRaw));
+    } catch {
+      return undefined;
+    }
+  };
+
+  const handleAdd = async () => {
+    if (isChecking || isSoldOut) {
+      return;
+    }
+
+    if (item.type === "LOCAL") {
+      setIsChecking(true);
+      const liveStock = await resolveLiveLocalStock();
+      setIsChecking(false);
+
+      if (liveStock !== undefined && liveStock <= 0) {
+        setIsSoldOut(true);
+        onSoldOut();
+        return;
+      }
+    }
+
+    const result = await addItem(
       {
         id: item.productId,
         slug: item.slug,
@@ -309,6 +350,14 @@ function AddToCartIconButton({
       1
     );
 
+    if (!result.ok) {
+      if (result.reason === "out_of_stock") {
+        setIsSoldOut(true);
+        onSoldOut();
+      }
+      return;
+    }
+
     onAdded();
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1200);
@@ -320,13 +369,17 @@ function AddToCartIconButton({
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        handleAdd();
+        void handleAdd();
       }}
       aria-label={isFr ? "Ajouter au panier" : "Add to cart"}
       title={isFr ? "Ajouter au panier" : "Add to cart"}
       className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition duration-200 active:scale-95 ${
-        added
+        isSoldOut
+          ? "border-amber-300/35 bg-amber-400/15 text-amber-100 opacity-100"
+          : added
           ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-100"
+          : isChecking
+            ? "border-white/15 bg-white/[0.08] text-white"
           : "border-white/10 bg-black/55 text-zinc-200 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 hover:-translate-y-0.5 hover:border-emerald-300/30 hover:bg-emerald-400/15 hover:text-white"
       }`}
     >
@@ -342,6 +395,8 @@ export default function HomeDynamicSignals({
   storageScope,
 }: HomeDynamicSignalsProps) {
   const isFr = locale === "fr";
+  const sessionUserId = useSessionUserId();
+  const effectiveStorageScope = storageScope ?? sessionUserId ?? null;
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
   const [recentViews, setRecentViews] = useState<RecentViewItem[]>([]);
   const [likedItems, setLikedItems] = useState<HomeLikedItem[]>(initialLikedItems);
@@ -414,11 +469,11 @@ export default function HomeDynamicSignals({
 
   useEffect(() => {
     const syncRecentSearches = () => {
-      const next = readRecentSearches(storageScope);
+      const next = readRecentSearches(effectiveStorageScope);
       setRecentSearches(next);
-      persistRecentSearches(storageScope, next);
+      persistRecentSearches(effectiveStorageScope, next);
     };
-    const syncRecentViews = () => setRecentViews(readRecentViews(storageScope));
+    const syncRecentViews = () => setRecentViews(readRecentViews(effectiveStorageScope));
 
     syncRecentSearches();
     syncRecentViews();
@@ -446,7 +501,7 @@ export default function HomeDynamicSignals({
       window.removeEventListener("jontaado:recent-views-updated", handleRecentViewsUpdate);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [storageScope]);
+  }, [effectiveStorageScope]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -527,13 +582,21 @@ export default function HomeDynamicSignals({
   };
 
   const toastCopy = useMemo(
-    () => ({
-      title: isFr ? "Ajoute au panier" : "Added to cart",
-      description: isFr
-        ? "Tu peux finaliser ta selection quand tu veux."
-        : "You can finish checkout whenever you are ready.",
-    }),
-    [isFr]
+    () =>
+      toastKind === "cart_sold_out"
+        ? {
+            title: isFr ? "Produit epuise" : "Product sold out",
+            description: isFr
+              ? "Ce produit n'est plus disponible pour le moment."
+              : "This product is no longer available right now.",
+          }
+        : {
+            title: isFr ? "Ajoute au panier" : "Added to cart",
+            description: isFr
+              ? "Tu peux finaliser ta selection quand tu veux."
+              : "You can finish checkout whenever you are ready.",
+          },
+    [isFr, toastKind]
   );
 
   return (
@@ -547,6 +610,16 @@ export default function HomeDynamicSignals({
                 {isFr
                   ? "Retrouve tes produits sauvegardes et ajoute-les au panier en un geste."
                   : "Keep saved products close and add them to cart in one move."}
+              </p>
+              <p
+                className={`mt-1.5 text-[11px] transition duration-200 ${
+                  toastKind === "cart_sold_out" ? "text-amber-200" : "text-emerald-200"
+                } ${
+                  toastKind ? "opacity-100" : "opacity-0"
+                }`}
+                aria-live="polite"
+              >
+                {toastCopy.title}. {toastCopy.description}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -644,6 +717,7 @@ export default function HomeDynamicSignals({
                           item={item}
                           locale={locale}
                           onAdded={() => setToastKind("cart_added")}
+                          onSoldOut={() => setToastKind("cart_sold_out")}
                         />
                       </div>
                     </div>
@@ -709,7 +783,7 @@ export default function HomeDynamicSignals({
                   <button
                     type="button"
                     onClick={() => {
-                      setRecentSearches(clearRecentSearches(storageScope));
+                      setRecentSearches(clearRecentSearches(effectiveStorageScope));
                       setRecentSearchesCleared(true);
                       setActiveTrashPulse("searches");
                     }}
@@ -792,7 +866,7 @@ export default function HomeDynamicSignals({
                   <button
                     type="button"
                     onClick={() => {
-                      setRecentViews(clearRecentViews(storageScope));
+                      setRecentViews(clearRecentViews(effectiveStorageScope));
                       setRecentViewsCleared(true);
                       setActiveTrashPulse("views");
                     }}
@@ -875,17 +949,6 @@ export default function HomeDynamicSignals({
         </div>
       </section>
 
-      <div
-        className={`pointer-events-none fixed bottom-5 right-5 z-40 transition duration-200 ${
-          toastKind ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
-        }`}
-        aria-live="polite"
-      >
-        <div className="rounded-2xl border border-emerald-300/20 bg-zinc-950/90 px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <p className="text-sm font-medium text-emerald-100">{toastCopy.title}</p>
-          <p className="mt-1 text-xs text-zinc-400">{toastCopy.description}</p>
-        </div>
-      </div>
     </>
   );
 }

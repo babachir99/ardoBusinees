@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
@@ -13,6 +14,27 @@ import {
   listMessageConversations,
   parseConversationTake,
 } from "@/lib/messages/conversations";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/messages",
+    title: isFr ? "Messagerie | Espace prive" : "Messages | Private space",
+    description: isFr
+      ? "Retrouve tes conversations et tes echanges dans un espace prive reserve a ton compte."
+      : "Access your conversations and exchanges in a private space reserved for your account.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function MessagesPage({
   params,

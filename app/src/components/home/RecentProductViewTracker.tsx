@@ -1,5 +1,6 @@
 "use client";
 
+import { useSessionUserId } from "@/components/auth/SessionScopeProvider";
 import { storeRecentView } from "@/lib/recentSignals";
 import { useEffect } from "react";
 
@@ -21,13 +22,16 @@ export default function RecentProductViewTracker({
   product,
   storageScope,
 }: RecentProductViewTrackerProps) {
+  const sessionUserId = useSessionUserId();
+  const effectiveStorageScope = storageScope ?? sessionUserId ?? null;
+
   useEffect(() => {
     try {
-      storeRecentView(storageScope, product);
+      storeRecentView(effectiveStorageScope, product);
     } catch {
       // ignore storage issues
     }
-  }, [product, storageScope]);
+  }, [effectiveStorageScope, product]);
 
   return null;
 }

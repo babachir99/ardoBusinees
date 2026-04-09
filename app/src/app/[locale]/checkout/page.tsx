@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import CheckoutForm from "@/components/cart/CheckoutForm";
 import Image from "next/image";
 import Footer from "@/components/layout/Footer";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/checkout",
+    title: isFr ? "Paiement | Espace prive" : "Checkout | Private space",
+    description: isFr
+      ? "Finalise ta commande dans un espace prive securise."
+      : "Complete your order in a secure private checkout space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default function CheckoutPage() {
   const t = useTranslations("Checkout");

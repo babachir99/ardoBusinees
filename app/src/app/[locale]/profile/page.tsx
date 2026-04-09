@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import ProfilePanel from "@/components/profile/ProfilePanel";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
@@ -5,6 +6,27 @@ import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
 import SignOutButton from "@/components/auth/SignOutButton";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/profile",
+    title: isFr ? "Profil | Espace prive" : "Profile | Private space",
+    description: isFr
+      ? "Consulte et gere les informations de ton profil dans ton espace prive."
+      : "Review and manage your profile information in your private space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);

@@ -1366,6 +1366,11 @@
     "add": "Favorites",
     "remove": "Remove from favorites",
     "unknownSeller": "Unknown seller",
+    "lowStockBadge": "Low stock",
+    "lowStockHint": "Only {count} item(s) left.",
+    "soldOutHint": "This product is temporarily sold out. You will be able to add it once stock is back.",
+    "suggestionsTitle": "You may also like",
+    "suggestionsSubtitle": "A few close picks based on your favorites to keep shopping.",
     "errors": {
       "load": "Unable to load favorites."
     }

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import OrdersLookup from "@/components/orders/OrdersLookup";
 import OrdersList from "@/components/orders/OrdersList";
@@ -5,6 +6,27 @@ import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/orders",
+    title: isFr ? "Commandes | Espace prive" : "Orders | Private space",
+    description: isFr
+      ? "Retrouve et suis tes commandes dans ton espace prive."
+      : "Review and track your orders in your private space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function OrdersPage() {
   const t = await getTranslations("Orders");

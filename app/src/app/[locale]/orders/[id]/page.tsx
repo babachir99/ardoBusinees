@@ -1,13 +1,35 @@
+import type { Metadata } from "next";
 import OrderDetail from "@/components/orders/OrderDetail";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}): Promise<Metadata> {
+  const { locale, id } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: `/orders/${id}`,
+    title: isFr ? "Detail commande | Espace prive" : "Order detail | Private space",
+    description: isFr
+      ? "Retrouve le detail et le suivi d'une commande dans ton espace prive."
+      : "Review order details and tracking in your private space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function OrderDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ locale: string; id: string }>;
 }) {
   const session = await getServerSession(authOptions);
   const { id } = await params;

@@ -4,6 +4,7 @@ import { getDiscountedPrice } from "@/lib/format";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { PaymentMethod, ProductType } from "@prisma/client";
+import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 const allowedPaymentMethods = new Set([
@@ -185,6 +186,8 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  await releaseExpiredPendingLocalOrders({ productIds });
 
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },

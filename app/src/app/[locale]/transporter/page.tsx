@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
@@ -8,11 +9,32 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
 import { formatMoney } from "@/lib/format";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole } from "@/lib/userRoles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/transporter",
+    title: isFr ? "Dashboard GP | Espace transporteur prive" : "GP dashboard | Private carrier space",
+    description: isFr
+      ? "Suis tes trajets, tes expeditions et tes gains depuis ton dashboard GP prive."
+      : "Track trips, shipments and earnings from your private GP dashboard.",
+    imagePath: "/stores/gp.png",
+    noIndex: true,
+  });
+}
 
 function formatDateOnly(locale: string, value: Date | null) {
   if (!value) return locale === "fr" ? "Non precise" : "Not set";

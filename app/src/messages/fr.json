@@ -1372,6 +1372,11 @@
     "add": "Favoris",
     "remove": "Retirer des favoris",
     "unknownSeller": "Vendeur inconnu",
+    "lowStockBadge": "Stock faible",
+    "lowStockHint": "Plus que {count} article(s) disponible(s).",
+    "soldOutHint": "Ce produit est momentanement epuise. Tu pourras l'ajouter des que le stock revient.",
+    "suggestionsTitle": "Tu pourrais aussi aimer",
+    "suggestionsSubtitle": "Quelques idees proches de tes favoris pour continuer tes achats.",
     "errors": {
       "load": "Impossible de charger les favoris."
     }

@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import FavoritesList from "@/components/favorites/FavoritesList";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/favorites",
+    title: isFr ? "Favoris | Espace prive" : "Favorites | Private space",
+    description: isFr
+      ? "Retrouve tes produits favoris dans ton espace prive."
+      : "Access your favorite products in your private space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function FavoritesPage() {
   const session = await getServerSession(authOptions);

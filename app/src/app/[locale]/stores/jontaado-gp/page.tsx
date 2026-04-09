@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
@@ -19,8 +20,30 @@ import { resolveGpPublishAccess } from "@/components/gp/gpPublishAccess";
 import { hasAnyUserRole } from "@/lib/userRoles";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { getGpMarketplaceSnapshot, getGpStoreSnapshot } from "@/lib/gpSnapshots";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
 const allowedCurrencies = new Set(["XOF", "EUR", "USD"]);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-gp",
+    title: isFr
+      ? "JONTAADO GP | Trajets, expedition et transporteurs"
+      : "JONTAADO GP | Trips, shipping and carriers",
+    description: isFr
+      ? "Explore les trajets GP, publie un trajet et expedie avec des transporteurs fiables sur JONTAADO."
+      : "Explore GP trips, publish a route and ship with reliable carriers on JONTAADO.",
+    imagePath: "/stores/gp.png",
+  });
+}
 
 export default async function GpPage({
   params,

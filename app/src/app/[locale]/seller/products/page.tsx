@@ -1,9 +1,31 @@
+import type { Metadata } from "next";
 import SellerProductsPanel from "@/components/seller/SellerProductsPanel";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import Image from "next/image";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/seller/products",
+    title: isFr ? "Produits vendeur | Espace prive" : "Seller products | Private space",
+    description: isFr
+      ? "Gere le catalogue de ta boutique depuis ton espace vendeur prive."
+      : "Manage your shop catalog from your private seller space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function SellerProductsPage() {
   const session = await getServerSession(authOptions);

@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
+import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
@@ -10,6 +11,27 @@ import InquiryChatThread from "@/components/messages/InquiryChatThread";
 import InquiryOffersPanel from "@/components/messages/InquiryOffersPanel";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
 import { parseMessageBody } from "@/lib/message-attachments";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}): Promise<Metadata> {
+  const { locale, id } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: `/messages/${id}`,
+    title: isFr ? "Conversation | Espace prive" : "Conversation | Private space",
+    description: isFr
+      ? "Consulte le detail d'une conversation dans ta messagerie privee."
+      : "Review conversation details in your private messaging space.",
+    imagePath: "/logo.png",
+    noIndex: true,
+  });
+}
 
 export default async function MessageDetailPage({
   params,

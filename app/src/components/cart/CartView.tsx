@@ -8,6 +8,7 @@ import { Link } from "@/i18n/navigation";
 import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
+import AddToCartButton from "@/components/cart/AddToCartButton";
 
 type RecommendedProduct = {
   id: string;
@@ -16,6 +17,8 @@ type RecommendedProduct = {
   priceCents: number;
   discountPercent?: number | null;
   currency: string;
+  type: "PREORDER" | "DROPSHIP" | "LOCAL";
+  stockQuantity?: number | null;
   seller?: { displayName: string; slug: string } | null;
   images: { url: string }[];
 };
@@ -54,6 +57,7 @@ function ProductSuggestionGrid({
   locale: string;
 }) {
   if (products.length === 0) return null;
+  const isFr = locale === "fr";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
@@ -65,11 +69,14 @@ function ProductSuggestionGrid({
             product.discountPercent && product.discountPercent > 0
               ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
               : product.priceCents;
+          const maxQuantity =
+            product.type === "LOCAL" && Number(product.stockQuantity ?? 0) > 0
+              ? Math.floor(Number(product.stockQuantity))
+              : undefined;
 
           return (
-            <Link
+            <div
               key={product.id}
-              href={`/shop/${product.slug}`}
               className="group rounded-2xl border border-white/10 bg-zinc-900/70 p-3 transition hover:border-emerald-300/60"
             >
               <div className="relative h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
@@ -78,31 +85,52 @@ function ProductSuggestionGrid({
                   variant="icon"
                   className="absolute left-2 top-2 z-20"
                 />
-                {product.images?.[0]?.url ? (
-                  <img
-                    src={product.images[0].url}
-                    alt={product.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
-                    Image
-                  </div>
-                )}
+                <Link href={`/shop/${product.slug}`} className="block h-full">
+                  {product.images?.[0]?.url ? (
+                    <img
+                      src={product.images[0].url}
+                      alt={product.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
+                      Image
+                    </div>
+                  )}
+                </Link>
               </div>
-              <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
-              <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-sm font-semibold text-emerald-200">
-                  {formatMoney(discountedPrice, product.currency, locale)}
-                </span>
-                {product.discountPercent && product.discountPercent > 0 && (
-                  <span className="text-[11px] text-zinc-500 line-through">
-                    {formatMoney(product.priceCents, product.currency, locale)}
+              <Link href={`/shop/${product.slug}`} className="block">
+                <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
+                <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-emerald-200">
+                    {formatMoney(discountedPrice, product.currency, locale)}
                   </span>
-                )}
+                  {product.discountPercent && product.discountPercent > 0 && (
+                    <span className="text-[11px] text-zinc-500 line-through">
+                      {formatMoney(product.priceCents, product.currency, locale)}
+                    </span>
+                  )}
+                </div>
+              </Link>
+              <div className="mt-3">
+                <AddToCartButton
+                  id={product.id}
+                  slug={product.slug}
+                  title={product.title}
+                  priceCents={discountedPrice}
+                  currency={product.currency}
+                  type={product.type}
+                  sellerName={product.seller?.displayName ?? undefined}
+                  maxQuantity={maxQuantity}
+                  label={isFr ? "Ajouter au panier" : "Add to cart"}
+                  addedLabel={isFr ? "Ajoute" : "Added"}
+                  soldOutLabel={isFr ? "Epuise" : "Sold out"}
+                  checkingLabel={isFr ? "Verification..." : "Checking..."}
+                  className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
+                />
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>
@@ -113,7 +141,7 @@ function ProductSuggestionGrid({
 export default function CartView() {
   const t = useTranslations("Cart");
   const locale = useLocale();
-  const { items, addItem, updateQuantity, removeItem, clear, subtotalCents } = useCart();
+  const { items, updateQuantity, removeItem, clear, subtotalCents } = useCart();
   const isFr = locale === "fr";
 
   const [similarProducts, setSimilarProducts] = useState<RecommendedProduct[]>([]);
@@ -235,23 +263,6 @@ export default function CartView() {
     }
   };
 
-  const addFavoriteToCart = (favorite: FavoriteItem) => {
-    const product = favorite.product;
-    const localStock = Number(product.stockQuantity ?? 0);
-    const maxQuantity = product.type === "LOCAL" && localStock > 0 ? localStock : undefined;
-
-    addItem({
-      id: product.id,
-      slug: product.slug,
-      title: product.title,
-      priceCents: product.priceCents,
-      currency: product.currency,
-      type: product.type,
-      sellerName: product.seller?.displayName ?? undefined,
-      maxQuantity,
-    });
-  };
-
   const feesCents = Math.round(subtotalCents * 0.04);
   const totalCents = subtotalCents + feesCents;
 
@@ -326,20 +337,26 @@ export default function CartView() {
                     </p>
 
                     <div className="mt-3 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => addFavoriteToCart(favorite)}
+                      <AddToCartButton
+                        id={product.id}
+                        slug={product.slug}
+                        title={product.title}
+                        priceCents={discountedPrice}
+                        currency={product.currency}
+                        type={product.type}
+                        sellerName={product.seller?.displayName ?? undefined}
+                        maxQuantity={
+                          product.type === "LOCAL" && Number(product.stockQuantity ?? 0) > 0
+                            ? Math.floor(Number(product.stockQuantity))
+                            : undefined
+                        }
+                        label={t("favoritesBox.addToCart")}
+                        addedLabel={isFr ? "Ajoute" : "Added"}
+                        soldOutLabel={t("favoritesBox.soldOut")}
+                        checkingLabel={isFr ? "Verification..." : "Checking..."}
+                        className="inline-flex rounded-full bg-emerald-400 px-3 py-1.5 text-[11px] font-semibold text-zinc-950 transition hover:bg-emerald-300"
                         disabled={isSoldOut}
-                        title={
-                          isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")
-                        }
-                        aria-label={
-                          isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")
-                        }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400 text-sm text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isSoldOut ? "!" : "\u{1F6D2}"}
-                      </button>
+                      />
                       <button
                         type="button"
                         onClick={() => removeFavorite(favorite.productId)}
@@ -530,14 +547,26 @@ export default function CartView() {
                       </div>
 
                       <div className="mt-3 grid gap-2">
-                        <button
-                          type="button"
-                          onClick={() => addFavoriteToCart(favorite)}
+                        <AddToCartButton
+                          id={product.id}
+                          slug={product.slug}
+                          title={product.title}
+                          priceCents={discountedPrice}
+                          currency={product.currency}
+                          type={product.type}
+                          sellerName={product.seller?.displayName ?? undefined}
+                          maxQuantity={
+                            product.type === "LOCAL" && Number(product.stockQuantity ?? 0) > 0
+                              ? Math.floor(Number(product.stockQuantity))
+                              : undefined
+                          }
+                          label={t("favoritesBox.addToCart")}
+                          addedLabel={isFr ? "Ajoute" : "Added"}
+                          soldOutLabel={t("favoritesBox.soldOut")}
+                          checkingLabel={isFr ? "Verification..." : "Checking..."}
+                          className="rounded-full bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-300"
                           disabled={isSoldOut}
-                          className="rounded-full bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isSoldOut ? t("favoritesBox.soldOut") : t("favoritesBox.addToCart")}
-                        </button>
+                        />
                         <button
                           type="button"
                           onClick={() => removeFavorite(favorite.productId)}
