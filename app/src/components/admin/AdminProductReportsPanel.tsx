@@ -236,6 +236,14 @@ export default function AdminProductReportsPanel({ locale }: { locale: string })
           {items.map((item) => {
             const statusMeta = STATUS_LABELS[item.status];
             const currentProduct = item.product;
+            const reportProgress = currentProduct
+              ? Math.min(
+                  100,
+                  Math.round(
+                    (currentProduct.activeReportCount / PRODUCT_REPORT_AUTO_HIDE_THRESHOLD) * 100
+                  )
+                )
+              : 0;
             const canReactivate = currentProduct
               ? !currentProduct.isActive &&
                 currentProduct.activeReportCount < PRODUCT_REPORT_AUTO_HIDE_THRESHOLD
@@ -274,8 +282,8 @@ export default function AdminProductReportsPanel({ locale }: { locale: string })
                         {item.product ? (
                           <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] text-amber-100">
                             {isFr
-                              ? `${item.product.activeReportCount} signalement(s) actifs`
-                              : `${item.product.activeReportCount} active report(s)`}
+                              ? `${item.product.activeReportCount}/${PRODUCT_REPORT_AUTO_HIDE_THRESHOLD} actifs`
+                              : `${item.product.activeReportCount}/${PRODUCT_REPORT_AUTO_HIDE_THRESHOLD} active`}
                           </span>
                         ) : null}
                         {item.product?.autoHiddenByReports ? (
@@ -309,6 +317,27 @@ export default function AdminProductReportsPanel({ locale }: { locale: string })
                   <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-200">
                     {item.description}
                   </p>
+                ) : null}
+
+                {currentProduct ? (
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] text-zinc-400">
+                      <span>{isFr ? "Seuil auto-masquage" : "Auto-hide threshold"}</span>
+                      <span>
+                        {currentProduct.activeReportCount}/{PRODUCT_REPORT_AUTO_HIDE_THRESHOLD}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          currentProduct.activeReportCount >= PRODUCT_REPORT_AUTO_HIDE_THRESHOLD
+                            ? "bg-rose-400"
+                            : "bg-amber-300"
+                        }`}
+                        style={{ width: `${reportProgress}%` }}
+                      />
+                    </div>
+                  </div>
                 ) : null}
 
                 {item.product?.autoHiddenAt ? (

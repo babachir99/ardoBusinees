@@ -111,6 +111,10 @@ const TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
     "Annonce masquee automatiquement: {{productTitle}}",
     "Votre annonce \"{{productTitle}}\" a ete masquee automatiquement apres {{activeReportCount}} signalements actifs.\nNotre equipe va la revoir. Vous pouvez suivre votre catalogue ici: {{link}}"
   ),
+  product_listing_reactivated: buildSimpleTemplate(
+    "Annonce reactivee: {{productTitle}}",
+    "Bonne nouvelle: votre annonce \"{{productTitle}}\" a ete reactivee apres revue.\nVous pouvez la retrouver dans votre catalogue ici: {{link}}"
+  ),
   ad_request_received: buildSimpleTemplate(
     "Demande pub bien recue pour {{companyName}}",
     "Votre demande de visibilite \"{{campaignTitle}}\" sur {{sourceVertical}} a bien ete recue pour le format {{placementLabel}}.\nNotre equipe va l'examiner puis vous recontacter si besoin."

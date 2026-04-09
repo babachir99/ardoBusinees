@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
+import { buildCarsStoreHref } from "@/lib/carsStorefront";
 
 export default async function CarDealerDetailPage({
   params,
@@ -77,7 +78,10 @@ export default async function CarDealerDetailPage({
     <div className="min-h-screen bg-jonta px-6 pb-24 pt-8 text-zinc-100">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-300/15 via-zinc-900 to-zinc-900 p-8">
-          <Link href="/cars/dealers" className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white">
+          <Link
+            href={buildCarsStoreHref(locale, { tab: "dealers" })}
+            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white"
+          >
             {t.back}
           </Link>
           <p className="mt-4 text-xs uppercase tracking-[0.2em] text-zinc-400">{t.title}</p>

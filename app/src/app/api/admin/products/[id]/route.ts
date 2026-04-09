@@ -8,6 +8,7 @@ import {
 } from "@/lib/product-delete";
 import {
   getActiveProductReportCount,
+  notifySellerAboutListingReactivated,
 } from "@/lib/productReports";
 import { PRODUCT_REPORT_AUTO_HIDE_THRESHOLD } from "@/lib/productReports.shared";
 
@@ -26,6 +27,30 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  const currentProduct = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      isActive: true,
+      title: true,
+      seller: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              email: true,
+              locale: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!currentProduct) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const data: Record<string, unknown> = {};
   if (typeof body.isActive === "boolean") {
     if (body.isActive === true) {
@@ -85,6 +110,19 @@ export async function PATCH(
     where: { id },
     data,
   });
+
+  const shouldNotifyReactivated =
+    typeof body.isActive === "boolean" && body.isActive === true && currentProduct.isActive === false;
+
+  if (shouldNotifyReactivated) {
+    void notifySellerAboutListingReactivated({
+      productId: currentProduct.id,
+      productTitle: currentProduct.title,
+      sellerUserId: currentProduct.seller?.userId ?? null,
+      sellerEmail: currentProduct.seller?.user?.email ?? null,
+      sellerLocale: currentProduct.seller?.user?.locale ?? "fr",
+    });
+  }
 
   return NextResponse.json(product);
 }

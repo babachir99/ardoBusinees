@@ -1,6 +1,6 @@
-import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import Footer from "@/components/layout/Footer";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
@@ -10,16 +10,38 @@ import {
   marketplaceActionSecondaryClass,
 } from "@/components/marketplace/MarketplaceActions";
 import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
-import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
+import Footer from "@/components/layout/Footer";
+import { CarsDealersSection, CarsExplorerSection, CarsMySection } from "@/components/cars/CarsStoreSections";
+import {
+  buildCarsStoreHref,
+  getCarsDealersData,
+  getCarsExplorerData,
+  getCarsMyDashboardData,
+  normalizeCarsStoreTab,
+  type CarsStoreSearchParams,
+} from "@/lib/carsStorefront";
 
 export default async function CarsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<CarsStoreSearchParams>;
 }) {
-  const [{ locale }, t] = await Promise.all([params, getTranslations("Verticals.cars")]);
+  const [{ locale }, rawSearchParams, session] = await Promise.all([
+    params,
+    searchParams,
+    getServerSession(authOptions),
+  ]);
   const isFr = locale === "fr";
-  const features = t.raw("features") as string[];
+  const activeTab = normalizeCarsStoreTab(rawSearchParams.tab);
+  const carsStoreHref = buildCarsStoreHref(locale);
+
+  const [explorerData, dealersData, myDashboardData] = await Promise.all([
+    activeTab === "explore" ? getCarsExplorerData(rawSearchParams) : Promise.resolve(null),
+    activeTab === "dealers" ? getCarsDealersData(rawSearchParams) : Promise.resolve(null),
+    activeTab === "my" ? getCarsMyDashboardData(session?.user?.id ?? null) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -45,20 +67,28 @@ export default async function CarsPage({
           left={
             <>
               <Link
-                href="/cars"
-                className={marketplaceActionPrimaryClass}
+                href={buildCarsStoreHref(locale, {
+                  tab: "explore",
+                  params: rawSearchParams,
+                })}
+                className={activeTab === "explore" ? marketplaceActionPrimaryClass : marketplaceActionSecondaryClass}
               >
                 {isFr ? "Explorer" : "Explore"}
               </Link>
               <Link
-                href="/cars/dealers"
-                className={marketplaceActionSecondaryClass}
+                href={buildCarsStoreHref(locale, {
+                  tab: "dealers",
+                  params: rawSearchParams,
+                })}
+                className={activeTab === "dealers" ? marketplaceActionPrimaryClass : marketplaceActionSecondaryClass}
               >
                 {isFr ? "Concessionnaires" : "Dealers"}
               </Link>
               <Link
-                href="/cars/my"
-                className={marketplaceActionSecondaryClass}
+                href={buildCarsStoreHref(locale, {
+                  tab: "my",
+                })}
+                className={activeTab === "my" ? marketplaceActionPrimaryClass : marketplaceActionSecondaryClass}
               >
                 {isFr ? "Mes annonces" : "My listings"}
               </Link>
@@ -74,20 +104,15 @@ export default async function CarsPage({
           }
         />
 
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {features.map((feature, index) => (
-            <MarketplaceCard
-              key={feature}
-              label={isFr ? `Experience ${index + 1}` : `Experience ${index + 1}`}
-              title={feature}
-              description={
-                isFr
-                  ? "Une promesse claire pour explorer, comparer et publier plus vite sans surcharge visuelle."
-                  : "A clear promise to explore, compare and publish faster without visual overload."
-              }
-            />
-          ))}
-        </section>
+        {activeTab === "explore" && explorerData ? (
+          <CarsExplorerSection locale={locale} basePath={carsStoreHref} data={explorerData} />
+        ) : null}
+
+        {activeTab === "dealers" && dealersData ? (
+          <CarsDealersSection locale={locale} basePath={carsStoreHref} data={dealersData} />
+        ) : null}
+
+        {activeTab === "my" ? <CarsMySection locale={locale} data={myDashboardData} /> : null}
       </main>
       <Footer />
     </div>

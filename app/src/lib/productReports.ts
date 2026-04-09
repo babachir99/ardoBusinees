@@ -7,6 +7,7 @@ export const PRODUCT_REPORT_ACTION = "PRODUCT_REPORT_SUBMITTED";
 export const PRODUCT_REPORT_ENTITY_TYPE = "PRODUCT";
 export const PRODUCT_REPORT_ADMIN_ALERT_ACTION = "ADMIN_PRODUCT_REPORT_SUBMITTED";
 export const PRODUCT_REPORT_SELLER_ALERT_ACTION = "SELLER_PRODUCT_AUTO_HIDDEN";
+export const PRODUCT_REPORT_SELLER_REACTIVATED_ACTION = "SELLER_PRODUCT_REACTIVATED";
 export const PRODUCT_REPORT_STATUSES = [
   "PENDING",
   "UNDER_REVIEW",
@@ -290,6 +291,45 @@ async function notifySellerAboutAutoHiddenListing(input: {
         link: sellerLink,
       },
       dedupeKey: `product_listing_auto_hidden:${input.productId}:${input.sellerUserId}`,
+    }),
+  ]);
+}
+
+export async function notifySellerAboutListingReactivated(input: {
+  productId: string;
+  productTitle: string;
+  sellerUserId: string | null;
+  sellerEmail: string | null;
+  sellerLocale: string;
+}) {
+  if (!input.sellerUserId) return;
+
+  const sellerLink = resolveSellerProductsLink(input.sellerLocale);
+
+  await Promise.allSettled([
+    prisma.activityLog.create({
+      data: {
+        userId: input.sellerUserId,
+        action: PRODUCT_REPORT_SELLER_REACTIVATED_ACTION,
+        entityType: PRODUCT_REPORT_ENTITY_TYPE,
+        entityId: input.productId,
+        metadata: {
+          productId: input.productId,
+          productTitle: input.productTitle,
+          reason: "LISTING_REACTIVATED_AFTER_REVIEW",
+        } as Prisma.InputJsonValue,
+      },
+    }),
+    NotificationService.queueEmail({
+      userId: input.sellerUserId,
+      toEmail: input.sellerEmail,
+      kind: NotificationKind.TRANSACTIONAL,
+      templateKey: "product_listing_reactivated",
+      payload: {
+        productTitle: input.productTitle,
+        link: sellerLink,
+      },
+      dedupeKey: `product_listing_reactivated:${input.productId}:${input.sellerUserId}`,
     }),
   ]);
 }
