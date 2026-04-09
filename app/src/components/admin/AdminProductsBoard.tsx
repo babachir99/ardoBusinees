@@ -22,7 +22,11 @@ type Product = {
   images: { url: string; alt?: string | null }[];
 };
 
-export default function AdminProductsBoard() {
+export default function AdminProductsBoard({
+  pendingReportsCount = 0,
+}: {
+  pendingReportsCount?: number;
+}) {
   const t = useTranslations("AdminProducts");
   const locale = useLocale();
   const [items, setItems] = useState<Product[]>([]);
@@ -159,7 +163,14 @@ export default function AdminProductsBoard() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold">{t("title")}</h1>
+            {pendingReportsCount > 0 ? (
+              <span className="rounded-full border border-rose-300/25 bg-rose-400/10 px-3 py-1 text-[11px] font-semibold text-rose-100">
+                {pendingReportsCount} {locale === "fr" ? "signalement(s)" : "report(s)"}
+              </span>
+            ) : null}
+          </div>
           <p className="mt-2 text-sm text-zinc-300">{t("subtitle")}</p>
         </div>
         <button

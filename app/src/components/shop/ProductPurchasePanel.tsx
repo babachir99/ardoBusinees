@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
+import ReportListingButton from "@/components/shop/ReportListingButton";
 
 type ProductImage = {
   url: string;
@@ -31,6 +32,7 @@ type ProductPurchasePanelProps = {
   showSizeOptions: boolean;
   colorOptions?: string[];
   sizeOptions?: string[];
+  isAuthenticated?: boolean;
 };
 
 export default function ProductPurchasePanel({
@@ -53,6 +55,7 @@ export default function ProductPurchasePanel({
   showSizeOptions,
   colorOptions,
   sizeOptions,
+  isAuthenticated = false,
 }: ProductPurchasePanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -559,6 +562,14 @@ export default function ProductPurchasePanel({
                   <p className="mt-1 text-[11px] text-rose-300">{shareErrorLabel}</p>
                 )}
               </div>
+
+              <ReportListingButton
+                locale={locale}
+                productId={productId}
+                productTitle={title}
+                imageUrl={images[0]?.url ?? null}
+                isAuthenticated={isAuthenticated}
+              />
             </div>
           </div>
         </div>

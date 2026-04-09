@@ -1,12 +1,22 @@
+import AdminProductReportsPanel from "@/components/admin/AdminProductReportsPanel";
 import AdminProductsBoard from "@/components/admin/AdminProductsBoard";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
+import { getProductReportCounts } from "@/lib/productReports";
 import Image from "next/image";
 
-export default async function AdminProductsPage() {
-  const session = await getServerSession(authOptions);
+export default async function AdminProductsPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const [session, reportCounts] = await Promise.all([
+    getServerSession(authOptions),
+    getProductReportCounts(),
+  ]);
 
   if (!session || session.user.role !== "ADMIN") {
     return (
@@ -65,7 +75,10 @@ export default async function AdminProductsPage() {
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-12">
-        <AdminProductsBoard />
+        <AdminProductReportsPanel locale={locale} />
+        <div className="mt-8">
+        <AdminProductsBoard pendingReportsCount={reportCounts.pending} />
+        </div>
       </main>
       <Footer />
     </div>

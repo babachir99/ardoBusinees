@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
+import { getServerSession } from "next-auth";
 import { notFound } from "next/navigation";
+import IdleSessionGuard from "@/components/auth/IdleSessionGuard";
 import { routing } from "@/i18n/routing";
+import { authOptions } from "@/lib/auth";
 import { CartProvider } from "@/components/cart/CartProvider";
 import InternalNavigationHeader from "@/components/layout/InternalNavigationHeader";
 import "../globals.css";
@@ -47,7 +50,10 @@ export default async function LocaleLayout({
   }
 
   setRequestLocale(locale);
-  const messages = await getMessages();
+  const [messages, session] = await Promise.all([
+    getMessages(),
+    getServerSession(authOptions),
+  ]);
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -56,6 +62,7 @@ export default async function LocaleLayout({
       >
         <NextIntlClientProvider messages={messages}>
           <CartProvider>
+            <IdleSessionGuard locale={locale} userId={session?.user?.id ?? null} />
             <InternalNavigationHeader locale={locale} />
             {children}
           </CartProvider>

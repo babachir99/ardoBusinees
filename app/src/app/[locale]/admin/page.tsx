@@ -7,6 +7,7 @@ import AdminOpsHub from "@/components/admin/AdminOpsHub";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
+import { getProductReportCounts } from "@/lib/productReports";
 import { hasUserRole } from "@/lib/userRoles";
 import { getAdminDashboardSnapshot } from "@/lib/adminDashboardSnapshot";
 export const dynamic = "force-dynamic";
@@ -77,6 +78,7 @@ export default async function AdminPage() {
     liveSponsoredCampaigns,
     configuredSponsoredCampaigns,
   } = await getAdminDashboardSnapshot();
+  const productReportCounts = await getProductReportCounts();
 
   const dayKey = (date: Date) => {
     const year = date.getFullYear();
@@ -462,6 +464,14 @@ export default async function AdminPage() {
                 subtitle: t("products.subtitle"),
                 cta: t("products.cta"),
                 href: "/admin/products",
+                badgeCount: productReportCounts.pending,
+                badgeTone: "rose" as const,
+                meta:
+                  productReportCounts.pending > 0
+                    ? isFr
+                      ? `${productReportCounts.pending} signalement(s) a revoir`
+                      : `${productReportCounts.pending} report(s) to review`
+                    : null,
               },
               {
                 title: t("categories.title"),
@@ -494,6 +504,11 @@ export default async function AdminPage() {
                   : "Manage homepage ads, verticals, and rotations",
                 cta: isFr ? "Gerer" : "Manage",
                 href: "/admin/campaigns",
+                badgeCount: liveSponsoredCampaigns,
+                badgeTone: "emerald" as const,
+                meta: isFr
+                  ? `${configuredSponsoredCampaigns} campagne(s) configuree(s) · ${liveSponsoredCampaigns} active(s)`
+                  : `${configuredSponsoredCampaigns} campaign(s) configured · ${liveSponsoredCampaigns} live`,
               },
             ].map((card) => (
               <article
@@ -502,20 +517,20 @@ export default async function AdminPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-sm font-semibold text-white">{card.title}</h3>
-                  {card.href === "/admin/campaigns" ? (
-                    <span className="inline-flex min-w-8 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">
-                      {liveSponsoredCampaigns}
+                  {typeof card.badgeCount === "number" && card.badgeCount > 0 ? (
+                    <span
+                      className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold ${
+                        card.badgeTone === "rose"
+                          ? "border border-rose-300/25 bg-rose-400/10 text-rose-100"
+                          : "border border-emerald-300/25 bg-emerald-400/10 text-emerald-100"
+                      }`}
+                    >
+                      {card.badgeCount}
                     </span>
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs text-zinc-400">{card.subtitle}</p>
-                {card.href === "/admin/campaigns" ? (
-                  <p className="mt-2 text-[11px] text-zinc-500">
-                    {isFr
-                      ? `${configuredSponsoredCampaigns} campagne(s) configuree(s) · ${liveSponsoredCampaigns} active(s)`
-                      : `${configuredSponsoredCampaigns} campaign(s) configured · ${liveSponsoredCampaigns} live`}
-                  </p>
-                ) : null}
+                {card.meta ? <p className="mt-2 text-[11px] text-zinc-500">{card.meta}</p> : null}
                 <Link
                   href={card.href}
                   className="mt-4 inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/60"

@@ -65,10 +65,7 @@ type EmptyStateProps = {
   children: ReactNode;
 };
 
-type SignalToastKind =
-  | "cart_added"
-  | "recent_searches_cleared"
-  | "recent_views_cleared";
+type SignalToastKind = "cart_added";
 
 function buildSearchHref(item: RecentSearchItem) {
   const params = new URLSearchParams();
@@ -350,6 +347,9 @@ export default function HomeDynamicSignals({
   const [likedItems, setLikedItems] = useState<HomeLikedItem[]>(initialLikedItems);
   const [likesLoading, setLikesLoading] = useState(false);
   const [toastKind, setToastKind] = useState<SignalToastKind | null>(null);
+  const [recentSearchesCleared, setRecentSearchesCleared] = useState(false);
+  const [recentViewsCleared, setRecentViewsCleared] = useState(false);
+  const [activeTrashPulse, setActiveTrashPulse] = useState<"searches" | "views" | null>(null);
   const favoritesRailRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -472,6 +472,33 @@ export default function HomeDynamicSignals({
     return () => window.clearTimeout(timeoutId);
   }, [toastKind]);
 
+  useEffect(() => {
+    if (!recentSearchesCleared) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setRecentSearchesCleared(false), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [recentSearchesCleared]);
+
+  useEffect(() => {
+    if (!recentViewsCleared) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setRecentViewsCleared(false), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [recentViewsCleared]);
+
+  useEffect(() => {
+    if (!activeTrashPulse) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setActiveTrashPulse(null), 380);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTrashPulse]);
+
   const likedTitle = useMemo(() => {
     if (isLoggedIn) {
       return isFr ? "Vos coups de coeur" : "Your favorites";
@@ -499,32 +526,15 @@ export default function HomeDynamicSignals({
     });
   };
 
-  const toastCopy = useMemo(() => {
-    if (toastKind === "recent_searches_cleared") {
-      return {
-        title: isFr ? "Recherches effacees" : "Recent searches cleared",
-        description: isFr
-          ? "Ton historique de recherche a ete nettoye."
-          : "Your search history has been cleared.",
-      };
-    }
-
-    if (toastKind === "recent_views_cleared") {
-      return {
-        title: isFr ? "Vues effacees" : "Recent views cleared",
-        description: isFr
-          ? "Ton historique de vues a ete nettoye."
-          : "Your recently viewed products were cleared.",
-      };
-    }
-
-    return {
+  const toastCopy = useMemo(
+    () => ({
       title: isFr ? "Ajoute au panier" : "Added to cart",
       description: isFr
         ? "Tu peux finaliser ta selection quand tu veux."
         : "You can finish checkout whenever you are ready.",
-    };
-  }, [isFr, toastKind]);
+    }),
+    [isFr]
+  );
 
   return (
     <>
@@ -681,20 +691,35 @@ export default function HomeDynamicSignals({
         <div className="flex h-full min-w-0 min-h-0 flex-col gap-4 xl:h-[320px]">
           <div className={`${secondaryCardClass} flex min-h-0 flex-1 flex-col`}>
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xl font-semibold text-white">
-                {isFr ? "Recherches recentes" : "Recent searches"}
-              </h3>
+              <div className="min-w-0">
+                <h3 className="text-xl font-semibold text-white">
+                  {isFr ? "Recherches recentes" : "Recent searches"}
+                </h3>
+                <p
+                  className={`mt-1 text-[11px] text-emerald-200 transition duration-200 ${
+                    recentSearchesCleared ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-live="polite"
+                >
+                  {isFr ? "Historique efface." : "History cleared."}
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 {recentSearches.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => {
                       setRecentSearches(clearRecentSearches(storageScope));
-                      setToastKind("recent_searches_cleared");
+                      setRecentSearchesCleared(true);
+                      setActiveTrashPulse("searches");
                     }}
                     aria-label={isFr ? "Vider les recherches recentes" : "Clear recent searches"}
                     title={isFr ? "Vider l'historique" : "Clear history"}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white/[0.04] transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white ${
+                      activeTrashPulse === "searches"
+                        ? "scale-[0.94] border-emerald-300/35 bg-emerald-400/15 text-emerald-100"
+                        : "border-white/10 text-zinc-300"
+                    }`}
                   >
                     <TrashGlyph />
                   </button>
@@ -749,20 +774,35 @@ export default function HomeDynamicSignals({
 
           <div className={`${secondaryCardClass} flex min-h-0 flex-1 flex-col`}>
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xl font-semibold text-white">
-                {isFr ? "Vu recemment" : "Viewed recently"}
-              </h3>
+              <div className="min-w-0">
+                <h3 className="text-xl font-semibold text-white">
+                  {isFr ? "Vu recemment" : "Viewed recently"}
+                </h3>
+                <p
+                  className={`mt-1 text-[11px] text-cyan-200 transition duration-200 ${
+                    recentViewsCleared ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-live="polite"
+                >
+                  {isFr ? "Historique efface." : "History cleared."}
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 {recentViews.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => {
                       setRecentViews(clearRecentViews(storageScope));
-                      setToastKind("recent_views_cleared");
+                      setRecentViewsCleared(true);
+                      setActiveTrashPulse("views");
                     }}
                     aria-label={isFr ? "Vider les vues recentes" : "Clear recent views"}
                     title={isFr ? "Vider l'historique" : "Clear history"}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white/[0.04] transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white ${
+                      activeTrashPulse === "views"
+                        ? "scale-[0.94] border-cyan-300/35 bg-cyan-400/15 text-cyan-100"
+                        : "border-white/10 text-zinc-300"
+                    }`}
                   >
                     <TrashGlyph />
                   </button>

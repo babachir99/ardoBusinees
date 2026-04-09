@@ -515,6 +515,7 @@ export default async function ProductPage({
             showSizeOptions={showSizeOptions}
             colorOptions={explicitColorOptions}
             sizeOptions={explicitSizeOptions}
+            isAuthenticated={Boolean(session?.user?.id)}
           />
 
           <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/70 p-5 text-sm text-zinc-300">

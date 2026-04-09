@@ -6,6 +6,10 @@ import {
   deleteProductSafely,
   PRODUCT_DELETE_CONFLICT_MESSAGE,
 } from "@/lib/product-delete";
+import {
+  getActiveProductReportCount,
+} from "@/lib/productReports";
+import { PRODUCT_REPORT_AUTO_HIDE_THRESHOLD } from "@/lib/productReports.shared";
 
 export async function PATCH(
   request: NextRequest,
@@ -24,6 +28,20 @@ export async function PATCH(
   const { id } = await params;
   const data: Record<string, unknown> = {};
   if (typeof body.isActive === "boolean") {
+    if (body.isActive === true) {
+      const activeReportCount = await getActiveProductReportCount(id);
+      if (activeReportCount >= PRODUCT_REPORT_AUTO_HIDE_THRESHOLD) {
+        return NextResponse.json(
+          {
+            error: "ACTIVE_REPORT_THRESHOLD_REACHED",
+            message: `Listing cannot be reactivated while it still has ${activeReportCount} active reports.`,
+            activeReportCount,
+            threshold: PRODUCT_REPORT_AUTO_HIDE_THRESHOLD,
+          },
+          { status: 409 }
+        );
+      }
+    }
     data.isActive = body.isActive;
   }
 

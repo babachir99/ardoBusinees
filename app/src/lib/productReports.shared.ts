@@ -1,0 +1,1 @@
+export const PRODUCT_REPORT_AUTO_HIDE_THRESHOLD = 5;

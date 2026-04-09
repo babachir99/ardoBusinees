@@ -103,6 +103,14 @@ const TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
     "Nouveau message GP {{shipmentCode}}",
     "{{actorName}} a partage un message sur l'envoi {{shipmentCode}}.\n{{messagePreview}}\nVoir le fil: {{link}}"
   ),
+  product_report_submitted: buildSimpleTemplate(
+    "Nouvelle annonce signalee: {{productTitle}}",
+    "Une annonce vient d'etre signalee pour le motif {{reasonLabel}}.\nSignalements actifs: {{activeReportCount}}.\n{{autoHiddenLine}}\nOuvrir la moderation: {{link}}"
+  ),
+  product_listing_auto_hidden: buildSimpleTemplate(
+    "Annonce masquee automatiquement: {{productTitle}}",
+    "Votre annonce \"{{productTitle}}\" a ete masquee automatiquement apres {{activeReportCount}} signalements actifs.\nNotre equipe va la revoir. Vous pouvez suivre votre catalogue ici: {{link}}"
+  ),
   ad_request_received: buildSimpleTemplate(
     "Demande pub bien recue pour {{companyName}}",
     "Votre demande de visibilite \"{{campaignTitle}}\" sur {{sourceVertical}} a bien ete recue pour le format {{placementLabel}}.\nNotre equipe va l'examiner puis vous recontacter si besoin."
