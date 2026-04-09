@@ -308,7 +308,7 @@ export default function CaresProductExperience({
                   <button
                     type="button"
                     onClick={() => openJourney(journey.id)}
-                    className={panelButtonClass}
+                    className={marketplaceActionSecondaryClass}
                   >
                     {journey.cta}
                   </button>

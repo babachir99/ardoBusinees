@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import {
   marketplaceActionPrimaryClass,
   marketplaceActionSecondaryClass,
@@ -28,7 +29,16 @@ export default async function ImmoPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          title={isFr ? "Trouve ou publie un bien" : "Find or list a property"}
+          title={
+            <MarketplaceHeroDynamicTitle
+              fixedLine={isFr ? "Trouve ou publie un bien" : "Find or list a property"}
+              lines={
+                isFr
+                  ? ["dans les bons quartiers", "avec des annonces plus claires", "sans visites inutiles", "en toute serenite"]
+                  : ["in the right neighborhoods", "with clearer listings", "without wasted visits", "with confidence"]
+              }
+            />
+          }
           compact
           accentClassName="from-cyan-500/16 via-zinc-950/92 to-zinc-950"
         />

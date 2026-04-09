@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import {
   marketplaceActionPrimaryClass,
   marketplaceActionSecondaryClass,
@@ -126,7 +127,16 @@ export default async function GpPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          title={locale === "fr" ? "Trouve ou propose un trajet" : "Find or offer a trip"}
+          title={
+            <MarketplaceHeroDynamicTitle
+              fixedLine={locale === "fr" ? "Trouve ou propose un trajet" : "Find or offer a trip"}
+              lines={
+                locale === "fr"
+                  ? ["pour expedier sans stress", "avec des transporteurs fiables", "au bon budget", "sur des trajets qui comptent"]
+                  : ["to ship without stress", "with trusted transporters", "at the right budget", "on trips that matter"]
+              }
+            />
+          }
           compact
           accentClassName="from-indigo-500/18 via-zinc-950/92 to-zinc-950"
         />

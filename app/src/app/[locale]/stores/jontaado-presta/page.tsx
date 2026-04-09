@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
 import { authOptions } from "@/lib/auth";
 import PrestaStoreClient from "@/components/presta/PrestaStoreClient";
@@ -36,7 +37,16 @@ export default async function PrestaPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          title={locale === "fr" ? "Trouve ou propose un service" : "Find or offer a service"}
+          title={
+            <MarketplaceHeroDynamicTitle
+              fixedLine={locale === "fr" ? "Trouve ou propose un service" : "Find or offer a service"}
+              lines={
+                locale === "fr"
+                  ? ["pour gagner du temps", "pres de chez toi", "en quelques clics", "en toute confiance"]
+                  : ["to save time", "near you", "in just a few clicks", "with confidence"]
+              }
+            />
+          }
           compact
           accentClassName="from-amber-500/18 via-zinc-950/92 to-zinc-950"
         />

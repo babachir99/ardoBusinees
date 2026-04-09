@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import {
   marketplaceActionPrimaryClass,
   marketplaceActionSecondaryClass,
@@ -25,7 +26,16 @@ export default async function CarsPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          title={isFr ? "Trouve ou publie un vehicule" : "Find or list a vehicle"}
+          title={
+            <MarketplaceHeroDynamicTitle
+              fixedLine={isFr ? "Trouve ou publie un vehicule" : "Find or list a vehicle"}
+              lines={
+                isFr
+                  ? ["au bon prix", "avec des vendeurs fiables", "sans perdre de temps", "pres de chez toi"]
+                  : ["at the right price", "with trusted sellers", "without wasting time", "near you"]
+              }
+            />
+          }
           compact
           accentClassName="from-rose-500/16 via-zinc-950/92 to-zinc-950"
         />

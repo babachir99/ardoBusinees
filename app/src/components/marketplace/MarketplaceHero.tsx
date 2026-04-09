@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 type MarketplaceHeroProps = {
   badge?: string;
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
