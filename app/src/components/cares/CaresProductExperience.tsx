@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import {
+  marketplaceActionPrimaryClass,
+  marketplaceActionSecondaryClass,
+} from "@/components/marketplace/MarketplaceActions";
 import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 
 type JourneyField = {
@@ -110,12 +114,6 @@ const toneClasses: Record<string, string> = {
   amber: "border-amber-300/20 bg-amber-400/10 text-amber-100",
 };
 
-const primaryButtonClass =
-  "rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300";
-
-const panelButtonClass =
-  "rounded-full border border-emerald-300/25 bg-emerald-400/12 px-5 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/45 hover:bg-emerald-400/18";
-
 export default function CaresProductExperience({
   page,
   locale = "fr",
@@ -172,14 +170,14 @@ export default function CaresProductExperience({
                 <button
                   key={journey.id}
                   type="button"
-                  onClick={() => openJourney(journey.id)}
-                  className={
-                    (activeJourneyId ?? page.journeys[0]?.id) === journey.id
-                      ? primaryButtonClass
-                      : panelButtonClass
-                  }
-                >
-                  {page.ctas[index]?.label ?? journey.label}
+                    onClick={() => openJourney(journey.id)}
+                    className={
+                      (activeJourneyId ?? page.journeys[0]?.id) === journey.id
+                        ? marketplaceActionPrimaryClass
+                        : marketplaceActionSecondaryClass
+                    }
+                  >
+                    {page.ctas[index]?.label ?? journey.label}
                 </button>
               ))}
               <button
@@ -188,7 +186,7 @@ export default function CaresProductExperience({
                   setActiveJourneyId(null);
                   setAboutOpen(true);
                 }}
-                className={panelButtonClass}
+                className={marketplaceActionSecondaryClass}
               >
                 {page.aboutButtonLabel}
               </button>

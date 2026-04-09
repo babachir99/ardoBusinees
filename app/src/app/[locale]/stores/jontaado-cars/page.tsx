@@ -3,6 +3,10 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import {
+  marketplaceActionPrimaryClass,
+  marketplaceActionSecondaryClass,
+} from "@/components/marketplace/MarketplaceActions";
 import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 
@@ -31,19 +35,19 @@ export default async function CarsPage({
             <>
               <Link
                 href="/cars"
-                className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]"
+                className={marketplaceActionPrimaryClass}
               >
                 {isFr ? "Explorer" : "Explore"}
               </Link>
               <Link
                 href="/cars/dealers"
-                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/35 hover:bg-white/10"
+                className={marketplaceActionSecondaryClass}
               >
                 {isFr ? "Concessionnaires" : "Dealers"}
               </Link>
               <Link
                 href="/cars/my"
-                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/35 hover:bg-white/10"
+                className={marketplaceActionSecondaryClass}
               >
                 {isFr ? "Mes annonces" : "My listings"}
               </Link>

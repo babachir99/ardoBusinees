@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedWizard from "@/components/presta/PrestaNeedWizard";
@@ -9,6 +10,10 @@ import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatch
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
 import PrestaFiltersBar, { type PrestaFiltersValue } from "@/components/presta/PrestaFiltersBar";
 import PrestaDetailsDrawer, { type PrestaDetailsItem } from "@/components/presta/PrestaDetailsDrawer";
+import {
+  marketplaceActionPrimaryClass,
+  marketplaceActionSecondaryClass,
+} from "@/components/marketplace/MarketplaceActions";
 import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 import CountryPhoneField from "@/components/forms/CountryPhoneField";
 import { buildFormDefaults, normalizePhoneInput } from "@/lib/forms/prefill";
@@ -802,11 +807,20 @@ export default function PrestaStoreClient({
         }
         right={
           <>
+            {canPublish ? (
+              <Link
+                href={`/${locale}/stores/jontaado-presta/dashboard`}
+                className={marketplaceActionSecondaryClass}
+              >
+                {isFr ? "Dashboard" : "Dashboard"}
+              </Link>
+            ) : null}
+
             {tab === "needs" ? (
               <button
                 type="button"
                 onClick={openNeedComposer}
-                className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+                className={marketplaceActionPrimaryClass}
               >
                 {isFr ? "Publier un besoin" : "Publish a need"}
               </button>
@@ -815,7 +829,7 @@ export default function PrestaStoreClient({
                 <button
                   type="button"
                   onClick={openServiceComposer}
-                  className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+                  className={marketplaceActionPrimaryClass}
                 >
                   {isFr ? "Proposer un service" : "Offer a service"}
                 </button>
@@ -823,7 +837,7 @@ export default function PrestaStoreClient({
                 <button
                   type="button"
                   onClick={openNeedComposer}
-                  className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-600 active:scale-95"
+                  className={marketplaceActionPrimaryClass}
                 >
                   {isFr ? "Publier un besoin" : "Publish a need"}
                 </button>
@@ -834,7 +848,7 @@ export default function PrestaStoreClient({
               <button
                 type="button"
                 onClick={goToBecomeProvider}
-                className="rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-zinc-100 transition hover:border-emerald-400/40 hover:text-white active:scale-95"
+                className={marketplaceActionSecondaryClass}
               >
                 {isFr ? "Devenir prestataire" : "Become provider"}
               </button>

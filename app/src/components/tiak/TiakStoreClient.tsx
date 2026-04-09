@@ -2,8 +2,13 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import {
+  marketplaceActionPrimaryClass,
+  marketplaceActionSecondaryClass,
+} from "@/components/marketplace/MarketplaceActions";
 import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
 import TiakCourierAvailabilityPanel from "@/components/tiak/TiakCourierAvailabilityPanel";
 import TiakDeliveryQueue from "@/components/tiak/TiakDeliveryQueue";
@@ -713,12 +718,11 @@ export default function TiakStoreClient({
   return (
     <div id="tiak-dispatch" className="space-y-6">
       <MarketplaceActions
-        className="sticky top-[92px] z-30 rounded-[1.6rem] border border-neutral-800/70 bg-neutral-900/60 p-3 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur transition-colors duration-200 ease-out hover:border-emerald-400/25 hover:bg-neutral-900/70 motion-reduce:transition-none"
         left={
           <>
             <a
               href="#tiak-open-deliveries"
-              className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]"
+              className={marketplaceActionPrimaryClass}
             >
               {locale === "fr" ? "Explorer" : "Explore"}
             </a>
@@ -729,7 +733,7 @@ export default function TiakStoreClient({
                   .getElementById("tiak-my-deliveries")
                   ?.scrollIntoView({ behavior: "smooth", block: "start" })
               }
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/10"
+              className={marketplaceActionSecondaryClass}
             >
               {locale === "fr" ? "Historique" : "History"}
             </button>
@@ -743,7 +747,7 @@ export default function TiakStoreClient({
                     markTiakNotificationsRead();
                   }
                 }}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/10"
+                className={`${marketplaceActionSecondaryClass} gap-2`}
               >
                 {locale === "fr" ? "Notifications" : "Notifications"}
                 {unreadTiakNotificationsCount > 0 ? (
@@ -762,10 +766,19 @@ export default function TiakStoreClient({
         }
         right={
           <>
+            {canViewEarnings ? (
+              <Link
+                href={`/${locale}/stores/jontaado-tiak-tiak/dashboard`}
+                className={marketplaceActionSecondaryClass}
+              >
+                {locale === "fr" ? "Dashboard" : "Dashboard"}
+              </Link>
+            ) : null}
+
             <button
               type="button"
               onClick={() => setOpenNewMission(true)}
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-2.5 font-medium text-neutral-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition-all duration-200 ease-out hover:brightness-110 hover:shadow-[0_14px_36px_rgba(16,185,129,0.35)] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/50 motion-reduce:transition-none"
+              className={`${marketplaceActionPrimaryClass} group gap-2 px-6 py-2.5 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-400/50`}
             >
               <svg
                 viewBox="0 0 24 24"
