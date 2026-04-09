@@ -268,6 +268,21 @@ export function removeRecentSearch(
   return next;
 }
 
+export function clearRecentSearches(storageScope: string | null | undefined) {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  persistRecentSearches(storageScope, []);
+  window.dispatchEvent(
+    new CustomEvent("jontaado:recent-searches-updated", {
+      detail: { scope: resolveRecentSignalsScope(storageScope), items: [] },
+    })
+  );
+
+  return [];
+}
+
 export function readRecentViews(storageScope?: string | null) {
   const items = readStoredArray<RecentViewItem>(
     getRecentViewsStorageKey(storageScope),
@@ -331,4 +346,19 @@ export function storeRecentView(
   );
 
   return next;
+}
+
+export function clearRecentViews(storageScope: string | null | undefined) {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  persistRecentViews(storageScope, []);
+  window.dispatchEvent(
+    new CustomEvent("jontaado:recent-views-updated", {
+      detail: { scope: resolveRecentSignalsScope(storageScope), items: [] },
+    })
+  );
+
+  return [];
 }

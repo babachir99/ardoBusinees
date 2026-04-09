@@ -7,11 +7,11 @@ import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { Link } from "@/i18n/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import {
-  getRecentSearchItemKey,
+  clearRecentSearches,
+  clearRecentViews,
   persistRecentSearches,
   readRecentSearches,
   readRecentViews,
-  removeRecentSearch,
   type RecentSearchItem,
   type RecentViewItem,
 } from "@/lib/recentSignals";
@@ -64,6 +64,11 @@ type EmptyStateProps = {
   toneClassName?: string;
   children: ReactNode;
 };
+
+type SignalToastKind =
+  | "cart_added"
+  | "recent_searches_cleared"
+  | "recent_views_cleared";
 
 function buildSearchHref(item: RecentSearchItem) {
   const params = new URLSearchParams();
@@ -203,14 +208,15 @@ function StoreGlyph() {
   );
 }
 
-function CloseGlyph() {
+function TrashGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
       <path
-        d="m6 6 8 8M14 6l-8 8"
+        d="M5.25 6h9.5M7.5 6V4.8c0-.44.36-.8.8-.8h3.4c.44 0 .8.36.8.8V6M7.75 8.5v5M10 8.5v5M12.25 8.5v5M6.5 6h7l-.38 8.06A1 1 0 0 1 12.12 15H7.88a1 1 0 0 1-.99-.94L6.5 6Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -343,7 +349,7 @@ export default function HomeDynamicSignals({
   const [recentViews, setRecentViews] = useState<RecentViewItem[]>([]);
   const [likedItems, setLikedItems] = useState<HomeLikedItem[]>(initialLikedItems);
   const [likesLoading, setLikesLoading] = useState(false);
-  const [showCartToast, setShowCartToast] = useState(false);
+  const [toastKind, setToastKind] = useState<SignalToastKind | null>(null);
   const favoritesRailRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -458,13 +464,13 @@ export default function HomeDynamicSignals({
   }, [isLoggedIn, loadFavorites]);
 
   useEffect(() => {
-    if (!showCartToast) {
+    if (!toastKind) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => setShowCartToast(false), 1800);
+    const timeoutId = window.setTimeout(() => setToastKind(null), 1800);
     return () => window.clearTimeout(timeoutId);
-  }, [showCartToast]);
+  }, [toastKind]);
 
   const likedTitle = useMemo(() => {
     if (isLoggedIn) {
@@ -493,9 +499,32 @@ export default function HomeDynamicSignals({
     });
   };
 
-  const handleRecentSearchRemove = (item: RecentSearchItem) => {
-    setRecentSearches(removeRecentSearch(storageScope, getRecentSearchItemKey(item)));
-  };
+  const toastCopy = useMemo(() => {
+    if (toastKind === "recent_searches_cleared") {
+      return {
+        title: isFr ? "Recherches effacees" : "Recent searches cleared",
+        description: isFr
+          ? "Ton historique de recherche a ete nettoye."
+          : "Your search history has been cleared.",
+      };
+    }
+
+    if (toastKind === "recent_views_cleared") {
+      return {
+        title: isFr ? "Vues effacees" : "Recent views cleared",
+        description: isFr
+          ? "Ton historique de vues a ete nettoye."
+          : "Your recently viewed products were cleared.",
+      };
+    }
+
+    return {
+      title: isFr ? "Ajoute au panier" : "Added to cart",
+      description: isFr
+        ? "Tu peux finaliser ta selection quand tu veux."
+        : "You can finish checkout whenever you are ready.",
+    };
+  }, [isFr, toastKind]);
 
   return (
     <>
@@ -604,7 +633,7 @@ export default function HomeDynamicSignals({
                         <AddToCartIconButton
                           item={item}
                           locale={locale}
-                          onAdded={() => setShowCartToast(true)}
+                          onAdded={() => setToastKind("cart_added")}
                         />
                       </div>
                     </div>
@@ -655,9 +684,25 @@ export default function HomeDynamicSignals({
               <h3 className="text-xl font-semibold text-white">
                 {isFr ? "Recherches recentes" : "Recent searches"}
               </h3>
-              <IconActionLink href="/shop" label={isFr ? "Explorer" : "Explore"}>
-                <CompassGlyph />
-              </IconActionLink>
+              <div className="flex items-center gap-2">
+                {recentSearches.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecentSearches(clearRecentSearches(storageScope));
+                      setToastKind("recent_searches_cleared");
+                    }}
+                    aria-label={isFr ? "Vider les recherches recentes" : "Clear recent searches"}
+                    title={isFr ? "Vider l'historique" : "Clear history"}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                  >
+                    <TrashGlyph />
+                  </button>
+                ) : null}
+                <IconActionLink href="/shop" label={isFr ? "Explorer" : "Explore"}>
+                  <CompassGlyph />
+                </IconActionLink>
+              </div>
             </div>
 
             {recentSearches.length > 0 ? (
@@ -665,40 +710,25 @@ export default function HomeDynamicSignals({
                 <div className="pointer-events-none absolute bottom-3 left-[13px] top-3 w-px rounded-full bg-gradient-to-b from-emerald-300/0 via-emerald-300/20 to-emerald-300/0" />
                 <div className={`${compactListClass} h-full`}>
                   {recentSearches.map((item) => (
-                    <div
-                      key={getRecentSearchItemKey(item)}
-                      className={`${secondaryRowClass} min-h-[58px] overflow-hidden pr-2`}
+                    <Link
+                      key={`${item.query}-${item.category}-${item.sort}-${item.createdAt}`}
+                      href={buildSearchHref(item)}
+                      className={`${secondaryRowClass} min-h-[58px] overflow-hidden`}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <Link
-                          href={buildSearchHref(item)}
-                          className="flex min-w-0 flex-1 items-start gap-3"
-                        >
-                          <span className="relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
-                            <SearchGlyph />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold leading-tight text-white">
-                              {formatRecentSearchLabel(item, isFr)}
-                            </p>
-                            <p className="mt-0.5 text-[11px] leading-none text-zinc-400">
-                              {formatCompactSignalDate(item.createdAt, locale)}
-                            </p>
-                          </div>
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleRecentSearchRemove(item)}
-                          aria-label={
-                            isFr ? "Supprimer cette recherche" : "Remove this search"
-                          }
-                          title={isFr ? "Supprimer" : "Remove"}
-                          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-400 transition duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-                        >
-                          <CloseGlyph />
-                        </button>
+                        <span className="relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
+                          <SearchGlyph />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold leading-tight text-white">
+                            {formatRecentSearchLabel(item, isFr)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-none text-zinc-400">
+                            {formatCompactSignalDate(item.createdAt, locale)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
                 {recentSearches.length > 2 ? (
@@ -722,9 +752,25 @@ export default function HomeDynamicSignals({
               <h3 className="text-xl font-semibold text-white">
                 {isFr ? "Vu recemment" : "Viewed recently"}
               </h3>
-              <IconActionLink href="/shop" label={isFr ? "Voir le shop" : "Open shop"}>
-                <StoreGlyph />
-              </IconActionLink>
+              <div className="flex items-center gap-2">
+                {recentViews.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecentViews(clearRecentViews(storageScope));
+                      setToastKind("recent_views_cleared");
+                    }}
+                    aria-label={isFr ? "Vider les vues recentes" : "Clear recent views"}
+                    title={isFr ? "Vider l'historique" : "Clear history"}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                  >
+                    <TrashGlyph />
+                  </button>
+                ) : null}
+                <IconActionLink href="/shop" label={isFr ? "Voir le shop" : "Open shop"}>
+                  <StoreGlyph />
+                </IconActionLink>
+              </div>
             </div>
 
             {recentViews.length > 0 ? (
@@ -791,17 +837,13 @@ export default function HomeDynamicSignals({
 
       <div
         className={`pointer-events-none fixed bottom-5 right-5 z-40 transition duration-200 ${
-          showCartToast ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+          toastKind ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
         }`}
         aria-live="polite"
       >
         <div className="rounded-2xl border border-emerald-300/20 bg-zinc-950/90 px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <p className="text-sm font-medium text-emerald-100">
-            {isFr ? "Ajoute au panier" : "Added to cart"}
-          </p>
-          <p className="mt-1 text-xs text-zinc-400">
-            {isFr ? "Tu peux finaliser ta selection quand tu veux." : "You can finish checkout whenever you are ready."}
-          </p>
+          <p className="text-sm font-medium text-emerald-100">{toastCopy.title}</p>
+          <p className="mt-1 text-xs text-zinc-400">{toastCopy.description}</p>
         </div>
       </div>
     </>
