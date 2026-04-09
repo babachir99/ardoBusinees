@@ -24,27 +24,9 @@ export default async function ImmoPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          badge="JONTAADO IMMO"
-          title={t("title")}
-          subtitle={t("subtitle")}
+          title={isFr ? "Trouve ou publie un bien" : "Find or list a property"}
+          compact
           accentClassName="from-cyan-500/16 via-zinc-950/92 to-zinc-950"
-          primaryAction={
-            <Link
-              href="/immo"
-              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
-            >
-              {isFr ? "Explorer les annonces" : "Browse listings"}
-            </Link>
-          }
-          secondaryAction={
-            <Link
-              href="/immo/my"
-              className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-cyan-300/35 hover:bg-white/10"
-            >
-              {isFr ? "Mes annonces" : "My listings"}
-            </Link>
-          }
-          highlights={features.slice(0, 3)}
         />
 
         <MarketplaceActions

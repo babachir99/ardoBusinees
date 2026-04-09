@@ -14,12 +14,6 @@ import { hasAnyUserRole } from "@/lib/userRoles";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { getGpMarketplaceSnapshot, getGpStoreSnapshot } from "@/lib/gpSnapshots";
 
-const currencyLabelMap: Record<string, string> = {
-  XOF: "FCFA",
-  EUR: "EUR",
-  USD: "$",
-};
-
 const allowedCurrencies = new Set(["XOF", "EUR", "USD"]);
 
 export default async function GpPage({
@@ -117,17 +111,10 @@ export default async function GpPage({
     deliveryStartAt: trip.deliveryStartAt ? new Date(trip.deliveryStartAt) : null,
     deliveryEndAt: trip.deliveryEndAt ? new Date(trip.deliveryEndAt) : null,
   }));
-  const totalTrips = marketplaceSnapshot.totalTrips;
-  const activeTransportersCount = marketplaceSnapshot.activeTransportersCount;
-
   const bookingStatusByTrip = new Map(myBookings.map((booking) => [booking.tripId, booking.status]));
   const publishAccess = resolveGpPublishAccess(viewer, Boolean(session?.user?.id));
   const gpRules = getVerticalRules(Vertical.GP);
   const canOpenTransporterDashboard = hasAnyUserRole(session?.user, gpRules.publishRoles);
-
-  const avgPriceValue =
-    trips.length > 0 ? Math.round(trips.reduce((acc, trip) => acc + trip.pricePerKgCents, 0) / trips.length) : null;
-  const avgCurrencyLabel = selectedCurrency !== "ALL" ? currencyLabelMap[selectedCurrency] : null;
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -135,67 +122,35 @@ export default async function GpPage({
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          badge="JONTAADO GP"
-          title={locale === "fr" ? "Transport de colis par voyageurs" : "Parcel transport by travelers"}
-          subtitle={
-            locale === "fr"
-              ? "Cherchez un trajet disponible selon ville, date de depart et budget, puis publiez vos propres capacites en quelques clics."
-              : "Search available trips by city, departure date and budget, then publish your own capacity in a few clicks."
-          }
+          title={locale === "fr" ? "Trouve ou propose un trajet" : "Find or offer a trip"}
+          compact
           accentClassName="from-indigo-500/18 via-zinc-950/92 to-zinc-950"
-          primaryAction={
-            <a
-              href="#gp-search"
-              className="inline-flex rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-300"
-            >
-              {locale === "fr" ? "Explorer les trajets" : "Explore trips"}
-            </a>
-          }
-          secondaryAction={
-            canOpenTransporterDashboard ? (
-              <Link
-                href="/transporter"
-                className="inline-flex rounded-full border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-zinc-100 transition duration-200 hover:scale-[1.02] hover:border-indigo-300/35 hover:bg-white/10"
-              >
-                {locale === "fr" ? "Ouvrir le dashboard GP" : "Open GP dashboard"}
-              </Link>
-            ) : null
-          }
-          metrics={[
-            { value: String(totalTrips), label: locale === "fr" ? "Annonces actives" : "Active listings" },
-            {
-              value: String(activeTransportersCount),
-              label: locale === "fr" ? "Transporteurs actifs" : "Active transporters",
-            },
-            {
-              value: avgPriceValue !== null && avgCurrencyLabel ? `${avgPriceValue} ${avgCurrencyLabel}` : "-",
-              label: locale === "fr" ? "Prix moyen" : "Average price",
-            },
-          ]}
         />
 
         <MarketplaceActions
           left={
-            canOpenTransporterDashboard ? (
-              <Link
-                href="/transporter"
+            <>
+              <a
+                href="#gp-search"
                 className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-[0_12px_30px_rgba(16,185,129,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02]"
               >
-                {locale === "fr" ? "Dashboard GP" : "GP dashboard"}
-              </Link>
-            ) : (
-              <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-200">
-                {locale === "fr" ? "Explorer GP" : "Explore GP"}
-              </span>
-            )
-          }
-          right={
-            <a
-              href="#gp-publish"
-              className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300/35 hover:bg-white/10"
-            >
-              {locale === "fr" ? "Publier un trajet" : "Publish trip"}
-            </a>
+                {locale === "fr" ? "Explorer" : "Explore"}
+              </a>
+              <a
+                href="#gp-publish"
+                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300/35 hover:bg-white/10"
+              >
+                {locale === "fr" ? "Publier" : "Publish"}
+              </a>
+              {canOpenTransporterDashboard ? (
+                <Link
+                  href="/transporter"
+                  className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-100 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300/35 hover:bg-white/10"
+                >
+                  {locale === "fr" ? "Dashboard" : "Dashboard"}
+                </Link>
+              ) : null}
+            </>
           }
         />
 

@@ -536,7 +536,7 @@ export default async function JontaadoCaresPage({
     <div className="min-h-screen bg-jonta text-zinc-100">
       <AppHeader locale={locale} />
 
-      <CaresProductExperience page={page} />
+      <CaresProductExperience page={page} locale={isFr ? "fr" : "en"} />
 
       <Footer />
     </div>

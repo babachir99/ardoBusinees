@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
 import type { HomePromoEntry } from "@/lib/homePromos.shared";
@@ -28,6 +28,7 @@ type AdminHomePromosPanelProps = {
 };
 
 type PreviewMode = "popup" | "inline" | "product-card";
+type PreviewViewport = "desktop" | "mobile";
 type SectionKey = "content" | "targeting" | "settings" | "planning";
 
 type AccordionSectionProps = {
@@ -330,8 +331,12 @@ export default function AdminHomePromosPanel({
   const [previewMode, setPreviewMode] = useState<PreviewMode>(
     getPreviewVariant(initialEntries[0]?.placement ?? "HOME_INLINE")
   );
+  const [previewViewport, setPreviewViewport] = useState<PreviewViewport>("desktop");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [autosaveState, setAutosaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
+    lastUpdatedAt ? "saved" : "idle"
+  );
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(lastUpdatedAt);
   const [lastSavedBy, setLastSavedBy] = useState<string | null>(getActorLabel(lastUpdatedBy));
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
@@ -340,6 +345,9 @@ export default function AdminHomePromosPanel({
     settings: false,
     planning: false,
   });
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didMountRef = useRef(false);
+  const lastSyncedSnapshotRef = useRef(JSON.stringify(initialEntries));
 
   const selectedPromo = useMemo(
     () => promos.find((promo) => promo.id === selectedPromoId) ?? promos[0] ?? null,
@@ -446,6 +454,36 @@ export default function AdminHomePromosPanel({
 
   const completedSteps = stepProgress.filter((step) => step.complete).length;
   const progressPercent = stepProgress.length > 0 ? Math.round((completedSteps / stepProgress.length) * 100) : 0;
+
+  const autosaveMeta = useMemo(() => {
+    switch (autosaveState) {
+      case "dirty":
+        return {
+          label: isFr ? "Modifs en attente" : "Changes pending",
+          className: "border-amber-300/20 bg-amber-400/10 text-amber-100",
+        };
+      case "saving":
+        return {
+          label: isFr ? "Autosave..." : "Autosaving...",
+          className: "border-sky-300/20 bg-sky-400/10 text-sky-100",
+        };
+      case "saved":
+        return {
+          label: isFr ? "Brouillon synchronise" : "Draft synced",
+          className: "border-emerald-300/20 bg-emerald-400/10 text-emerald-100",
+        };
+      case "error":
+        return {
+          label: isFr ? "Autosave en echec" : "Autosave failed",
+          className: "border-rose-300/20 bg-rose-400/10 text-rose-100",
+        };
+      default:
+        return {
+          label: isFr ? "Pret" : "Ready",
+          className: "border-white/10 bg-white/[0.04] text-zinc-300",
+        };
+    }
+  }, [autosaveState, isFr]);
 
   function toggleSection(section: SectionKey) {
     setOpenSections((current) => ({
@@ -625,17 +663,21 @@ export default function AdminHomePromosPanel({
     );
   }
 
-  async function persistSelectedPromo(enabled: boolean) {
-    if (!selectedPromo) {
-      return;
+  const persistPromos = useCallback(async (
+    nextPromos: HomePromoEntry[],
+    options?: {
+      source?: "manual" | "autosave";
+      successMessage?: string | null;
     }
-
-    const nextPromos = promos.map((promo) =>
-      promo.id === selectedPromo.id ? { ...promo, enabled } : promo
-    );
-
+  ) => {
+    const source = options?.source ?? "manual";
     setSaving(true);
-    setFeedback(null);
+    setAutosaveState((current) =>
+      source === "autosave" || current === "dirty" ? "saving" : current
+    );
+    if (source !== "autosave") {
+      setFeedback(null);
+    }
 
     try {
       const response = await fetch("/api/admin/home-promos", {
@@ -659,28 +701,86 @@ export default function AdminHomePromosPanel({
           ? current
           : (normalizedEntries[0]?.id ?? "")
       );
+      lastSyncedSnapshotRef.current = JSON.stringify(normalizedEntries);
       setLastSavedAt(payload?.lastUpdatedAt ?? new Date().toISOString());
       setLastSavedBy(getActorLabel(payload?.lastUpdatedBy) ?? lastSavedBy ?? null);
-      setFeedback(
-        enabled
-          ? isFr
-            ? "Campagne publiee." 
-            : "Campaign published."
-          : isFr
-            ? "Brouillon enregistre."
-            : "Draft saved."
-      );
+      setAutosaveState("saved");
+      if (source !== "autosave") {
+        setFeedback(options?.successMessage ?? null);
+      }
     } catch (error) {
-      setFeedback(
-        isFr
-          ? "Impossible de sauvegarder la campagne pour l'instant."
-          : "We could not save the campaign right now."
-      );
+      setAutosaveState("error");
+      if (source !== "autosave") {
+        setFeedback(
+          isFr
+            ? "Impossible de sauvegarder la campagne pour l'instant."
+            : "We could not save the campaign right now."
+        );
+      }
       console.error(error);
     } finally {
       setSaving(false);
     }
+  }, [isFr, lastSavedBy]);
+
+  function persistSelectedPromo(enabled: boolean) {
+    if (!selectedPromo) {
+      return;
+    }
+
+    const nextPromos = promos.map((promo) =>
+      promo.id === selectedPromo.id ? { ...promo, enabled } : promo
+    );
+
+    void persistPromos(nextPromos, {
+      source: "manual",
+      successMessage: enabled
+        ? isFr
+          ? "Campagne publiee."
+          : "Campaign published."
+        : isFr
+          ? "Brouillon enregistre."
+          : "Draft saved.",
+    });
   }
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const snapshot = JSON.stringify(promos);
+
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      lastSyncedSnapshotRef.current = snapshot;
+      return;
+    }
+
+    if (snapshot === lastSyncedSnapshotRef.current) {
+      return;
+    }
+
+    setAutosaveState((current) => (current === "saving" ? current : "dirty"));
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      void persistPromos(promos, { source: "autosave" });
+    }, 1400);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [persistPromos, promos]);
 
   if (!selectedPromo || !previewPromo) {
     return null;
@@ -691,6 +791,10 @@ export default function AdminHomePromosPanel({
   const textareaClassName = `${inputClassName} min-h-[104px] resize-none`;
   const pillClassName =
     "inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-zinc-300 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08]";
+  const previewFrameClassName =
+    previewViewport === "mobile"
+      ? "mx-auto max-w-[390px] rounded-[2rem] border border-white/10 bg-black/25 p-3 shadow-[0_20px_44px_rgba(0,0,0,0.28)]"
+      : "w-full rounded-[1.75rem] border border-white/10 bg-black/20 p-3";
 
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.95fr)] xl:items-start">
@@ -709,6 +813,9 @@ export default function AdminHomePromosPanel({
                   ? "L'essentiel a gauche, l'apercu en direct a droite."
                   : "Keep essentials on the left and the live preview on the right."}
               </p>
+              <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs ${autosaveMeta.className}`}>
+                {autosaveMeta.label}
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1257,6 +1364,34 @@ export default function AdminHomePromosPanel({
             })}
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {([
+                ["desktop", isFr ? "Desktop" : "Desktop"],
+                ["mobile", isFr ? "Mobile" : "Mobile"],
+              ] as const).map(([viewport, label]) => {
+                const active = previewViewport === viewport;
+                return (
+                  <button
+                    key={viewport}
+                    type="button"
+                    onClick={() => setPreviewViewport(viewport)}
+                    className={`rounded-full px-3 py-1.5 text-xs transition-all duration-200 ${
+                      active
+                        ? "border border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
+                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-[11px] ${autosaveMeta.className}`}>
+              {autosaveMeta.label}
+            </span>
+          </div>
+
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -1295,7 +1430,10 @@ export default function AdminHomePromosPanel({
             ))}
           </div>
 
-          <div className="mt-4 rounded-[1.75rem] border border-white/10 bg-black/20 p-3 transition-all duration-300">
+          <div className={`mt-4 transition-all duration-300 ${previewFrameClassName}`}>
+            {previewViewport === "mobile" ? (
+              <div className="mx-auto mb-3 h-1.5 w-20 rounded-full bg-white/10" />
+            ) : null}
             {previewMode === "popup" ? (
               <div
                 key={`${selectedPromo.id}-${previewMode}-${previewPromo.accentClassName}`}

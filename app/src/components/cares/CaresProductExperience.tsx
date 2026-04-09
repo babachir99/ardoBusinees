@@ -116,7 +116,13 @@ const primaryButtonClass =
 const panelButtonClass =
   "rounded-full border border-emerald-300/25 bg-emerald-400/12 px-5 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/45 hover:bg-emerald-400/18";
 
-export default function CaresProductExperience({ page }: { page: CaresPageContent }) {
+export default function CaresProductExperience({
+  page,
+  locale = "fr",
+}: {
+  page: CaresPageContent;
+  locale?: "fr" | "en";
+}) {
   const [activeJourneyId, setActiveJourneyId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -154,67 +160,9 @@ export default function CaresProductExperience({ page }: { page: CaresPageConten
     <>
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          badge={page.kicker}
-          title={page.title}
-          subtitle={page.subtitle}
+          title={locale === "fr" ? "Donner, offrir ou demander de l'aide" : "Give, offer, or ask for help"}
+          compact
           accentClassName="from-emerald-500/18 via-zinc-950/92 to-zinc-950"
-          primaryAction={
-            <button
-              type="button"
-              onClick={() => openJourney(page.journeys[0]?.id ?? "faire-un-don")}
-              className={primaryButtonClass}
-            >
-              {page.ctas[0]?.label ?? page.journeys[0]?.label}
-            </button>
-          }
-          secondaryAction={
-            <button
-              type="button"
-              onClick={() => {
-                setActiveJourneyId(null);
-                setAboutOpen(true);
-              }}
-              className={panelButtonClass}
-            >
-              {page.aboutButtonLabel}
-            </button>
-          }
-          highlights={page.heroHighlights}
-          metrics={page.metrics.map((metric) => ({ value: metric.value, label: metric.label }))}
-          aside={
-            <div>
-              <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-5">
-                <Image
-                  src="/stores/last_cares.png"
-                  alt="JONTAADO CARES logo"
-                  width={760}
-                  height={340}
-                  className="mx-auto h-auto w-full max-w-[340px] object-contain"
-                  priority
-                />
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-zinc-950/65 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">
-                  {page.explainerTitle}
-                </p>
-                <p className="mt-3 text-sm leading-6 text-zinc-300">{page.explainerBody}</p>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {page.chips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="rounded-full border border-emerald-300/15 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-100"
-                  >
-                    {chip}
-                  </span>
-                ))}
-              </div>
-
-              <p className="mt-4 text-center text-xs text-zinc-500">{page.aboutButtonHint}</p>
-            </div>
-          }
         />
 
         <MarketplaceActions
@@ -225,26 +173,59 @@ export default function CaresProductExperience({ page }: { page: CaresPageConten
                   key={journey.id}
                   type="button"
                   onClick={() => openJourney(journey.id)}
-                  className={index === 0 ? primaryButtonClass : panelButtonClass}
+                  className={
+                    (activeJourneyId ?? page.journeys[0]?.id) === journey.id
+                      ? primaryButtonClass
+                      : panelButtonClass
+                  }
                 >
                   {page.ctas[index]?.label ?? journey.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveJourneyId(null);
+                  setAboutOpen(true);
+                }}
+                className={panelButtonClass}
+              >
+                {page.aboutButtonLabel}
+              </button>
             </>
           }
-          right={
-            <button
-              type="button"
-              onClick={() => {
-                setActiveJourneyId(null);
-                setAboutOpen(true);
-              }}
-              className={panelButtonClass}
-            >
-              {page.aboutButtonLabel}
-            </button>
-          }
         />
+
+        <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="rounded-[1.8rem] border border-white/10 bg-zinc-900/65 p-5 backdrop-blur-sm">
+            <Image
+              src="/stores/last_cares.png"
+              alt="JONTAADO CARES logo"
+              width={760}
+              height={340}
+              className="mx-auto h-auto w-full max-w-[240px] object-contain"
+              priority
+            />
+          </div>
+
+          <div className="rounded-[1.8rem] border border-white/10 bg-zinc-900/65 p-5 backdrop-blur-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
+              {page.explainerTitle}
+            </p>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">{page.explainerBody}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {page.chips.map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full border border-emerald-300/15 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-100"
+                >
+                  {chip}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-zinc-500">{page.aboutButtonHint}</p>
+          </div>
+        </section>
 
         <section className="rounded-[2rem] border border-white/10 bg-zinc-900/65 p-6 backdrop-blur-sm md:p-7">
           <div>

@@ -21,7 +21,9 @@ export default function MarketplaceActions({
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">{left}</div>
+        <div className="min-w-0 flex-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="inline-flex min-w-max items-center gap-2">{left}</div>
+        </div>
         {right ? <div className="flex flex-wrap items-center justify-end gap-2">{right}</div> : null}
       </div>
     </section>
