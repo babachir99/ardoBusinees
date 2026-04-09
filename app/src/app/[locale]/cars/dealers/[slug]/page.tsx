@@ -1,16 +1,13 @@
+import type { Metadata } from "next";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 import { buildCarsStoreHref } from "@/lib/carsStorefront";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
-export default async function CarDealerDetailPage({
-  params,
-}: {
-  params: Promise<{ locale: string; slug: string }>;
-}) {
-  const { locale, slug } = await params;
-
+const getCarDealerPageData = cache(async (slug: string) => {
   const dealer = await prisma.carPublisher.findFirst({
     where: {
       slug,
@@ -37,9 +34,7 @@ export default async function CarDealerDetailPage({
     },
   });
 
-  if (!dealer) {
-    notFound();
-  }
+  if (!dealer) return null;
 
   const listings = await prisma.carListing.findMany({
     where: {
@@ -63,6 +58,57 @@ export default async function CarDealerDetailPage({
       createdAt: true,
     },
   });
+
+  return { dealer, listings };
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const data = await getCarDealerPageData(slug);
+  const isFr = locale === "fr";
+
+  if (!data) {
+    return buildStoreMetadata({
+      locale,
+      path: `/cars/dealers/${slug}`,
+      title: isFr ? "Concessionnaire CARS introuvable | JONTAADO" : "CARS dealer not found | JONTAADO",
+      description: isFr
+        ? "Ce concessionnaire CARS est introuvable ou n'est plus actif."
+        : "This CARS dealer could not be found or is no longer active.",
+      imagePath: "/stores/cars.png",
+    });
+  }
+
+  return buildStoreMetadata({
+    locale,
+    path: `/cars/dealers/${data.dealer.slug}`,
+    title: isFr
+      ? `${data.dealer.name} | Concessionnaire JONTAADO CARS`
+      : `${data.dealer.name} | JONTAADO CARS dealer`,
+    description: isFr
+      ? `${data.dealer._count.listings} annonces publiees, ${data.dealer.city ?? "ville"} ${data.dealer.country ?? ""}`.trim()
+      : `${data.dealer._count.listings} published listings, ${data.dealer.city ?? "city"} ${data.dealer.country ?? ""}`.trim(),
+    imagePath: data.dealer.logoUrl || "/stores/cars.png",
+  });
+}
+
+export default async function CarDealerDetailPage({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}) {
+  const { locale, slug } = await params;
+  const data = await getCarDealerPageData(slug);
+
+  if (!data) {
+    notFound();
+  }
+
+  const { dealer, listings } = data;
 
   const t = {
     back: locale === "fr" ? "Retour concessionnaires" : "Back to dealers",

@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
+import type { Metadata } from "next";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -8,18 +10,10 @@ import { formatMoney } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
 import { hasUserRole } from "@/lib/userRoles";
 import { buildImmoStoreHref } from "@/lib/immoStorefront";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
-export default async function ImmoListingDetailPage({
-  params,
-}: {
-  params: Promise<{ locale: string; id: string }>;
-}) {
-  const [{ locale, id }, session] = await Promise.all([
-    params,
-    getServerSession(authOptions),
-  ]);
-
-  const listing = await prisma.immoListing.findUnique({
+const getImmoListing = cache(async (id: string) => {
+  return prisma.immoListing.findUnique({
     where: { id },
     select: {
       id: true,
@@ -46,6 +40,58 @@ export default async function ImmoListingDetailPage({
       },
     },
   });
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}): Promise<Metadata> {
+  const { locale, id } = await params;
+  const listing = await getImmoListing(id);
+  const isFr = locale === "fr";
+
+  if (!listing) {
+    return buildStoreMetadata({
+      locale,
+      path: `/immo/${id}`,
+      title: isFr ? "Annonce IMMO introuvable | JONTAADO" : "IMMO listing not found | JONTAADO",
+      description: isFr
+        ? "Cette annonce IMMO est introuvable ou n'est plus disponible."
+        : "This IMMO listing could not be found or is no longer available.",
+      imagePath: "/stores/immo.png",
+    });
+  }
+
+  const formattedPrice = formatMoney(listing.priceCents, listing.currency, locale);
+  const propertyLabel = listing.propertyType.toLowerCase();
+  const title = isFr
+    ? `${listing.title} | ${listing.city} sur JONTAADO IMMO`
+    : `${listing.title} | ${listing.city} on JONTAADO IMMO`;
+  const description = isFr
+    ? `${listing.listingType === "SALE" ? "Vente" : "Location"} ${propertyLabel}, ${listing.surfaceM2} m2, ${listing.rooms ?? "-"} pieces, ${formattedPrice}, ${listing.city}.`
+    : `${listing.listingType === "SALE" ? "Sale" : "Rent"} ${propertyLabel}, ${listing.surfaceM2} m2, ${listing.rooms ?? "-"} rooms, ${formattedPrice}, ${listing.city}.`;
+
+  return buildStoreMetadata({
+    locale,
+    path: `/immo/${listing.id}`,
+    title,
+    description,
+    imagePath: listing.imageUrls[0] || "/stores/immo.png",
+  });
+}
+
+export default async function ImmoListingDetailPage({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}) {
+  const [{ locale, id }, session] = await Promise.all([
+    params,
+    getServerSession(authOptions),
+  ]);
+
+  const listing = await getImmoListing(id);
 
   if (!listing) {
     notFound();
@@ -128,4 +174,3 @@ export default async function ImmoListingDetailPage({
     </div>
   );
 }
-

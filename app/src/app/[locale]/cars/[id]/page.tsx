@@ -1,5 +1,7 @@
-﻿/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element */
 
+import type { Metadata } from "next";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -10,18 +12,10 @@ import { hasUserRole } from "@/lib/userRoles";
 import CarsGpIntentSuggestion from "@/components/cars/CarsGpIntentSuggestion";
 import { isEligibleForGP } from "@/lib/orchestratorEligibility";
 import { buildCarsStoreHref } from "@/lib/carsStorefront";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
-export default async function CarListingDetailPage({
-  params,
-}: {
-  params: Promise<{ locale: string; id: string }>;
-}) {
-  const [{ locale, id }, session] = await Promise.all([
-    params,
-    getServerSession(authOptions),
-  ]);
-
-  const listing = await prisma.carListing.findUnique({
+const getCarListing = cache(async (id: string) => {
+  return prisma.carListing.findUnique({
     where: { id },
     select: {
       id: true,
@@ -55,6 +49,57 @@ export default async function CarListingDetailPage({
       },
     },
   });
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}): Promise<Metadata> {
+  const { locale, id } = await params;
+  const listing = await getCarListing(id);
+  const isFr = locale === "fr";
+
+  if (!listing) {
+    return buildStoreMetadata({
+      locale,
+      path: `/cars/${id}`,
+      title: isFr ? "Annonce CARS introuvable | JONTAADO" : "CARS listing not found | JONTAADO",
+      description: isFr
+        ? "Cette annonce CARS est introuvable ou n'est plus disponible."
+        : "This CARS listing could not be found or is no longer available.",
+      imagePath: "/stores/cars.png",
+    });
+  }
+
+  const formattedPrice = formatMoney(listing.priceCents, listing.currency, locale);
+  const title = isFr
+    ? `${listing.title} | ${listing.make} ${listing.model} sur JONTAADO CARS`
+    : `${listing.title} | ${listing.make} ${listing.model} on JONTAADO CARS`;
+  const description = isFr
+    ? `${listing.make} ${listing.model} ${listing.year}, ${listing.mileageKm.toLocaleString(locale)} km, ${formattedPrice}, ${listing.city}. ${listing.publisher?.name ? `Vendu par ${listing.publisher.name}.` : "Annonce particulier."}`
+    : `${listing.make} ${listing.model} ${listing.year}, ${listing.mileageKm.toLocaleString(locale)} km, ${formattedPrice}, ${listing.city}. ${listing.publisher?.name ? `Sold by ${listing.publisher.name}.` : "Individual listing."}`;
+
+  return buildStoreMetadata({
+    locale,
+    path: `/cars/${listing.id}`,
+    title,
+    description,
+    imagePath: listing.imageUrls[0] || "/stores/cars.png",
+  });
+}
+
+export default async function CarListingDetailPage({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}) {
+  const [{ locale, id }, session] = await Promise.all([
+    params,
+    getServerSession(authOptions),
+  ]);
+
+  const listing = await getCarListing(id);
 
   if (!listing) {
     notFound();
@@ -95,7 +140,6 @@ export default async function CarListingDetailPage({
     verified: locale === "fr" ? "Verifie" : "Verified",
     viewDealer: locale === "fr" ? "Voir la vitrine" : "View storefront",
     photos: locale === "fr" ? "Photos" : "Photos",
-    gpSuggestTitle: locale === "fr" ? "Transport international (GP)" : "International transport (GP)",
   };
 
   return (

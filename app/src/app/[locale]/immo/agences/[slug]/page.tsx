@@ -1,18 +1,15 @@
 /* eslint-disable @next/next/no-img-element */
 
+import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 import { buildImmoStoreHref } from "@/lib/immoStorefront";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 
-export default async function ImmoAgencyDetailPage({
-  params,
-}: {
-  params: Promise<{ locale: string; slug: string }>;
-}) {
-  const { locale, slug } = await params;
-
+const getImmoAgencyPageData = cache(async (slug: string) => {
   const publisher = await prisma.immoPublisher.findFirst({
     where: {
       slug,
@@ -31,9 +28,7 @@ export default async function ImmoAgencyDetailPage({
     },
   });
 
-  if (!publisher) {
-    notFound();
-  }
+  if (!publisher) return null;
 
   const [publishedCount, listings] = await Promise.all([
     prisma.immoListing.count({
@@ -65,11 +60,62 @@ export default async function ImmoAgencyDetailPage({
     }),
   ]);
 
+  return { publisher, publishedCount, listings };
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const data = await getImmoAgencyPageData(slug);
+  const isFr = locale === "fr";
+
+  if (!data) {
+    return buildStoreMetadata({
+      locale,
+      path: `/immo/agences/${slug}`,
+      title: isFr ? "Agence IMMO introuvable | JONTAADO" : "IMMO agency not found | JONTAADO",
+      description: isFr
+        ? "Cette agence IMMO est introuvable ou n'est plus active."
+        : "This IMMO agency could not be found or is no longer active.",
+      imagePath: "/stores/immo.png",
+    });
+  }
+
+  return buildStoreMetadata({
+    locale,
+    path: `/immo/agences/${data.publisher.slug}`,
+    title: isFr
+      ? `${data.publisher.name} | Agence JONTAADO IMMO`
+      : `${data.publisher.name} | JONTAADO IMMO agency`,
+    description: isFr
+      ? `${data.publishedCount} annonces publiees, ${data.publisher.city ?? "ville"} ${data.publisher.country ?? ""}`.trim()
+      : `${data.publishedCount} published listings, ${data.publisher.city ?? "city"} ${data.publisher.country ?? ""}`.trim(),
+    imagePath: data.publisher.logoUrl || "/stores/immo.png",
+  });
+}
+
+export default async function ImmoAgencyDetailPage({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}) {
+  const { locale, slug } = await params;
+  const data = await getImmoAgencyPageData(slug);
+
+  if (!data) {
+    notFound();
+  }
+
+  const { publisher, publishedCount, listings } = data;
+
   const t = {
     back: locale === "fr" ? "Retour agences" : "Back to agencies",
-    listings: locale === "fr" ? "Annonces publi?es" : "Published listings",
-    verified: locale === "fr" ? "V?rifi?e" : "Verified",
-    empty: locale === "fr" ? "Aucune annonce publi?e." : "No published listings.",
+    listings: locale === "fr" ? "Annonces publiees" : "Published listings",
+    verified: locale === "fr" ? "Verifiee" : "Verified",
+    empty: locale === "fr" ? "Aucune annonce publiee." : "No published listings.",
     view: locale === "fr" ? "Voir annonce" : "View listing",
   };
 
@@ -128,5 +174,3 @@ export default async function ImmoAgencyDetailPage({
     </div>
   );
 }
-
-
