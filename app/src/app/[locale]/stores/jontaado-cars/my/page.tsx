@@ -21,6 +21,7 @@ export async function generateMetadata({
       ? "Gere tes annonces, tes credits et ton espace vendeur depuis JONTAADO CARS."
       : "Manage your listings, credits and seller space from JONTAADO CARS.",
     imagePath: "/stores/cars.png",
+    noIndex: true,
   });
 }
 

@@ -26,12 +26,14 @@ export function buildStoreMetadata({
   title,
   description,
   imagePath,
+  noIndex = false,
 }: {
   locale: string;
   path: string;
   title: string;
   description: string;
   imagePath: string;
+  noIndex?: boolean;
 }): Metadata {
   const metadataBase = getMetadataBase();
   const canonicalPath = buildLocalizedPath(locale, path);
@@ -49,6 +51,12 @@ export function buildStoreMetadata({
     metadataBase,
     title,
     description,
+    robots: noIndex
+      ? {
+          index: false,
+          follow: false,
+        }
+      : undefined,
     alternates: {
       canonical: canonicalUrl,
       languages,

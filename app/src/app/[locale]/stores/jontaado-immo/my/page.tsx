@@ -21,6 +21,7 @@ export async function generateMetadata({
       ? "Gere tes annonces, tes credits et ton espace immobilier depuis JONTAADO IMMO."
       : "Manage your listings, credits and real estate space from JONTAADO IMMO.",
     imagePath: "/stores/immo.png",
+    noIndex: true,
   });
 }
 

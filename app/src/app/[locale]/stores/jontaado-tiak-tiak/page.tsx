@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
@@ -5,6 +6,28 @@ import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
 import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import TiakStoreClient from "@/components/tiak/TiakStoreClient";
 import { authOptions } from "@/lib/auth";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-tiak-tiak",
+    title: isFr
+      ? "JONTAADO TIAK TIAK | Livraisons urbaines et suivi"
+      : "JONTAADO TIAK TIAK | Urban deliveries and tracking",
+    description: isFr
+      ? "Lance une livraison, suis ton colis et retrouve l'espace coursier TIAK TIAK sur JONTAADO."
+      : "Start a delivery, track your package and access the TIAK TIAK courier space on JONTAADO.",
+    imagePath: "/stores/tiak.png",
+  });
+}
 
 export default async function TiakTiakPage({
   params,

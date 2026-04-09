@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
@@ -8,11 +9,34 @@ import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole } from "@/lib/userRoles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-presta/dashboard",
+    title: isFr
+      ? "Dashboard PRESTA | Espace prestataire prive"
+      : "PRESTA dashboard | Private provider space",
+    description: isFr
+      ? "Suis tes gains, tes reservations et tes clients depuis le dashboard prive PRESTA."
+      : "Track earnings, bookings and clients from the private PRESTA dashboard.",
+    imagePath: "/stores/presta.png",
+    noIndex: true,
+  });
+}
 
 function startOfToday() {
   const date = new Date();

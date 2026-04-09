@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
@@ -8,11 +9,34 @@ import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole } from "@/lib/userRoles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-tiak-tiak/dashboard",
+    title: isFr
+      ? "Dashboard TIAK TIAK | Espace coursier prive"
+      : "TIAK TIAK dashboard | Private courier space",
+    description: isFr
+      ? "Pilote tes livraisons, tes gains et ton activite depuis le dashboard prive TIAK TIAK."
+      : "Track deliveries, earnings and activity from the private TIAK TIAK dashboard.",
+    imagePath: "/stores/tiak.png",
+    noIndex: true,
+  });
+}
 
 function startOfToday() {
   const date = new Date();

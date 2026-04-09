@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
@@ -8,8 +9,30 @@ import { authOptions } from "@/lib/auth";
 import PrestaStoreClient from "@/components/presta/PrestaStoreClient";
 import { getHomePromoEntries } from "@/lib/homePromos";
 import { filterHomePromosForPlacement } from "@/lib/homePromos.shared";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 import { Vertical, getVerticalRules } from "@/lib/verticals";
 import { hasAnyUserRole } from "@/lib/userRoles";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/stores/jontaado-presta",
+    title: isFr
+      ? "JONTAADO PRESTA | Services locaux, offres et besoins"
+      : "JONTAADO PRESTA | Local services, offers and needs",
+    description: isFr
+      ? "Explore les offres PRESTA, publie un besoin et trouve rapidement des prestataires locaux sur JONTAADO."
+      : "Explore PRESTA offers, publish a need and quickly find local providers on JONTAADO.",
+    imagePath: "/stores/presta.png",
+  });
+}
 
 export default async function PrestaPage({
   params,
