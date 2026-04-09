@@ -113,20 +113,25 @@ export function normalizeCarsStoreTab(value: string | undefined): CarsStoreTab {
   return "explore";
 }
 
+function carsStorePath(locale: string, tab: CarsStoreTab, includeLocale: boolean) {
+  const base = includeLocale ? `/${locale}/stores/jontaado-cars` : "/stores/jontaado-cars";
+  if (tab === "dealers") return `${base}/dealers`;
+  if (tab === "my") return `${base}/my`;
+  return base;
+}
+
 export function buildCarsStoreHref(
   locale: string,
   options: {
     tab?: CarsStoreTab;
     params?: Partial<CarsStoreSearchParams>;
+    includeLocale?: boolean;
   } = {}
 ) {
   const tab = options.tab ?? "explore";
   const params = options.params ?? {};
+  const includeLocale = options.includeLocale ?? false;
   const search = new URLSearchParams();
-
-  if (tab !== "explore") {
-    search.set("tab", tab);
-  }
 
   if (tab === "explore") {
     appendQueryParam(search, "country", params.country);
@@ -154,7 +159,8 @@ export function buildCarsStoreHref(
   }
 
   const query = search.toString();
-  return `/${locale}/stores/jontaado-cars${query ? `?${query}` : ""}`;
+  const basePath = carsStorePath(locale, tab, includeLocale);
+  return `${basePath}${query ? `?${query}` : ""}`;
 }
 
 export function mapLegacyCarsSearchToStoreParams(searchParams: Partial<CarsStoreSearchParams>) {

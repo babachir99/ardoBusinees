@@ -6,6 +6,7 @@ import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
 import PrintButton from "@/components/immo/PrintButton";
 import { hasAnyUserRole } from "@/lib/userRoles";
+import { buildCarsStoreHref } from "@/lib/carsStorefront";
 
 type Params = {
   locale: string;
@@ -81,7 +82,10 @@ export default async function CarsMyReceiptPage({
       <main className="mx-auto w-full max-w-3xl">
         <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6 print:border-zinc-700 print:bg-white print:text-zinc-900">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
-            <Link href="/cars/my" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white">
+            <Link
+              href={buildCarsStoreHref(locale, { tab: "my" })}
+              className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white"
+            >
               {locale === "fr" ? "Retour" : "Back"}
             </Link>
             <PrintButton

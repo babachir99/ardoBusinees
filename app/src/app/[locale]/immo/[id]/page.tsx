@@ -1,4 +1,4 @@
-﻿/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @next/next/no-img-element */
 
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
 import { hasUserRole } from "@/lib/userRoles";
+import { buildImmoStoreHref } from "@/lib/immoStorefront";
 
 export default async function ImmoListingDetailPage({
   params,
@@ -72,7 +73,7 @@ export default async function ImmoListingDetailPage({
   return (
     <div className="min-h-screen bg-jonta px-6 pb-24 pt-8 text-zinc-100">
       <main className="mx-auto w-full max-w-4xl">
-        <Link href="/immo" className="inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white">
+        <Link href={buildImmoStoreHref(locale, { tab: "explore" })} className="inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white">
           {t.back}
         </Link>
 
@@ -127,3 +128,4 @@ export default async function ImmoListingDetailPage({
     </div>
   );
 }
+

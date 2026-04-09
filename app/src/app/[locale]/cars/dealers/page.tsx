@@ -23,6 +23,7 @@ export default async function CarsDealersPage({
     buildCarsStoreHref(locale, {
       tab: "dealers",
       params: mapLegacyDealerSearchToStoreParams(filters),
+      includeLocale: true,
     })
   );
 }

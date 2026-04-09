@@ -328,7 +328,6 @@ export function CarsDealersSection({
         </div>
 
         <form action={basePath} className="grid gap-2 md:grid-cols-4">
-          <input type="hidden" name="tab" value="dealers" />
           <input
             name="dealerCountry"
             defaultValue={data.filters.dealerCountry}
@@ -393,9 +392,11 @@ export function CarsDealersSection({
 
 export function CarsMySection({
   locale,
+  loginHref,
   data,
 }: {
   locale: string;
+  loginHref: string;
   data: CarsMyDashboardData | null;
 }) {
   const isFr = locale === "fr";
@@ -416,7 +417,7 @@ export function CarsMySection({
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
-            href={`/login?callbackUrl=/${locale}/stores/jontaado-cars?tab=my`}
+            href={loginHref}
             className="rounded-full bg-rose-400 px-4 py-2 text-sm font-semibold text-zinc-950"
           >
             {isFr ? "Se connecter" : "Sign in"}
@@ -428,3 +429,4 @@ export function CarsMySection({
 
   return <CarsMyDashboard locale={locale} {...data} />;
 }
+

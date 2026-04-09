@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
+import { buildImmoStoreHref } from "@/lib/immoStorefront";
 
 export default async function ImmoAgencyDetailPage({
   params,
@@ -75,7 +76,7 @@ export default async function ImmoAgencyDetailPage({
   return (
     <div className="min-h-screen bg-jonta px-6 pb-24 pt-8 text-zinc-100">
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <Link href="/immo/agences" className="inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white">
+        <Link href={buildImmoStoreHref(locale, { tab: "agencies" })} className="inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white">
           {t.back}
         </Link>
 
@@ -127,3 +128,5 @@ export default async function ImmoAgencyDetailPage({
     </div>
   );
 }
+
+

@@ -7,5 +7,5 @@ export default async function CarsMyPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect(buildCarsStoreHref(locale, { tab: "my" }));
+  redirect(buildCarsStoreHref(locale, { tab: "my", includeLocale: true }));
 }

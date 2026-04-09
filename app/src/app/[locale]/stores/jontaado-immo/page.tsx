@@ -1,92 +1,30 @@
-import { getTranslations } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
-import Footer from "@/components/layout/Footer";
-import AppHeader from "@/components/layout/AppHeader";
-import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
-import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
-import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
+import { redirect } from "next/navigation";
+import ImmoStorePage from "@/components/immo/ImmoStorePage";
 import {
-  marketplaceActionPrimaryClass,
-  marketplaceActionSecondaryClass,
-} from "@/components/marketplace/MarketplaceActions";
-import MarketplaceActions from "@/components/marketplace/MarketplaceActions";
-import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
+  buildImmoStoreHref,
+  normalizeImmoStoreTab,
+  type ImmoStoreSearchParams,
+} from "@/lib/immoStorefront";
 
 export default async function ImmoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<ImmoStoreSearchParams>;
 }) {
-  const [{ locale }, t] = await Promise.all([
-    params,
-    getTranslations("Verticals.immo"),
-  ]);
-  const isFr = locale === "fr";
-  const features = t.raw("features") as string[];
+  const [{ locale }, filters] = await Promise.all([params, searchParams]);
+  const legacyTab = normalizeImmoStoreTab(filters.tab);
 
-  return (
-    <div className="min-h-screen bg-jonta text-zinc-100">
-      <AppHeader locale={locale} />
+  if (filters.tab && legacyTab !== "explore") {
+    redirect(
+      buildImmoStoreHref(locale, {
+        tab: legacyTab,
+        params: filters,
+        includeLocale: true,
+      })
+    );
+  }
 
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-24 pt-6 sm:px-6">
-        <MarketplaceHero
-          title={
-            <MarketplaceHeroDynamicTitle
-              fixedLine={isFr ? "Trouve ou publie un bien" : "Find or list a property"}
-              lines={
-                isFr
-                  ? ["dans les bons quartiers", "avec des annonces plus claires", "sans visites inutiles", "en toute serenite"]
-                  : ["in the right neighborhoods", "with clearer listings", "without wasted visits", "with confidence"]
-              }
-            />
-          }
-          compact
-          accentClassName="from-cyan-500/16 via-zinc-950/92 to-zinc-950"
-        />
-
-        <MarketplaceActions
-          left={
-            <>
-              <Link
-                href="/immo"
-                className={marketplaceActionPrimaryClass}
-              >
-                {isFr ? "Explorer annonces" : "Explore listings"}
-              </Link>
-              <Link
-                href="/immo/my"
-                className={marketplaceActionSecondaryClass}
-              >
-                {isFr ? "Mes annonces" : "My listings"}
-              </Link>
-            </>
-          }
-          right={
-            <MarketplaceAdRequestButton
-              locale={locale}
-              sourceVertical="IMMO"
-              label={isFr ? "Demander une pub" : "Request an ad"}
-              className={marketplaceActionSecondaryClass}
-            />
-          }
-        />
-
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {features.map((feature, index) => (
-            <MarketplaceCard
-              key={feature}
-              label={isFr ? `Parcours ${index + 1}` : `Flow ${index + 1}`}
-              title={feature}
-              description={
-                isFr
-                  ? "Un bloc plus lisible et premium pour explorer, publier et suivre ses biens sans redondance."
-                  : "A cleaner premium block to explore, publish and track properties without redundancy."
-              }
-            />
-          ))}
-        </section>
-      </main>
-      <Footer />
-    </div>
-  );
+  return <ImmoStorePage locale={locale} activeTab="explore" searchParams={filters} />;
 }
