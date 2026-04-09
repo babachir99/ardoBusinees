@@ -6,21 +6,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { formatMoney } from "@/lib/format";
-import FavoriteButton from "@/components/favorites/FavoriteButton";
-import AddToCartButton from "@/components/cart/AddToCartButton";
+import ProductSuggestionGrid, {
+  type ProductSuggestionItem,
+} from "@/components/shop/ProductSuggestionGrid";
 
-type RecommendedProduct = {
-  id: string;
-  title: string;
-  slug: string;
-  priceCents: number;
-  discountPercent?: number | null;
-  currency: string;
-  type: "PREORDER" | "DROPSHIP" | "LOCAL";
-  stockQuantity?: number | null;
-  seller?: { displayName: string; slug: string } | null;
-  images: { url: string }[];
-};
+type RecommendedProduct = ProductSuggestionItem;
 
 type RecommendationsResponse = {
   similar?: RecommendedProduct[];
@@ -49,131 +39,6 @@ const statusMap: Record<string, string> = {
   CANCELED: "canceled",
   REFUNDED: "refunded",
 };
-
-function RecommendedGrid({
-  title,
-  subtitle,
-  products,
-  locale,
-}: {
-  title: string;
-  subtitle: string;
-  products: RecommendedProduct[];
-  locale: string;
-}) {
-  if (products.length === 0) return null;
-  const isFr = locale === "fr";
-  const lowStockBadge = isFr ? "Stock faible" : "Low stock";
-  const soldOutHint = isFr
-    ? "Ce produit est momentanement epuise. Reviens un peu plus tard ou essaie une autre suggestion."
-    : "This product is temporarily sold out. Check back later or try another suggestion.";
-  const lowStockHint = (count: number) =>
-    isFr ? `Plus que ${count} article(s) disponible(s).` : `Only ${count} item(s) left.`;
-
-  return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 first:mt-8">
-      <p className="text-xs text-zinc-400">{title}</p>
-      <p className="mt-1 text-[11px] text-zinc-500">{subtitle}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((product) => {
-          const discountedPrice =
-            product.discountPercent && product.discountPercent > 0
-              ? Math.round((product.priceCents * (100 - product.discountPercent)) / 100)
-              : product.priceCents;
-          const localStock =
-            product.type === "LOCAL"
-              ? Math.max(0, Math.floor(Number(product.stockQuantity ?? 0)))
-              : undefined;
-          const maxQuantity =
-            product.type === "LOCAL" && (localStock ?? 0) > 0 ? localStock : undefined;
-          const isSoldOut = product.type === "LOCAL" && (localStock ?? 0) <= 0;
-          const isLowStock =
-            product.type === "LOCAL" && (localStock ?? 0) > 0 && (localStock ?? 0) <= 3;
-
-          return (
-            <div
-              key={product.id}
-              className="group rounded-2xl border border-white/10 bg-zinc-900/70 p-3 transition hover:border-emerald-300/60"
-            >
-              <div className="relative h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
-                <FavoriteButton
-                  productId={product.id}
-                  variant="icon"
-                  className="absolute left-2 top-2 z-20"
-                />
-                <Link href={`/shop/${product.slug}`} className="block h-full">
-                  {product.images?.[0]?.url ? (
-                    <img
-                      src={product.images[0].url}
-                      alt={product.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">
-                      Image
-                    </div>
-                  )}
-                </Link>
-              </div>
-              <Link href={`/shop/${product.slug}`} className="block">
-                <div className="mt-2 flex items-start justify-between gap-3">
-                  <p className="line-clamp-2 text-sm font-semibold text-white">{product.title}</p>
-                  {isSoldOut ? (
-                    <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200">
-                      {isFr ? "Epuise" : "Sold out"}
-                    </span>
-                  ) : isLowStock ? (
-                    <span className="shrink-0 rounded-full border border-orange-300/20 bg-orange-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-orange-200">
-                      {lowStockBadge}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-[11px] text-zinc-400">{product.seller?.displayName ?? "-"}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-sm font-semibold text-emerald-200">
-                    {formatMoney(discountedPrice, product.currency, locale)}
-                  </span>
-                  {product.discountPercent && product.discountPercent > 0 && (
-                    <span className="text-[11px] text-zinc-500 line-through">
-                      {formatMoney(product.priceCents, product.currency, locale)}
-                    </span>
-                  )}
-                </div>
-              </Link>
-              <div className="mt-3">
-                <AddToCartButton
-                  id={product.id}
-                  slug={product.slug}
-                  title={product.title}
-                  priceCents={discountedPrice}
-                  currency={product.currency}
-                  type={product.type}
-                  sellerName={product.seller?.displayName ?? undefined}
-                  maxQuantity={maxQuantity}
-                  label={isFr ? "Ajouter au panier" : "Add to cart"}
-                  addedLabel={isFr ? "Ajoute" : "Added"}
-                  soldOutLabel={isFr ? "Epuise" : "Sold out"}
-                  checkingLabel={isFr ? "Verification..." : "Checking..."}
-                  disabled={isSoldOut}
-                  className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-[11px] font-semibold text-zinc-950"
-                />
-              </div>
-              {isSoldOut ? (
-                <p className="mt-3 text-[11px] leading-relaxed text-amber-100/80">
-                  {soldOutHint}
-                </p>
-              ) : isLowStock ? (
-                <p className="mt-3 text-[11px] leading-relaxed text-orange-100/80">
-                  {lowStockHint(localStock ?? 0)}
-                </p>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export default function OrdersList() {
   const t = useTranslations("Orders");
@@ -383,18 +248,20 @@ export default function OrdersList() {
         </div>
       )}
 
-      <RecommendedGrid
+      <ProductSuggestionGrid
         title={t("detail.recommendedSimilarTitle")}
         subtitle={t("detail.recommendedSimilarSubtitle")}
         products={similarProducts}
         locale={locale}
+        className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 first:mt-8"
       />
 
-      <RecommendedGrid
+      <ProductSuggestionGrid
         title={t("detail.recommendedComplementaryTitle")}
         subtitle={t("detail.recommendedComplementarySubtitle")}
         products={complementaryProducts}
         locale={locale}
+        className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4"
       />
     </div>
   );
