@@ -6,6 +6,7 @@ import UserProfileDrawer from "@/components/trust/UserProfileDrawer";
 import PrestaNeedWizard from "@/components/presta/PrestaNeedWizard";
 import PrestaNeedPublishPopup from "@/components/presta/PrestaNeedPublishPopup";
 import PrestaNeedProposalsPanel from "@/components/presta/PrestaNeedProposalsPanel";
+import PrestaAdRequestPopup from "@/components/presta/PrestaAdRequestPopup";
 import PrestaProviderMatchingPanel from "@/components/presta/PrestaProviderMatchingPanel";
 import PrestaProviderProposalsPanel from "@/components/presta/PrestaProviderProposalsPanel";
 import PrestaFiltersBar, { type PrestaFiltersValue } from "@/components/presta/PrestaFiltersBar";
@@ -192,6 +193,7 @@ export default function PrestaStoreClient({
   const [needSuccess, setNeedSuccess] = useState<string | null>(null);
   const [submittingNeed, setSubmittingNeed] = useState(false);
   const [showNeedForm, setShowNeedForm] = useState(false);
+  const [showAdRequestPopup, setShowAdRequestPopup] = useState(false);
   const serviceFormRef = useRef<HTMLElement | null>(null);
   const [selectedNeedForProposals, setSelectedNeedForProposals] = useState<string | null>(null);
   const [showProviderProposalsPanel, setShowProviderProposalsPanel] = useState(false);
@@ -816,6 +818,14 @@ export default function PrestaStoreClient({
               </Link>
             ) : null}
 
+            <button
+              type="button"
+              onClick={() => setShowAdRequestPopup(true)}
+              className={marketplaceActionSecondaryClass}
+            >
+              {isFr ? "Demander une pub" : "Request an ad"}
+            </button>
+
             {tab === "needs" ? (
               <button
                 type="button"
@@ -1234,6 +1244,12 @@ export default function PrestaStoreClient({
           compact
         />
       </PrestaNeedPublishPopup>
+
+      <PrestaAdRequestPopup
+        open={showAdRequestPopup}
+        locale={locale}
+        onClose={() => setShowAdRequestPopup(false)}
+      />
 
       <PrestaDetailsDrawer
         locale={locale}

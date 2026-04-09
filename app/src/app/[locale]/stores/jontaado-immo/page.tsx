@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
+import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
 import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import {
@@ -59,6 +60,14 @@ export default async function ImmoPage({
                 {isFr ? "Mes annonces" : "My listings"}
               </Link>
             </>
+          }
+          right={
+            <MarketplaceAdRequestButton
+              locale={locale}
+              sourceVertical="IMMO"
+              label={isFr ? "Demander une pub" : "Request an ad"}
+              className={marketplaceActionSecondaryClass}
+            />
           }
         />
 

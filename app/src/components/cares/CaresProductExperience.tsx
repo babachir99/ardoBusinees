@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
 import { Link } from "@/i18n/navigation";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 import {
   marketplaceActionPrimaryClass,
   marketplaceActionSecondaryClass,
@@ -158,7 +160,27 @@ export default function CaresProductExperience({
     <>
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 pb-24 pt-6 sm:px-6">
         <MarketplaceHero
-          title={locale === "fr" ? "Donner, offrir ou demander de l'aide" : "Give, offer, or ask for help"}
+          title={
+            <MarketplaceHeroDynamicTitle
+              fixedLine={locale === "fr" ? "Donner, offrir ou demander de l'aide" : "Give, offer, or ask for help"}
+              lines={
+                locale === "fr"
+                  ? [
+                      "pour soutenir une cause utile",
+                      "avec des gestes concrets",
+                      "sans perdre de vue l'impact",
+                      "avec plus de confiance",
+                    ]
+                  : [
+                      "to support a meaningful cause",
+                      "through concrete actions",
+                      "without losing sight of impact",
+                      "with more trust",
+                    ]
+              }
+              lineClassName="text-emerald-100/70"
+            />
+          }
           compact
           accentClassName="from-emerald-500/18 via-zinc-950/92 to-zinc-950"
         />
@@ -191,6 +213,14 @@ export default function CaresProductExperience({
                 {page.aboutButtonLabel}
               </button>
             </>
+          }
+          right={
+            <MarketplaceAdRequestButton
+              locale={locale}
+              sourceVertical="CARES"
+              label={locale === "fr" ? "Demander une pub" : "Request an ad"}
+              className={marketplaceActionSecondaryClass}
+            />
           }
         />
 

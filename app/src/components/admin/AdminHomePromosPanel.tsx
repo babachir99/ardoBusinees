@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import SponsoredPlacement from "@/components/ads/SponsoredPlacement";
-import type { HomePromoEntry } from "@/lib/homePromos.shared";
+import { canHomePromoGoLive, type HomePromoEntry } from "@/lib/homePromos.shared";
 import {
   buildGeneratedPromoId,
   fromDateTimeLocalValue,
   getAudienceLabel,
+  getBillingStatusLabel,
   getPlacementContextDescription,
   getPlacementLabel,
   getPreviewVariant,
@@ -68,6 +69,7 @@ function buildDraftPromoSeed(
     impressionCap: null,
     rotationSeconds: 8,
     priority: 50,
+    billingStatus: "INTERNAL",
     enabled: false,
     startAt: null,
     endAt: null,
@@ -362,6 +364,12 @@ export default function AdminHomePromosPanel({
 
   const selectedPlacementSummary = selectedPromo
     ? getPlacementContextDescription(locale, selectedPromo)
+    : null;
+  const publishBlockedByBilling = selectedPromo ? !canHomePromoGoLive(selectedPromo) : false;
+  const publishBlockedMessage = publishBlockedByBilling
+    ? isFr
+      ? "Cette campagne ne peut pas etre publiee tant que le paiement n'est pas recu."
+      : "This campaign cannot be published until payment has been received."
     : null;
 
   const previewPromo = useMemo(() => {
@@ -728,6 +736,15 @@ export default function AdminHomePromosPanel({
       return;
     }
 
+    if (enabled && !canHomePromoGoLive(selectedPromo)) {
+      setFeedback(
+        isFr
+          ? "Passe d'abord la campagne en statut \"Paye\" ou \"Pret\" avant publication."
+          : 'Move the campaign to "Paid" or "Ready" before publishing.'
+      );
+      return;
+    }
+
     const nextPromos = promos.map((promo) =>
       promo.id === selectedPromo.id ? { ...promo, enabled } : promo
     );
@@ -836,8 +853,9 @@ export default function AdminHomePromosPanel({
               <button
                 type="button"
                 onClick={() => void persistSelectedPromo(true)}
-                disabled={saving}
-                className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-300 disabled:opacity-60"
+                disabled={saving || publishBlockedByBilling}
+                className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                title={publishBlockedMessage ?? undefined}
               >
                 {isFr ? "Publier" : "Publish"}
               </button>
@@ -845,9 +863,10 @@ export default function AdminHomePromosPanel({
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
-            <div className="text-xs text-zinc-400">
-              {feedback ? feedback : isFr ? "Selectionne une campagne pour la configurer." : "Select a campaign to configure it."}
-            </div>
+              <div className="text-xs text-zinc-400">
+                {feedback ? feedback : isFr ? "Selectionne une campagne pour la configurer." : "Select a campaign to configure it."}
+                {!feedback && publishBlockedMessage ? ` ${publishBlockedMessage}` : ""}
+              </div>
             <button
               type="button"
               onClick={addPromo}
@@ -1199,7 +1218,7 @@ export default function AdminHomePromosPanel({
           open={openSections.settings}
           onToggle={() => toggleSection("settings")}
         >
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <FieldLabel label={isFr ? "Priorite" : "Priority"} />
               <input
@@ -1210,6 +1229,32 @@ export default function AdminHomePromosPanel({
                 value={selectedPromo.priority}
                 onChange={(event) => updateSelectedPromo("priority", Number(event.currentTarget.value) || 0)}
               />
+            </div>
+            <div>
+              <FieldLabel
+                label={isFr ? "Statut paiement" : "Billing status"}
+                hint={
+                  isFr
+                    ? "Les pubs externes restent en brouillon tant qu'elles ne sont pas payees."
+                    : "External ads stay in draft until they are paid."
+                }
+              />
+              <select
+                className={inputClassName}
+                value={selectedPromo.billingStatus}
+                onChange={(event) =>
+                  updateSelectedPromo(
+                    "billingStatus",
+                    event.currentTarget.value as HomePromoEntry["billingStatus"]
+                  )
+                }
+              >
+                <option value="INTERNAL">{getBillingStatusLabel(locale, "INTERNAL")}</option>
+                <option value="QUOTE_PENDING">{getBillingStatusLabel(locale, "QUOTE_PENDING")}</option>
+                <option value="PAYMENT_PENDING">{getBillingStatusLabel(locale, "PAYMENT_PENDING")}</option>
+                <option value="PAID">{getBillingStatusLabel(locale, "PAID")}</option>
+                <option value="READY">{getBillingStatusLabel(locale, "READY")}</option>
+              </select>
             </div>
             <div>
               <FieldLabel label={isFr ? "Rotation (s)" : "Rotation (s)"} />
@@ -1474,6 +1519,14 @@ export default function AdminHomePromosPanel({
                   : isFr
                     ? "Toutes les verticales"
                     : "All verticals"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                {isFr ? "Paiement" : "Billing"}
+              </p>
+              <p className="mt-2 text-sm text-zinc-200">
+                {getBillingStatusLabel(locale, selectedPromo.billingStatus)}
               </p>
             </div>
           </div>

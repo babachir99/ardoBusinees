@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
+import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
 import Footer from "@/components/layout/Footer";
 import AppHeader from "@/components/layout/AppHeader";
 import MarketplaceHero from "@/components/marketplace/MarketplaceHero";
@@ -165,6 +166,14 @@ export default async function GpPage({
                 </Link>
               ) : null}
             </>
+          }
+          right={
+            <MarketplaceAdRequestButton
+              locale={locale}
+              sourceVertical="GP"
+              label={locale === "fr" ? "Demander une pub" : "Request an ad"}
+              className={marketplaceActionSecondaryClass}
+            />
           }
         />
 

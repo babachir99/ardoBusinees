@@ -15,6 +15,7 @@ import { getPublicUploadUrl } from "@/lib/upload-url";
 const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOADS_PER_WINDOW = 15;
 const UPLOAD_WINDOW_MS = 5 * 60 * 1000;
+const PUBLIC_UPLOAD_SCOPES = new Set(["ad-request"]);
 
 const allowedImageMimeToExtension: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -45,11 +46,17 @@ export async function POST(request: Request) {
   const csrfBlocked = assertSameOrigin(request);
   if (csrfBlocked) return csrfBlocked;
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const formData = await request.formData();
+  const uploadScope = String(formData.get("scope") ?? "")
+    .trim()
+    .toLowerCase();
+  const allowsAnonymousUpload = PUBLIC_UPLOAD_SCOPES.has(uploadScope);
+
+  if (!session?.user?.id && !allowsAnonymousUpload) {
     return NextResponse.json({ error: "UNAUTHORIZED", message: "Authentication required." }, { status: 401 });
   }
 
-  const scope = getUploaderScope(session.user.id, request);
+  const scope = getUploaderScope(session?.user?.id, request);
 
   const rate = checkRateLimit({
     key: `upload:${scope}`,
@@ -64,7 +71,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const formData = await request.formData();
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {

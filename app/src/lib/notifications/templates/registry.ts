@@ -103,6 +103,22 @@ const TEMPLATE_BUILDERS: Record<string, TemplateBuilder> = {
     "Nouveau message GP {{shipmentCode}}",
     "{{actorName}} a partage un message sur l'envoi {{shipmentCode}}.\n{{messagePreview}}\nVoir le fil: {{link}}"
   ),
+  ad_request_received: buildSimpleTemplate(
+    "Demande pub bien recue pour {{companyName}}",
+    "Votre demande de visibilite \"{{campaignTitle}}\" sur {{sourceVertical}} a bien ete recue pour le format {{placementLabel}}.\nNotre equipe va l'examiner puis vous recontacter si besoin."
+  ),
+  ad_request_approved: buildSimpleTemplate(
+    "Demande pub validee pour {{companyName}}",
+    "Bonne nouvelle: votre demande \"{{campaignTitle}}\" sur {{sourceVertical}} a ete validee.\nFormat retenu: {{placementLabel}}.\n{{adminNote}}"
+  ),
+  ad_request_rejected: buildSimpleTemplate(
+    "Demande pub refusee pour {{companyName}}",
+    "Votre demande \"{{campaignTitle}}\" sur {{sourceVertical}} n'a pas ete retenue pour le moment.\n{{adminNote}}"
+  ),
+  ad_request_submitted: buildSimpleTemplate(
+    "Nouvelle demande pub {{companyName}}",
+    "{{companyName}} souhaite diffuser \"{{campaignTitle}}\" sur {{sourceVertical}} (format: {{placementLabel}}).\nOuvrir la revue admin: {{link}}"
+  ),
   delivery_reminder: buildSimpleTemplate(
     "Rappel livraison {{orderId}}",
     "Rappel: votre livraison {{orderId}} est attendue bientot. Suivi: {{link}}"

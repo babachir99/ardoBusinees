@@ -2,14 +2,19 @@ import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import SearchBar from "@/components/search/SearchBar";
 import UserHeaderActions from "@/components/layout/UserHeaderActions";
+import { authOptions } from "@/lib/auth";
 import { getHeaderSearchSnapshot } from "@/lib/catalogSnapshots";
+import { getServerSession } from "next-auth";
 
 type AppHeaderProps = {
   locale: string;
 };
 
 export default async function AppHeader({ locale }: AppHeaderProps) {
-  const { categories, recentProducts } = await getHeaderSearchSnapshot();
+  const [{ categories, recentProducts }, session] = await Promise.all([
+    getHeaderSearchSnapshot(),
+    getServerSession(authOptions),
+  ]);
 
   return (
     <header className="sticky top-3 z-40 w-full box-border">
@@ -36,6 +41,7 @@ export default async function AppHeader({ locale }: AppHeaderProps) {
               targetPath="/shop"
               autoNavigateOnFilters={false}
               clearNavigates={false}
+              storageScope={session?.user?.id ?? null}
             />
           </div>
 

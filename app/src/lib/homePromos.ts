@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import {
   HOME_PROMO_AUDIENCES,
+  HOME_PROMO_BILLING_STATUSES,
   HOME_PROMO_PLACEMENTS,
+  canHomePromoGoLive,
   type HomePromoAudience,
+  type HomePromoBillingStatus,
   type HomePromoEntry,
   type HomePromoPlacement,
 } from "@/lib/homePromos.shared";
@@ -55,6 +58,7 @@ const defaultHomePromos: HomePromoEntry[] = [
     impressionCap: null,
     rotationSeconds: 6,
     priority: 100,
+    billingStatus: "INTERNAL",
     enabled: true,
     startAt: null,
     endAt: null,
@@ -79,6 +83,7 @@ const defaultHomePromos: HomePromoEntry[] = [
     impressionCap: null,
     rotationSeconds: 8,
     priority: 80,
+    billingStatus: "INTERNAL",
     enabled: true,
     startAt: null,
     endAt: null,
@@ -103,6 +108,7 @@ const defaultHomePromos: HomePromoEntry[] = [
     impressionCap: null,
     rotationSeconds: 8,
     priority: 70,
+    billingStatus: "INTERNAL",
     enabled: false,
     startAt: null,
     endAt: null,
@@ -190,6 +196,15 @@ function sanitizeAudience(value: unknown, fallback: HomePromoAudience): HomeProm
     : fallback;
 }
 
+function sanitizeBillingStatus(
+  value: unknown,
+  fallback: HomePromoBillingStatus
+): HomePromoBillingStatus {
+  return HOME_PROMO_BILLING_STATUSES.includes(value as HomePromoBillingStatus)
+    ? (value as HomePromoBillingStatus)
+    : fallback;
+}
+
 function sanitizeStringArray(value: unknown) {
   if (!Array.isArray(value)) {
     return [];
@@ -250,6 +265,7 @@ function buildPromoFallback(index: number): HomePromoEntry {
     impressionCap: null,
     rotationSeconds: 8,
     priority: Math.max(0, 50 - index),
+    billingStatus: "INTERNAL",
     enabled: false,
     startAt: null,
     endAt: null,
@@ -262,7 +278,7 @@ function normalizePromo(entry: unknown, fallback: HomePromoEntry): HomePromoEntr
   }
 
   const raw = entry as Record<string, unknown>;
-  return {
+  const normalized: HomePromoEntry = {
     id: sanitizeText(raw.id, fallback.id, 40).toLowerCase().replace(/\s+/g, "-"),
     tag: sanitizeText(raw.tag, fallback.tag, 32),
     title: sanitizeText(raw.title, fallback.title, 90),
@@ -281,10 +297,17 @@ function normalizePromo(entry: unknown, fallback: HomePromoEntry): HomePromoEntr
     impressionCap: sanitizeNullableCount(raw.impressionCap, fallback.impressionCap),
     rotationSeconds: sanitizeRotationSeconds(raw.rotationSeconds, fallback.rotationSeconds),
     priority: sanitizePriority(raw.priority, fallback.priority),
+    billingStatus: sanitizeBillingStatus(raw.billingStatus, fallback.billingStatus),
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : fallback.enabled,
     startAt: sanitizeDateValue(raw.startAt),
     endAt: sanitizeDateValue(raw.endAt),
   };
+
+  if (!canHomePromoGoLive(normalized)) {
+    normalized.enabled = false;
+  }
+
+  return normalized;
 }
 
 export function resolveHomePromoEntries(rawEntries: unknown): HomePromoEntry[] {
@@ -327,6 +350,21 @@ export async function getHomePromoEntries() {
     lastUpdatedAt: latest?.createdAt ?? null,
     lastUpdatedBy: latest?.user ?? null,
   };
+}
+
+export async function persistHomePromoEntries(entries: HomePromoEntry[], actorUserId: string) {
+  await prisma.activityLog.create({
+    data: {
+      userId: actorUserId,
+      action: HOME_PROMO_ACTIVITY_ACTION,
+      entityType: "HOME_PROMOS",
+      metadata: {
+        promos: resolveHomePromoEntries(entries),
+      },
+    },
+  });
+
+  return getHomePromoEntries();
 }
 
 export async function getHomePromoTrackingSummary(days = 30): Promise<HomePromoTrackingSummary> {

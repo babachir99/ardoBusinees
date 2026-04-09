@@ -456,6 +456,7 @@ export default async function HomePage({
         locale={locale}
         isLoggedIn={Boolean(session?.user?.id)}
         initialLikedItems={homeLikedItems}
+        storageScope={session?.user?.id ?? null}
       />
     </div>
   );
@@ -708,6 +709,7 @@ export default async function HomePage({
               ...sellerHints.map((item) => item.displayName),
               ...storeHints.map((item) => item.name),
             ]}
+            storageScope={session?.user?.id ?? null}
           />
         </div>
         <UserHeaderActions

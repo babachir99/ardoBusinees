@@ -2,7 +2,9 @@ import { Link } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { getServerSession } from "next-auth";
 import Footer from "@/components/layout/Footer";
+import AdminAdRequestsPanel from "@/components/admin/AdminAdRequestsPanel";
 import AdminHomePromosPanel from "@/components/admin/AdminHomePromosPanel";
+import { getAdRequests } from "@/lib/adRequests";
 import { authOptions } from "@/lib/auth";
 import { hasUserRole } from "@/lib/userRoles";
 import {
@@ -46,7 +48,10 @@ export default async function AdminCampaignsPage() {
     );
   }
 
-  const homePromoConfig = await getHomePromoEntries();
+  const [homePromoConfig, adRequests] = await Promise.all([
+    getHomePromoEntries(),
+    getAdRequests(),
+  ]);
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
@@ -83,6 +88,8 @@ export default async function AdminCampaignsPage() {
             </div>
           </div>
         </section>
+
+        <AdminAdRequestsPanel locale={locale} initialRequests={adRequests} />
 
         <AdminHomePromosPanel
           locale={locale}

@@ -443,6 +443,7 @@ export default async function ProductPage({
           sellerName: product.seller?.displayName ?? null,
           imageUrl: product.images[0]?.url ?? null,
         }}
+        storageScope={session?.user?.id ?? null}
       />
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
         <Link href="/" className="flex items-center gap-3">

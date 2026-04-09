@@ -5,9 +5,17 @@ export const HOME_PROMO_PLACEMENTS = [
   "STORE_INLINE",
 ] as const;
 export const HOME_PROMO_AUDIENCES = ["ALL", "AUTH", "GUEST"] as const;
+export const HOME_PROMO_BILLING_STATUSES = [
+  "INTERNAL",
+  "QUOTE_PENDING",
+  "PAYMENT_PENDING",
+  "PAID",
+  "READY",
+] as const;
 
 export type HomePromoPlacement = (typeof HOME_PROMO_PLACEMENTS)[number];
 export type HomePromoAudience = (typeof HOME_PROMO_AUDIENCES)[number];
+export type HomePromoBillingStatus = (typeof HOME_PROMO_BILLING_STATUSES)[number];
 
 export type HomePromoEntry = {
   id: string;
@@ -28,16 +36,31 @@ export type HomePromoEntry = {
   impressionCap: number | null;
   rotationSeconds: number | null;
   priority: number;
+  billingStatus: HomePromoBillingStatus;
   enabled: boolean;
   startAt: string | null;
   endAt: string | null;
 };
 
+export function canHomePromoGoLive(
+  entry: Pick<HomePromoEntry, "billingStatus">
+) {
+  return (
+    entry.billingStatus === "INTERNAL" ||
+    entry.billingStatus === "PAID" ||
+    entry.billingStatus === "READY"
+  );
+}
+
 export function isHomePromoScheduledLive(
-  entry: Pick<HomePromoEntry, "enabled" | "startAt" | "endAt">,
+  entry: Pick<HomePromoEntry, "enabled" | "startAt" | "endAt" | "billingStatus">,
   now = new Date()
 ) {
   if (!entry.enabled) {
+    return false;
+  }
+
+  if (!canHomePromoGoLive(entry)) {
     return false;
   }
 

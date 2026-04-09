@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "@/i18n/navigation";
+import {
+  canonicalizeSearchTerm,
+  storeRecentSearch,
+} from "@/lib/recentSignals";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-const RECENT_SEARCHES_STORAGE_KEY = "jontaado_recent_searches";
-const MAX_RECENT_SEARCHES = 6;
 
 type SearchBarProps = {
   initialQuery?: string;
@@ -18,114 +19,8 @@ type SearchBarProps = {
   targetPath?: string;
   autoNavigateOnFilters?: boolean;
   clearNavigates?: boolean;
+  storageScope?: string | null;
 };
-
-type StoredRecentSearch = {
-  query: string;
-  category: string;
-  sort: string;
-  createdAt: number;
-};
-
-function canonicalizeSearchTerm(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function areSearchVariants(a: string, b: string) {
-  const left = canonicalizeSearchTerm(a);
-  const right = canonicalizeSearchTerm(b);
-
-  if (!left || !right) return false;
-  if (left === right) return true;
-
-  const shortest = Math.min(left.length, right.length);
-  if (shortest < 3) return false;
-
-  return left.startsWith(right) || right.startsWith(left);
-}
-
-function pickPreferredSearch(
-  current: StoredRecentSearch,
-  incoming: Omit<StoredRecentSearch, "createdAt"> & { createdAt?: number }
-) {
-  const currentQuery = current.query.trim();
-  const incomingQuery = incoming.query.trim();
-
-  if (incomingQuery.length > currentQuery.length) {
-    return {
-      query: incomingQuery,
-      category: incoming.category,
-      sort: incoming.sort,
-      createdAt: incoming.createdAt ?? Date.now(),
-    };
-  }
-
-  return current;
-}
-
-function storeRecentSearch(entry: Omit<StoredRecentSearch, "createdAt">) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const normalizedQuery = entry.query.trim();
-  const hasMeaningfulValue = Boolean(
-    normalizedQuery || entry.category || entry.sort !== "recent"
-  );
-  if (!hasMeaningfulValue) {
-    return;
-  }
-
-  let current: StoredRecentSearch[] = [];
-
-  try {
-    const raw = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
-    current = raw ? (JSON.parse(raw) as StoredRecentSearch[]) : [];
-  } catch {
-    current = [];
-  }
-
-  const duplicate = current.find((item) => {
-    if (!normalizedQuery) {
-      return item.query.trim() === "";
-    }
-
-    return areSearchVariants(item.query, normalizedQuery);
-  });
-
-  const deduped = current.filter((item) => {
-    if (!normalizedQuery) {
-      return item.query.trim() !== "";
-    }
-
-    return !areSearchVariants(item.query, normalizedQuery);
-  });
-
-  const next = [
-    duplicate
-      ? pickPreferredSearch(duplicate, {
-          query: normalizedQuery,
-          category: entry.category,
-          sort: entry.sort,
-          createdAt: Date.now(),
-        })
-      : {
-          query: normalizedQuery,
-          category: entry.category,
-          sort: entry.sort,
-          createdAt: Date.now(),
-        },
-    ...deduped,
-  ].slice(0, MAX_RECENT_SEARCHES);
-
-  window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent("jontaado:recent-searches-updated", { detail: next }));
-}
 
 function buildSearchHref(params: {
   targetPath: string;
@@ -153,6 +48,7 @@ export default function SearchBar({
   targetPath = "/",
   autoNavigateOnFilters = true,
   clearNavigates = true,
+  storageScope,
 }: SearchBarProps) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery ?? "");
@@ -192,7 +88,7 @@ export default function SearchBar({
 
   const navigateToSearch = ({ trackRecent }: { trackRecent: boolean }) => {
     if (trackRecent) {
-      storeRecentSearch({ query, category, sort });
+      storeRecentSearch(storageScope, { query, category, sort });
     }
     router.push(searchHref);
   };

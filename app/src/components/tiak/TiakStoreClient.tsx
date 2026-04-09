@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import MarketplaceAdRequestButton from "@/components/ads/MarketplaceAdRequestButton";
 import dynamic from "next/dynamic";
 import {
   marketplaceActionPrimaryClass,
@@ -766,6 +767,12 @@ export default function TiakStoreClient({
         }
         right={
           <>
+            <MarketplaceAdRequestButton
+              locale={locale}
+              sourceVertical="TIAK"
+              label={locale === "fr" ? "Demander une pub" : "Request an ad"}
+              className={marketplaceActionSecondaryClass}
+            />
             {canViewEarnings ? (
               <Link
                 href={`/${locale}/stores/jontaado-tiak-tiak/dashboard`}

@@ -1,5 +1,5 @@
-﻿import type { HomePromoEntry } from "@/lib/homePromos.shared";
-import { isHomePromoScheduledLive } from "@/lib/homePromos.shared";
+import type { HomePromoEntry } from "@/lib/homePromos.shared";
+import { canHomePromoGoLive, isHomePromoScheduledLive } from "@/lib/homePromos.shared";
 
 export const targetingOptions = [
   { value: "jontaado-cares", fr: "CARES", en: "CARES" },
@@ -75,6 +75,28 @@ export function getAudienceLabel(locale: string, audience: HomePromoEntry["audie
   }
 }
 
+export function getBillingStatusLabel(
+  locale: string,
+  billingStatus: HomePromoEntry["billingStatus"]
+) {
+  const isFr = locale === "fr";
+
+  switch (billingStatus) {
+    case "INTERNAL":
+      return isFr ? "Interne" : "Internal";
+    case "QUOTE_PENDING":
+      return isFr ? "Devis en attente" : "Quote pending";
+    case "PAYMENT_PENDING":
+      return isFr ? "Paiement en attente" : "Payment pending";
+    case "PAID":
+      return isFr ? "Paye" : "Paid";
+    case "READY":
+      return isFr ? "Pret" : "Ready";
+    default:
+      return billingStatus;
+  }
+}
+
 export function getPreviewVariant(
   placement: HomePromoEntry["placement"]
 ): "popup" | "inline" | "product-card" {
@@ -144,6 +166,23 @@ export function getPlacementContextDescription(locale: string, promo: HomePromoE
 
 export function getPromoStatusMeta(locale: string, promo: HomePromoEntry, now: Date) {
   const isFr = locale === "fr";
+
+  if (!canHomePromoGoLive(promo)) {
+    if (promo.billingStatus === "QUOTE_PENDING") {
+      return {
+        label: isFr ? "Devis en attente" : "Quote pending",
+        className: "border-amber-300/25 bg-amber-400/10 text-amber-100",
+      };
+    }
+
+    if (promo.billingStatus === "PAYMENT_PENDING") {
+      return {
+        label: isFr ? "Paiement requis" : "Payment required",
+        className: "border-rose-300/25 bg-rose-400/10 text-rose-100",
+      };
+    }
+  }
+
   const status = getPromoLifecycleStatus(promo, now);
 
   switch (status) {
@@ -164,8 +203,12 @@ export function getPromoStatusMeta(locale: string, promo: HomePromoEntry, now: D
       };
     default:
       return {
-        label: isFr ? "Brouillon" : "Draft",
-        className: "border-sky-300/20 bg-sky-400/10 text-sky-100",
+        label: promo.billingStatus === "PAID" ? (isFr ? "Paye" : "Paid") : promo.billingStatus === "READY" ? (isFr ? "Pret" : "Ready") : isFr ? "Brouillon" : "Draft",
+        className: promo.billingStatus === "PAID"
+          ? "border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
+          : promo.billingStatus === "READY"
+            ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-100"
+            : "border-sky-300/20 bg-sky-400/10 text-sky-100",
       };
   }
 }
@@ -209,6 +252,7 @@ export function buildDemoPreviewPromos(
       impressionCap: null,
       rotationSeconds: 6,
       priority: 90,
+      billingStatus: "INTERNAL",
       enabled: true,
       startAt: null,
       endAt: null,
@@ -236,6 +280,7 @@ export function buildDemoPreviewPromos(
       impressionCap: null,
       rotationSeconds: 8,
       priority: 80,
+      billingStatus: "INTERNAL",
       enabled: true,
       startAt: null,
       endAt: null,
@@ -261,10 +306,15 @@ export function buildDemoPreviewPromos(
       impressionCap: null,
       rotationSeconds: 8,
       priority: 70,
+      billingStatus: "INTERNAL",
       enabled: true,
       startAt: null,
       endAt: null,
     },
   };
 }
+
+
+
+
 

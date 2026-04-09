@@ -6,11 +6,17 @@ import { useCart } from "@/components/cart/CartProvider";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
 import { Link } from "@/i18n/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
+import {
+  getRecentSearchItemKey,
+  persistRecentSearches,
+  readRecentSearches,
+  readRecentViews,
+  removeRecentSearch,
+  type RecentSearchItem,
+  type RecentViewItem,
+} from "@/lib/recentSignals";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const RECENT_SEARCHES_STORAGE_KEY = "jontaado_recent_searches";
-const RECENT_VIEWS_STORAGE_KEY = "jontaado_recent_views";
 
 type HomeLikedItem = {
   productId: string;
@@ -27,22 +33,11 @@ type HomeLikedItem = {
   favoritesCount?: number;
 };
 
-type RecentViewItem = {
-  id: string;
-  slug: string;
-  title: string;
-  priceCents: number;
-  currency: string;
-  discountPercent?: number | null;
-  sellerName?: string | null;
-  imageUrl?: string | null;
-  viewedAt: number;
-};
-
 type HomeDynamicSignalsProps = {
   locale: string;
   isLoggedIn: boolean;
   initialLikedItems: HomeLikedItem[];
+  storageScope?: string | null;
 };
 
 type FavoriteApiItem = {
@@ -62,13 +57,6 @@ type FavoriteApiItem = {
   };
 };
 
-type RecentSearchItem = {
-  query: string;
-  category: string;
-  sort: string;
-  createdAt: number;
-};
-
 type EmptyStateProps = {
   ctaHref: string;
   ctaLabel: string;
@@ -76,101 +64,6 @@ type EmptyStateProps = {
   toneClassName?: string;
   children: ReactNode;
 };
-
-function canonicalizeSearchTerm(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function areSearchVariants(a: string, b: string) {
-  const left = canonicalizeSearchTerm(a);
-  const right = canonicalizeSearchTerm(b);
-
-  if (!left || !right) return false;
-  if (left === right) return true;
-
-  const shortest = Math.min(left.length, right.length);
-  if (shortest < 2) return false;
-
-  return left.startsWith(right) || right.startsWith(left);
-}
-
-function normalizeRecentSearches(items: RecentSearchItem[]) {
-  return items.reduce<RecentSearchItem[]>((acc, item) => {
-    const query = item.query.trim();
-    const hasMeaningfulValue = Boolean(query || item.category || item.sort !== "recent");
-    if (!hasMeaningfulValue) {
-      return acc;
-    }
-
-    const existingIndex = acc.findIndex((existing) => {
-      if (!query || !existing.query.trim()) {
-        return existing.query.trim() === query;
-      }
-
-      return areSearchVariants(existing.query, query);
-    });
-
-    if (existingIndex === -1) {
-      acc.push({ ...item, query });
-      return acc;
-    }
-
-    const current = acc[existingIndex];
-    const currentQuery = current.query.trim();
-    const shouldReplace =
-      query.length > currentQuery.length ||
-      (query.length === currentQuery.length && item.createdAt >= current.createdAt);
-
-    if (shouldReplace) {
-      acc[existingIndex] = { ...item, query };
-    }
-
-    return acc;
-  }, []);
-}
-
-function readRecentSearches() {
-  if (typeof window === "undefined") {
-    return [] as RecentSearchItem[];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
-    return raw ? normalizeRecentSearches(JSON.parse(raw) as RecentSearchItem[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistNormalizedRecentSearches(items: RecentSearchItem[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // ignore storage issues
-  }
-}
-
-function readRecentViews() {
-  if (typeof window === "undefined") {
-    return [] as RecentViewItem[];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(RECENT_VIEWS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as RecentViewItem[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 function buildSearchHref(item: RecentSearchItem) {
   const params = new URLSearchParams();
@@ -310,6 +203,19 @@ function StoreGlyph() {
   );
 }
 
+function CloseGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
+      <path
+        d="m6 6 8 8M14 6l-8 8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function SparkHeartGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
@@ -430,6 +336,7 @@ export default function HomeDynamicSignals({
   locale,
   isLoggedIn,
   initialLikedItems,
+  storageScope,
 }: HomeDynamicSignalsProps) {
   const isFr = locale === "fr";
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>([]);
@@ -501,22 +408,25 @@ export default function HomeDynamicSignals({
 
   useEffect(() => {
     const syncRecentSearches = () => {
-      const next = readRecentSearches();
+      const next = readRecentSearches(storageScope);
       setRecentSearches(next);
-      persistNormalizedRecentSearches(next);
+      persistRecentSearches(storageScope, next);
     };
-    const syncRecentViews = () => setRecentViews(readRecentViews());
+    const syncRecentViews = () => setRecentViews(readRecentViews(storageScope));
 
     syncRecentSearches();
     syncRecentViews();
 
     const handleRecentSearchUpdate = () => syncRecentSearches();
     const handleRecentViewsUpdate = () => syncRecentViews();
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === RECENT_SEARCHES_STORAGE_KEY) {
-        syncRecentSearches();
+    const handleStorage = () => {
+      if (typeof window === "undefined") {
+        return;
       }
-      if (event.key === RECENT_VIEWS_STORAGE_KEY) {
+      if (
+        document.visibilityState !== "hidden"
+      ) {
+        syncRecentSearches();
         syncRecentViews();
       }
     };
@@ -530,7 +440,7 @@ export default function HomeDynamicSignals({
       window.removeEventListener("jontaado:recent-views-updated", handleRecentViewsUpdate);
       window.removeEventListener("storage", handleStorage);
     };
-  }, []);
+  }, [storageScope]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -581,6 +491,10 @@ export default function HomeDynamicSignals({
       left: direction === "right" ? 236 : -236,
       behavior: "smooth",
     });
+  };
+
+  const handleRecentSearchRemove = (item: RecentSearchItem) => {
+    setRecentSearches(removeRecentSearch(storageScope, getRecentSearchItemKey(item)));
   };
 
   return (
@@ -751,25 +665,40 @@ export default function HomeDynamicSignals({
                 <div className="pointer-events-none absolute bottom-3 left-[13px] top-3 w-px rounded-full bg-gradient-to-b from-emerald-300/0 via-emerald-300/20 to-emerald-300/0" />
                 <div className={`${compactListClass} h-full`}>
                   {recentSearches.map((item) => (
-                    <Link
-                      key={`${item.query}-${item.category}-${item.sort}-${item.createdAt}`}
-                      href={buildSearchHref(item)}
-                      className={`${secondaryRowClass} min-h-[58px] overflow-hidden`}
+                    <div
+                      key={getRecentSearchItemKey(item)}
+                      className={`${secondaryRowClass} min-h-[58px] overflow-hidden pr-2`}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <span className="relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
-                          <SearchGlyph />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold leading-tight text-white">
-                            {formatRecentSearchLabel(item, isFr)}
-                          </p>
-                          <p className="mt-0.5 text-[11px] leading-none text-zinc-400">
-                            {formatCompactSignalDate(item.createdAt, locale)}
-                          </p>
-                        </div>
+                        <Link
+                          href={buildSearchHref(item)}
+                          className="flex min-w-0 flex-1 items-start gap-3"
+                        >
+                          <span className="relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/15 bg-emerald-400/10 text-emerald-200 shadow-[0_0_0_4px_rgba(15,16,19,0.9)]">
+                            <SearchGlyph />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold leading-tight text-white">
+                              {formatRecentSearchLabel(item, isFr)}
+                            </p>
+                            <p className="mt-0.5 text-[11px] leading-none text-zinc-400">
+                              {formatCompactSignalDate(item.createdAt, locale)}
+                            </p>
+                          </div>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleRecentSearchRemove(item)}
+                          aria-label={
+                            isFr ? "Supprimer cette recherche" : "Remove this search"
+                          }
+                          title={isFr ? "Supprimer" : "Remove"}
+                          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-400 transition duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                        >
+                          <CloseGlyph />
+                        </button>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
                 {recentSearches.length > 2 ? (
