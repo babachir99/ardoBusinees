@@ -243,7 +243,8 @@
     },
     "list": {
       "title": "Historique compact",
-      "subtitle": "Trois commandes par ligne pour parcourir l'ensemble plus vite."
+      "subtitle": "Trois commandes par ligne pour parcourir l'ensemble plus vite.",
+      "display": "Afficher"
     },
     "actions": {
       "showMore": "Voir {count} de plus"

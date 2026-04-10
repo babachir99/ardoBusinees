@@ -243,7 +243,8 @@
     },
     "list": {
       "title": "Compact history",
-      "subtitle": "Three orders per row to scan everything faster."
+      "subtitle": "Three orders per row to scan everything faster.",
+      "display": "Show"
     },
     "actions": {
       "showMore": "Show {count} more"

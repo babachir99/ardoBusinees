@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import OrdersLookup from "@/components/orders/OrdersLookup";
 import OrdersList from "@/components/orders/OrdersList";
 import Footer from "@/components/layout/Footer";
@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { buildStoreMetadata } from "@/lib/storeSeo";
+import MarketplaceHeroDynamicTitle from "@/components/marketplace/MarketplaceHeroDynamicTitle";
 
 export async function generateMetadata({
   params,
@@ -30,15 +31,32 @@ export async function generateMetadata({
 
 export default async function OrdersPage() {
   const t = await getTranslations("Orders");
+  const locale = await getLocale();
+  const isFr = locale === "fr";
   const session = await getServerSession(authOptions);
+  const heroLines = isFr
+    ? [
+        "sans perdre le fil",
+        "avec un suivi plus clair",
+        "en retrouvant vite l'essentiel",
+        "du panier a la livraison",
+      ]
+    : [
+        "without losing track",
+        "with clearer follow-up",
+        "while finding essentials faster",
+        "from cart to delivery",
+      ];
 
   return (
     <div className="min-h-screen bg-[#0b0f12] text-white">
       <section className="mx-auto max-w-6xl px-6 pb-20 pt-12">
-        <div className="mb-6">
-          <p className="text-xs uppercase tracking-[0.3em] text-emerald-200/70">
-            {t("kicker")}
-          </p>
+        <div className="mb-6 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(12,17,22,0.95),rgba(18,43,36,0.72))] p-6 shadow-[0_24px_60px_-36px_rgba(16,185,129,0.45)]">
+          <MarketplaceHeroDynamicTitle
+            fixedLine={t("title")}
+            lines={heroLines}
+            lineClassName="text-zinc-400"
+          />
         </div>
         {session ? (
           <OrdersList />
