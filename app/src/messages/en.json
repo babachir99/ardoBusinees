@@ -194,6 +194,7 @@
     "kicker": "Orders",
     "title": "My orders",
     "subtitle": "Enter your email to find your orders.",
+    "subtitleDashboard": "Track, filter and revisit your orders without getting lost in a long list.",
     "loading": "Loading orders...",
     "signinHint": "Sign in to see your full order history.",
     "signinCta": "Sign in",
@@ -226,8 +227,31 @@
       "unknown": "Unknown product",
       "proof": "Proof available",
       "view": "View details",
+      "viewShort": "Open",
       "messages": "Messages",
       "noEmail": "No email"
+    },
+    "summary": {
+      "total": "Total orders",
+      "confirmed": "Confirmed",
+      "pending": "Pending / canceled",
+      "spent": "Total spend",
+      "visible": "{current} visible out of {total}"
+    },
+    "groups": {
+      "thisMonth": "This month"
+    },
+    "list": {
+      "title": "Compact history",
+      "subtitle": "Three orders per row to scan everything faster."
+    },
+    "actions": {
+      "showMore": "Show {count} more"
+    },
+    "recommendations": {
+      "title": "Next picks",
+      "subtitle": "A compact set of suggestions to continue shopping faster.",
+      "explore": "Explore"
     },
     "payment": {
       "pending": "Pending",

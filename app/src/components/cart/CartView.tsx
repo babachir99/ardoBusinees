@@ -7,7 +7,6 @@ import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useCart } from "./CartProvider";
 import { formatMoney } from "@/lib/format";
-import FavoriteButton from "@/components/favorites/FavoriteButton";
 import AddToCartButton from "@/components/cart/AddToCartButton";
 import ProductSuggestionGrid, {
   type ProductSuggestionItem,

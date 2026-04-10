@@ -194,6 +194,7 @@
     "kicker": "Commandes",
     "title": "Mes commandes",
     "subtitle": "Entre ton email pour retrouver tes commandes.",
+    "subtitleDashboard": "Retrouve, filtre et suis tes commandes sans te perdre dans une longue liste.",
     "loading": "Chargement...",
     "signinHint": "Connecte-toi pour voir tout ton historique.",
     "signinCta": "Se connecter",
@@ -226,8 +227,31 @@
       "unknown": "Produit inconnu",
       "proof": "Preuve disponible",
       "view": "Voir detail",
+      "viewShort": "Voir",
       "messages": "Messagerie",
       "noEmail": "Aucun email"
+    },
+    "summary": {
+      "total": "Total commandes",
+      "confirmed": "Confirmees",
+      "pending": "En attente / annulees",
+      "spent": "Depense totale",
+      "visible": "{current} visibles sur {total}"
+    },
+    "groups": {
+      "thisMonth": "Ce mois-ci"
+    },
+    "list": {
+      "title": "Historique compact",
+      "subtitle": "Trois commandes par ligne pour parcourir l'ensemble plus vite."
+    },
+    "actions": {
+      "showMore": "Voir {count} de plus"
+    },
+    "recommendations": {
+      "title": "Pour la suite",
+      "subtitle": "Quelques suggestions compactes pour reprendre vite tes achats.",
+      "explore": "Explorer"
     },
     "payment": {
       "pending": "En attente",

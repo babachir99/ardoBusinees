@@ -69,6 +69,7 @@ const homeProductSelect = {
   slug: true,
   title: true,
   type: true,
+  stockQuantity: true,
   priceCents: true,
   currency: true,
   discountPercent: true,
@@ -506,6 +507,13 @@ export default async function HomePage({
             const finalPrice = product.discountPercent
               ? getDiscountedPrice(product.priceCents, product.discountPercent)
               : product.priceCents;
+            const localStock =
+              product.type === "LOCAL"
+                ? Math.max(0, Math.floor(Number(product.stockQuantity ?? 0)))
+                : undefined;
+            const isSoldOut = product.type === "LOCAL" && (localStock ?? 0) <= 0;
+            const isLowStock =
+              product.type === "LOCAL" && (localStock ?? 0) > 0 && (localStock ?? 0) <= 3;
 
             return (
               <Link
@@ -527,9 +535,20 @@ export default async function HomePage({
                 <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
                   {product.seller?.displayName ?? "JONTAADO"}
                 </p>
-                <h3 className="mt-2 line-clamp-2 text-base font-semibold text-white">
-                  {product.title}
-                </h3>
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  <h3 className="line-clamp-2 text-base font-semibold text-white">
+                    {product.title}
+                  </h3>
+                  {isSoldOut ? (
+                    <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200">
+                      {locale === "fr" ? "Epuise" : "Sold out"}
+                    </span>
+                  ) : isLowStock ? (
+                    <span className="shrink-0 rounded-full border border-orange-300/20 bg-orange-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-orange-200">
+                      {locale === "fr" ? "Stock faible" : "Low stock"}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="text-sm font-semibold text-emerald-200">
                     {formatMoney(finalPrice, product.currency, locale)}
@@ -538,8 +557,21 @@ export default async function HomePage({
                     <span className="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] text-rose-200">
                       -{product.discountPercent}%
                     </span>
-                  ) : null}
+                    ) : null}
                 </div>
+                {isSoldOut ? (
+                  <p className="mt-2 text-[11px] text-amber-100/80">
+                    {locale === "fr"
+                      ? "Momentanement indisponible."
+                      : "Temporarily unavailable."}
+                  </p>
+                ) : isLowStock ? (
+                  <p className="mt-2 text-[11px] text-orange-100/80">
+                    {locale === "fr"
+                      ? `Plus que ${localStock} en stock.`
+                      : `Only ${localStock} left.`}
+                  </p>
+                ) : null}
               </Link>
             );
           })}
@@ -563,6 +595,13 @@ export default async function HomePage({
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 fade-up">
         {displayedProducts.map((product, index) => {
           const boosted = isBoosted(product);
+          const localStock =
+            product.type === "LOCAL"
+              ? Math.max(0, Math.floor(Number(product.stockQuantity ?? 0)))
+              : undefined;
+          const isSoldOut = product.type === "LOCAL" && (localStock ?? 0) <= 0;
+          const isLowStock =
+            product.type === "LOCAL" && (localStock ?? 0) > 0 && (localStock ?? 0) <= 3;
           const chunkIndex = Math.floor(index / 6);
           const shouldInsertProductCardPromo =
             !hasActiveSearchIntent &&
@@ -613,7 +652,18 @@ export default async function HomePage({
                   <span>{product.type}</span>
                   <span>{product.seller?.displayName ?? "JONTAADO"}</span>
                 </div>
-                <h3 className="mt-3 text-lg font-semibold">{product.title}</h3>
+                <div className="mt-3 flex items-start justify-between gap-3">
+                  <h3 className="text-lg font-semibold">{product.title}</h3>
+                  {isSoldOut ? (
+                    <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200">
+                      {locale === "fr" ? "Epuise" : "Sold out"}
+                    </span>
+                  ) : isLowStock ? (
+                    <span className="shrink-0 rounded-full border border-orange-300/20 bg-orange-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-orange-200">
+                      {locale === "fr" ? "Stock faible" : "Low stock"}
+                    </span>
+                  ) : null}
+                </div>
                 {product.discountPercent ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                     <span className="font-semibold text-emerald-200">
@@ -635,6 +685,19 @@ export default async function HomePage({
                     {formatMoney(product.priceCents, product.currency, locale)}
                   </p>
                 )}
+                {isSoldOut ? (
+                  <p className="mt-2 text-[11px] text-amber-100/80">
+                    {locale === "fr"
+                      ? "Momentanement indisponible."
+                      : "Temporarily unavailable."}
+                  </p>
+                ) : isLowStock ? (
+                  <p className="mt-2 text-[11px] text-orange-100/80">
+                    {locale === "fr"
+                      ? `Plus que ${localStock} en stock.`
+                      : `Only ${localStock} left.`}
+                  </p>
+                ) : null}
               </Link>
 
               {!hasActiveSearchIntent && homeInlinePromos.length > 0 && index === 1 ? (

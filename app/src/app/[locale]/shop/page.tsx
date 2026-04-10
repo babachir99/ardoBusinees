@@ -456,6 +456,13 @@ export default async function ShopPage({
             <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {sortedProducts.map((product) => {
                 const boosted = isBoosted(product);
+                const localStock =
+                  product.type === "LOCAL"
+                    ? Math.max(0, Math.floor(Number(product.stockQuantity ?? 0)))
+                    : undefined;
+                const isSoldOut = product.type === "LOCAL" && (localStock ?? 0) <= 0;
+                const isLowStock =
+                  product.type === "LOCAL" && (localStock ?? 0) > 0 && (localStock ?? 0) <= 3;
                 return (
                   <Link
                     key={product.id}
@@ -525,7 +532,18 @@ export default async function ShopPage({
                           : t("labels.eta", { days: "5-10 jours" })}
                       </span>
                     </div>
-                    <h3 className="mt-4 text-xl font-semibold">{product.title}</h3>
+                    <div className="mt-4 flex items-start justify-between gap-3">
+                      <h3 className="text-xl font-semibold">{product.title}</h3>
+                      {isSoldOut ? (
+                        <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200">
+                          {locale === "fr" ? "Epuise" : "Sold out"}
+                        </span>
+                      ) : isLowStock ? (
+                        <span className="shrink-0 rounded-full border border-orange-300/20 bg-orange-400/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-orange-200">
+                          {locale === "fr" ? "Stock faible" : "Low stock"}
+                        </span>
+                      ) : null}
+                    </div>
                     {product.discountPercent ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                         <span className="font-semibold text-emerald-200">
@@ -550,6 +568,19 @@ export default async function ShopPage({
                         {formatMoney(product.priceCents, product.currency, locale)}
                       </p>
                     )}
+                    {isSoldOut ? (
+                      <p className="mt-2 text-[11px] text-amber-100/80">
+                        {locale === "fr"
+                          ? "Momentanement indisponible."
+                          : "Temporarily unavailable."}
+                      </p>
+                    ) : isLowStock ? (
+                      <p className="mt-2 text-[11px] text-orange-100/80">
+                        {locale === "fr"
+                          ? `Plus que ${localStock} en stock.`
+                          : `Only ${localStock} left.`}
+                      </p>
+                    ) : null}
                     <div className="mt-6 flex items-center justify-between text-xs text-zinc-400">
                       <span>{product.seller?.displayName ?? t("labels.seller")}</span>
                       <span className="text-emerald-200 transition group-hover:text-emerald-100">
