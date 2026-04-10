@@ -36,27 +36,30 @@ export default async function OrdersPage() {
   const session = await getServerSession(authOptions);
   const heroLines = isFr
     ? [
-        "sans perdre le fil",
-        "avec un suivi plus clair",
-        "en retrouvant vite l'essentiel",
-        "du panier a la livraison",
+        "du paiement a la livraison",
+        "avec chaque etape bien visible",
+        "bien rangees et faciles a retrouver",
+        "sans perdre le fil du suivi",
       ]
     : [
-        "without losing track",
-        "with clearer follow-up",
-        "while finding essentials faster",
-        "from cart to delivery",
+        "from payment to delivery",
+        "with every step in view",
+        "organized and easy to revisit",
+        "without losing the thread",
       ];
 
   return (
     <div className="min-h-screen bg-[#0b0f12] text-white">
       <section className="mx-auto max-w-6xl px-6 pb-20 pt-12">
-        <div className="mb-6 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(12,17,22,0.95),rgba(18,43,36,0.72))] p-6 shadow-[0_24px_60px_-36px_rgba(16,185,129,0.45)]">
-          <MarketplaceHeroDynamicTitle
-            fixedLine={t("title")}
-            lines={heroLines}
-            lineClassName="text-zinc-400"
-          />
+        <div className="mb-6 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(12,17,22,0.95),rgba(18,43,36,0.72))] px-5 py-4 shadow-[0_24px_60px_-36px_rgba(16,185,129,0.45)] md:px-6 md:py-5">
+          <div className="text-2xl font-semibold tracking-tight leading-none text-white md:text-3xl">
+            <MarketplaceHeroDynamicTitle
+              fixedLine={`${t("title")} —`}
+              lines={heroLines}
+              lineClassName="text-zinc-400"
+              layout="inline"
+            />
+          </div>
         </div>
         {session ? (
           <OrdersList />
