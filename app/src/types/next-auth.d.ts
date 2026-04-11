@@ -3,6 +3,7 @@ import "next-auth/jwt";
 
 declare module "next-auth" {
   interface Session {
+    authInvalidated?: boolean;
     user: {
       id: string;
       role: string;
@@ -27,5 +28,6 @@ declare module "next-auth/jwt" {
     roles?: string[];
     image?: string | null;
     name?: string | null;
+    authInvalidated?: boolean;
   }
 }

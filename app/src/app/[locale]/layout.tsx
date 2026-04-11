@@ -66,7 +66,11 @@ export default async function LocaleLayout({
           <NextIntlClientProvider messages={messages}>
             <SessionScopeProvider initialUserId={session?.user?.id ?? null}>
               <CartProvider sessionUserId={session?.user?.id ?? null}>
-                <IdleSessionGuard locale={locale} userId={session?.user?.id ?? null} />
+                <IdleSessionGuard
+                  locale={locale}
+                  userId={session?.user?.id ?? null}
+                  authInvalidated={Boolean(session?.authInvalidated)}
+                />
                 <InternalNavigationHeader locale={locale} />
                 {children}
               </CartProvider>

@@ -6,6 +6,52 @@ const withNextIntl = createNextIntlPlugin();
 const vercelEnv = String(process.env.VERCEL_ENV ?? "").trim().toLowerCase();
 const isProduction = process.env.NODE_ENV === "production" || vercelEnv === "production";
 const isHostedNonLocal = vercelEnv === "preview" || vercelEnv === "staging";
+type CspMode = "off" | "report-only" | "enforce";
+
+function resolveCspMode(): CspMode {
+  const raw = String(process.env.CSP_MODE ?? "").trim().toLowerCase();
+  if (raw === "off") return "off";
+  if (raw === "enforce") return "enforce";
+  if (raw === "report-only" || raw === "reportonly" || raw === "report_only") {
+    return "report-only";
+  }
+
+  return isProduction || isHostedNonLocal ? "report-only" : "off";
+}
+
+function buildCspValue() {
+  const reportUri = String(process.env.CSP_REPORT_URI ?? "").trim();
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = ["'self'", "'unsafe-inline'", "https:"];
+
+  if (isDev) {
+    scriptSrc.push("'unsafe-eval'");
+  }
+
+  const directives = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self' https:",
+    `script-src ${scriptSrc.join(" ")}`,
+    "style-src 'self' 'unsafe-inline' https:",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https:",
+    "connect-src 'self' https: ws: wss:",
+    "frame-src 'self' https:",
+    "media-src 'self' data: blob: https:",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    ...(isProduction ? ["upgrade-insecure-requests"] : []),
+  ];
+
+  if (reportUri) {
+    directives.push(`report-uri ${reportUri}`);
+  }
+
+  return directives.join("; ");
+}
 
 function assertStartupSecurityEnv() {
   if (!(isProduction || isHostedNonLocal)) return;
@@ -24,6 +70,9 @@ function assertStartupSecurityEnv() {
 
 assertStartupSecurityEnv();
 
+const cspMode = resolveCspMode();
+const cspValue = buildCspValue();
+
 const nextConfig: NextConfig = {
   async headers() {
     const headers = [
@@ -31,10 +80,11 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-      {
-        key: "Content-Security-Policy-Report-Only",
-        value: "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
-      },
+      ...(cspMode === "enforce"
+        ? [{ key: "Content-Security-Policy", value: cspValue }]
+        : cspMode === "report-only"
+          ? [{ key: "Content-Security-Policy-Report-Only", value: cspValue }]
+          : []),
       ...(isProduction
         ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" }]
         : []),

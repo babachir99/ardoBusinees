@@ -13,6 +13,7 @@ function parseArgs(argv) {
     baseUrl: process.env.QA_BASE_URL ?? "http://127.0.0.1:3000",
     email: process.env.QA_EMAIL,
     password: process.env.QA_PASSWORD,
+    expectMockPayment: process.env.QA_EXPECT_MOCK_PAYMENT === "1",
     verbose: false,
   };
 
@@ -35,6 +36,10 @@ function parseArgs(argv) {
     }
     if (arg === "--verbose") {
       options.verbose = true;
+      continue;
+    }
+    if (arg === "--expect-mock-payment") {
+      options.expectMockPayment = true;
       continue;
     }
     if (arg.startsWith("--mode=")) {
@@ -76,11 +81,12 @@ function printHelp() {
       "  --base-url=URL        API base URL (default: http://127.0.0.1:3000).",
       "  --email=EMAIL         Account for login (optional).",
       "  --password=PASS       Password for login (optional).",
+      "  --expect-mock-payment Fail if mock payment is unavailable.",
       "  --verbose             Print extra details.",
       "  --help, -h            Show this help.",
       "",
       "Environment:",
-      "  QA_BASE_URL, QA_EMAIL, QA_PASSWORD, DATABASE_URL",
+      "  QA_BASE_URL, QA_EMAIL, QA_PASSWORD, DATABASE_URL, QA_EXPECT_MOCK_PAYMENT",
       "",
       "Notes:",
       "  - Server must already be running.",
@@ -518,12 +524,21 @@ async function main() {
     reporter.add("order_ids_resolved", orderIdsOk, orderIds.join(", "));
 
     if (orderIdsOk) {
-      const { response: payRes } = await client.json("/api/payments/mock", {
+      const { response: payRes, data: payData } = await client.json("/api/payments/mock", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ orderIds }),
       });
-      reporter.add("mock_payment", payRes.ok, `status=${payRes.status}`);
+      const mockPaymentDisabled =
+        payRes.status === 403 &&
+        typeof payData?.error === "string" &&
+        payData.error.toLowerCase().includes("mock payments are disabled");
+      const mockPaymentOk = payRes.ok || (!options.expectMockPayment && mockPaymentDisabled);
+      reporter.add(
+        "mock_payment",
+        mockPaymentOk,
+        mockPaymentDisabled ? `skipped - ${payData.error}` : `status=${payRes.status}`
+      );
 
       const { response: ordersRes, data: ordersData } = await client.json("/api/orders?take=50");
       const hasOrders = ordersRes.ok && Array.isArray(ordersData);
@@ -531,15 +546,24 @@ async function main() {
 
       if (hasOrders) {
         const createdOrders = ordersData.filter((order) => orderIds.includes(order.id));
-        const finalStatusesOk =
-          createdOrders.length === orderIds.length &&
-          createdOrders.every(
-            (order) => order.status === "CONFIRMED" && order.paymentStatus === "PAID"
-          );
-        reporter.add("order_final_status", finalStatusesOk);
+        const finalStatusesOk = mockPaymentDisabled
+          ? createdOrders.length === orderIds.length &&
+            createdOrders.every(
+              (order) => order.status === "PENDING" && order.paymentStatus === "PENDING"
+            )
+          : createdOrders.length === orderIds.length &&
+            createdOrders.every(
+              (order) => order.status === "CONFIRMED" && order.paymentStatus === "PAID"
+            );
+        reporter.add(
+          "order_final_status",
+          finalStatusesOk,
+          mockPaymentDisabled ? "mock disabled, pending state preserved" : ""
+        );
         context.order = {
           orderIds,
           foundInOrdersApi: createdOrders.length === orderIds.length,
+          mockPaymentDisabled,
           finalStatuses: createdOrders.map((order) => ({
             id: order.id,
             status: order.status,

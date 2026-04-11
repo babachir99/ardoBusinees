@@ -1,5 +1,6 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import type { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
@@ -13,6 +14,43 @@ import {
 
 const providers = [];
 
+function parseAuthSessionInvalidateBefore(raw: string | undefined) {
+  const value = String(raw ?? "").trim();
+  if (!value) return null;
+
+  if (/^\d+$/.test(value)) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return null;
+    return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const authSessionInvalidateBefore = parseAuthSessionInvalidateBefore(
+  process.env.AUTH_SESSION_INVALIDATE_BEFORE
+);
+
+function isSessionTokenMarkedStale(
+  token: JWT,
+  user?: {
+    id?: string;
+  } | null
+) {
+  if (!authSessionInvalidateBefore) {
+    return false;
+  }
+
+  const issuedAtMs = user
+    ? Date.now()
+    : typeof token.iat === "number"
+      ? token.iat * 1000
+      : null;
+
+  return typeof issuedAtMs === "number" && issuedAtMs < authSessionInvalidateBefore;
+}
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
     GoogleProvider({
@@ -22,40 +60,40 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-  providers.push(
-    Credentials({
+providers.push(
+  Credentials({
     name: "Credentials",
     credentials: {
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
     },
-      async authorize(credentials) {
-        const email = credentials?.email?.toLowerCase().trim();
-        const password = credentials?.password;
-        if (!email || !password) {
-          return null;
-        }
-        const user = await prisma.user.findUnique({
-          where: { email },
-        });
-        if (!user?.passwordHash || !user.emailVerified) {
-          return null;
-        }
-        const ok = await compare(password, user.passwordHash);
-        if (!ok) return null;
-        const roles = await getUserRoles(user.id);
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          roles,
-          image: user.image,
-          emailVerified: user.emailVerified,
-        };
-      },
-    })
-  );
+    async authorize(credentials) {
+      const email = credentials?.email?.toLowerCase().trim();
+      const password = credentials?.password;
+      if (!email || !password) {
+        return null;
+      }
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+      if (!user?.passwordHash || !user.emailVerified) {
+        return null;
+      }
+      const ok = await compare(password, user.passwordHash);
+      if (!ok) return null;
+      const roles = await getUserRoles(user.id);
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles,
+        image: user.image,
+        emailVerified: user.emailVerified,
+      };
+    },
+  })
+);
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -93,9 +131,15 @@ export const authOptions: NextAuthOptions = {
         token.role = "CUSTOMER";
       }
 
+      token.authInvalidated = isSessionTokenMarkedStale(
+        token,
+        user as { id?: string } | null | undefined
+      );
+
       return token;
     },
     async session({ session, token }) {
+      session.authInvalidated = token.authInvalidated === true;
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "CUSTOMER";

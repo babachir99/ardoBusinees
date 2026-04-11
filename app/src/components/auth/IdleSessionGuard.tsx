@@ -25,18 +25,32 @@ function readLastActivity(storageKey: string) {
 type IdleSessionGuardProps = {
   locale: string;
   userId?: string | null;
+  authInvalidated?: boolean;
 };
 
 export default function IdleSessionGuard({
   locale,
   userId,
+  authInvalidated = false,
 }: IdleSessionGuardProps) {
   const timeoutRef = useRef<number | null>(null);
   const lastPersistedAtRef = useRef(0);
   const signOutStartedRef = useRef(false);
 
   useEffect(() => {
-    if (!userId || typeof window === "undefined") {
+    if (!authInvalidated || typeof window === "undefined" || signOutStartedRef.current) {
+      return;
+    }
+
+    signOutStartedRef.current = true;
+    announceAuthStateChanged();
+    void signOut({
+      callbackUrl: `/${locale}?reason=session-reset`,
+    });
+  }, [authInvalidated, locale]);
+
+  useEffect(() => {
+    if (!userId || authInvalidated || typeof window === "undefined") {
       return;
     }
 
@@ -144,7 +158,7 @@ export default function IdleSessionGuard({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [locale, userId]);
+  }, [authInvalidated, locale, userId]);
 
   return null;
 }

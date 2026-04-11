@@ -1,13 +1,16 @@
 # QA Smoke Checklist
 
 ## Prerequis
-- Application en cours d'execution (`npm run dev`)
+- Application en cours d'execution (`npm run dev` ou `npm start`)
+- Base fraiche: executer `npm run seed` puis `npm run qa:seed-auth-fixtures`
 - Compte de test valide (ex: `bachir.ba.bb@gmail.com`)
 - Au moins un produit `LOCAL` actif avec stock > 0
 
 ## Lancement automatique
 - Executer `npm run qa:smoke` (mode complet + cleanup auto)
 - Executer `npm run qa:smoke -- --readonly` (sans creation de commande)
+- En environnement production-like (`next build` + `next start`), le paiement mock peut etre desactive.
+- Utiliser `QA_EXPECT_MOCK_PAYMENT=1` uniquement si vous attendez explicitement la confirmation mock.
 
 ## 1. Login / Session
 - Se connecter avec un compte connu
@@ -25,11 +28,13 @@
 - Lancer `POST /api/orders` depuis le panier
 - Attendu: `201` avec `orderIds`
 - Lancer `POST /api/payments/mock`
-- Attendu: `201` et commande `CONFIRMED/PAID`
+- Si mock actif: `201` et commande `CONFIRMED/PAID`
+- Si mock desactive: `403` attendu, la commande reste `PENDING/PENDING` et le smoke ne doit pas casser
 
 ## 4. Verification DB
-- Verifier la commande: `status=CONFIRMED`, `paymentStatus=PAID`
-- Verifier le payout: creation `PENDING`
+- Si mock actif: verifier la commande `status=CONFIRMED`, `paymentStatus=PAID`
+- Si mock actif: verifier le payout `PENDING`
+- Si mock inactif: verifier la commande `status=PENDING`, `paymentStatus=PENDING`
 - Verifier le stock local: decrement coherent
 
 ## 5. Rupture de stock

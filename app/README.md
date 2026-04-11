@@ -44,6 +44,8 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Keep `ALLOW_INSECURE_INTERNAL_CALLS=0` in production and preview/staging environments.
 - Set `INTERNAL_API_TOKEN` for server-to-server internal API calls (payment initialization bridges) and keep it secret.
 - Rotate and protect `NEXTAUTH_SECRET`, `PAYDUNYA_WEBHOOK_SECRET`, and `PAYMENTS_CALLBACK_TOKEN`.
+- Roll out CSP progressively with `CSP_MODE=report-only`, then switch to `CSP_MODE=enforce` once reports are clean.
+- Optional: set `AUTH_SESSION_INVALIDATE_BEFORE` to force browser re-auth after a chosen cutoff.
 - Enforce HTTPS at the reverse proxy and keep HSTS enabled in production.
 - Replace in-memory rate limiting with a shared backend (Redis) before horizontal scaling.
 - For distributed auth rate limiting in production, configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (fallback is in-memory only).
@@ -71,6 +73,9 @@ PAYMENTS_CALLBACK_TOKEN=<secret>
 UPSTASH_REDIS_REST_URL=<optional-for-distributed-rate-limit>
 UPSTASH_REDIS_REST_TOKEN=<optional-for-distributed-rate-limit>
 PUBLIC_ASSET_BASE_URL=<optional-assets-domain>
+CSP_MODE=report-only
+CSP_REPORT_URI=<optional-report-collector>
+AUTH_SESSION_INVALIDATE_BEFORE=<optional-iso-date-or-timestamp>
 ```
 
 PowerShell (current session):
@@ -88,6 +93,9 @@ $env:PAYMENTS_CALLBACK_TOKEN="<secret>"
 $env:UPSTASH_REDIS_REST_URL="<optional-for-distributed-rate-limit>"
 $env:UPSTASH_REDIS_REST_TOKEN="<optional-for-distributed-rate-limit>"
 $env:PUBLIC_ASSET_BASE_URL="<optional-assets-domain>"
+$env:CSP_MODE="report-only"
+$env:CSP_REPORT_URI="<optional-report-collector>"
+$env:AUTH_SESSION_INVALIDATE_BEFORE="<optional-iso-date-or-timestamp>"
 ```
 
 Build and run:
@@ -119,6 +127,9 @@ Notes:
 - Run this on staging before production.
 - `ALLOW_INSECURE_INTERNAL_CALLS` must stay `0` on production/preview/staging.
 - Include all webhook/callback hostnames in `ALLOWED_HOSTS`.
+- Run `npm run qa:seed-auth-fixtures` on a fresh QA/CI database before smoke login checks.
+- See `docs/preprod-security-checklist.md` for the compact pre-prod flow.
+- See `docs/csp-rollout.md` and `.env.staging.example` for the staged CSP rollout.
 
 ## Trust Smoke Runbook (Windows + Bash)
 
