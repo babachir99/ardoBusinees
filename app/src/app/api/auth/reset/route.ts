@@ -3,9 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
-import { sha256Hex } from "@/lib/request-security";
+import { assertSameOrigin, sha256Hex } from "@/lib/request-security";
 
 export async function POST(request: NextRequest) {
+  const sameOriginError = assertSameOrigin(request);
+  if (sameOriginError) {
+    return sameOriginError;
+  }
+
   const body = await request.json().catch(() => null);
   const email = String(body?.email ?? "").toLowerCase().trim();
   const token = String(body?.token ?? "");

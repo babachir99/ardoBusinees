@@ -122,6 +122,7 @@ function loadEnvFromDotEnv() {
 class HttpClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.origin = new URL(this.baseUrl).origin;
     this.cookies = new Map();
   }
 
@@ -147,7 +148,14 @@ class HttpClient {
   async request(pathname, init = {}) {
     const headers = new Headers(init.headers ?? {});
     const cookie = this.getCookieHeader();
+    const method = String(init.method ?? "GET").toUpperCase();
     if (cookie) headers.set("cookie", cookie);
+    if (!headers.has("referer")) {
+      headers.set("referer", `${this.origin}/qa-smoke`);
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(method) && !headers.has("origin")) {
+      headers.set("origin", this.origin);
+    }
     const response = await fetch(`${this.baseUrl}${pathname}`, {
       ...init,
       headers,

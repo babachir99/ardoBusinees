@@ -5,9 +5,14 @@ import crypto from "crypto";
 import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
 import { mapLegacyRoleToUserRoleType } from "@/lib/userRoles";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
-import { sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
+import { assertSameOrigin, sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
 
 export async function POST(request: NextRequest) {
+  const sameOriginError = assertSameOrigin(request);
+  if (sameOriginError) {
+    return sameOriginError;
+  }
+
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });

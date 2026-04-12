@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { assertSameOrigin } from "@/lib/request-security";
 
 type OrderWithSeller = {
   id: string;
@@ -121,6 +122,11 @@ async function finalizeMockPayment(order: OrderWithSeller) {
 }
 
 export async function POST(request: NextRequest) {
+  const sameOriginError = assertSameOrigin(request);
+  if (sameOriginError) {
+    return sameOriginError;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
