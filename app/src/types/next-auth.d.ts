@@ -18,6 +18,7 @@ declare module "next-auth" {
     role: string;
     roles?: string[];
     emailVerified?: Date | null;
+    securityStamp?: string;
   }
 }
 
@@ -29,5 +30,6 @@ declare module "next-auth/jwt" {
     image?: string | null;
     name?: string | null;
     authInvalidated?: boolean;
+    securityStamp?: string;
   }
 }

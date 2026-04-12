@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { CartError, mergeCartForUser } from "@/lib/cart-server";
+import { assertSameOrigin } from "@/lib/request-security";
 
 async function resolveSessionUserId() {
   const session = await getServerSession(authOptions);
@@ -17,6 +18,11 @@ function toErrorResponse(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const userId = await resolveSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { syncUserLegacyRoleAssignments } from "@/lib/account-security";
 import { slugify } from "@/lib/slug";
 import { Prisma, SellerStatus, UserRole } from "@prisma/client";
 import { assertSameOrigin } from "@/lib/request-security";
@@ -166,6 +167,7 @@ export async function POST(request: NextRequest) {
           where: { id: userId },
           data: { role: UserRole.SELLER },
         });
+        await syncUserLegacyRoleAssignments(tx, userId, UserRole.SELLER);
       }
 
       return created;

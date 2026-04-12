@@ -237,23 +237,24 @@ export default function SignupForm() {
 
           <label className="grid gap-2">
             <span className="text-xs font-medium text-zinc-300">{t("fields.password")}</span>
-            <input
-              type="password"
-              className="h-12 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 text-sm text-white outline-none placeholder:text-zinc-600 transition focus:border-emerald-300/60 focus:ring-2 focus:ring-emerald-300/40"
-              placeholder={t("fields.password")}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
-              autoComplete="new-password"
-            />
+              <input
+                type="password"
+                className="h-12 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 text-sm text-white outline-none placeholder:text-zinc-600 transition focus:border-emerald-300/60 focus:ring-2 focus:ring-emerald-300/40"
+                placeholder={t("fields.password")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                autoComplete="new-password"
+                minLength={10}
+              />
             <p className={`text-[11px] ${capsLockOn ? "text-amber-300" : "text-zinc-500"}`}>
               {capsLockOn
                 ? isFr
                   ? "Caps Lock active"
                   : "Caps Lock enabled"
                 : isFr
-                ? "Utilise au moins 8 caracteres."
-                : "Use at least 8 characters."}
+                ? "Utilise au moins 10 caracteres."
+                : "Use at least 10 characters."}
             </p>
           </label>
         </div>

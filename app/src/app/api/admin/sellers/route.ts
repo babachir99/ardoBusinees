@@ -2,8 +2,10 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncUserLegacyRoleAssignments } from "@/lib/account-security";
 import { slugify } from "@/lib/slug";
 import { Prisma, SellerStatus, UserRole } from "@prisma/client";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedSellerStatuses = new Set(Object.values(SellerStatus));
 
@@ -91,6 +93,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -171,6 +178,7 @@ export async function POST(request: NextRequest) {
         where: { id: userId },
         data: { role: UserRole.SELLER },
       });
+      await syncUserLegacyRoleAssignments(tx, userId, UserRole.SELLER);
 
       return seller;
     });

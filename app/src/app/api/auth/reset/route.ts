@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
+import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
 import { sha256Hex } from "@/lib/request-security";
 
@@ -15,6 +16,16 @@ export async function POST(request: NextRequest) {
   if (!email || !token || !password) {
     return NextResponse.json(
       { error: "email, token and password are required" },
+      { status: 400 }
+    );
+  }
+
+  const passwordValidation = validatePassword(password);
+  if (passwordValidation) {
+    return NextResponse.json(
+      {
+        error: `Password must contain at least ${getMinPasswordLength()} characters.`,
+      },
       { status: 400 }
     );
   }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { compare, hash } from "bcryptjs";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validatePassword } from "@/lib/account-security";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
 import { assertSameOrigin } from "@/lib/request-security";
 
@@ -41,8 +42,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "VALIDATION_ERROR" }, { status: 400 });
   }
 
-  if (newPassword.length < 8) {
-    return NextResponse.json({ error: "PASSWORD_TOO_SHORT" }, { status: 400 });
+  const passwordValidation = validatePassword(newPassword);
+  if (passwordValidation) {
+    return NextResponse.json({ error: passwordValidation.code }, { status: 400 });
   }
 
   if (currentPassword === newPassword) {

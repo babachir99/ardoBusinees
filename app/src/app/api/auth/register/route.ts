@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import crypto from "crypto";
+import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
 import { mapLegacyRoleToUserRoleType } from "@/lib/userRoles";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
 import { sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
@@ -27,10 +28,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const passwordValidation = validatePassword(password);
+  if (passwordValidation) {
+    return NextResponse.json(
+      {
+        error: `Password must contain at least ${getMinPasswordLength()} characters.`,
+      },
+      { status: 400 }
+    );
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     return NextResponse.json(
-      { error: "User already exists" },
+      { error: "Unable to create account" },
       { status: 400 }
     );
   }

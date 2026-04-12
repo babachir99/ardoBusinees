@@ -322,7 +322,8 @@
     "errors": {
       "email": "Email is required.",
       "generic": "Unable to load orders."
-    }
+    },
+    "secureAccessNote": "To protect your order history, access is now limited to signed-in accounts."
   },
   "Checkout": {
     "nav": {
@@ -1360,7 +1361,7 @@
       },
       "errors": {
         "required": "Please fill all password fields.",
-        "minLength": "Password must contain at least 8 characters.",
+        "minLength": "Password must contain at least 10 characters.",
         "mismatch": "Password confirmation does not match.",
         "invalidCurrent": "Current password is incorrect.",
         "unavailable": "Password change is unavailable for this account.",

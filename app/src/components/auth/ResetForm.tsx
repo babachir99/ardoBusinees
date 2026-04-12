@@ -69,6 +69,7 @@ export default function ResetForm({
           placeholder={t("fields.password")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          minLength={10}
         />
       </div>
 

@@ -2,8 +2,10 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncUserLegacyRoleAssignments } from "@/lib/account-security";
 import { slugify } from "@/lib/slug";
 import { Prisma, SellerStatus, UserRole } from "@prisma/client";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedSellerStatuses = new Set(Object.values(SellerStatus));
 const allowedRoles = new Set(Object.values(UserRole));
@@ -26,6 +28,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -111,13 +118,17 @@ export async function PATCH(
       });
 
       if (userRole !== undefined || userIsActive !== undefined) {
-        await tx.user.update({
+        const updatedUser = await tx.user.update({
           where: { id: seller.userId },
           data: {
             ...(userRole !== undefined ? { role: userRole as UserRole } : {}),
             ...(userIsActive !== undefined ? { isActive: userIsActive } : {}),
           },
         });
+
+        if (userRole !== undefined) {
+          await syncUserLegacyRoleAssignments(tx, updatedUser.id, userRole as UserRole);
+        }
       }
 
       return seller;
@@ -142,9 +153,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -200,6 +216,7 @@ export async function DELETE(
       where: { id: seller.userId },
       data: { role: UserRole.CUSTOMER },
     });
+    await syncUserLegacyRoleAssignments(tx, seller.userId, UserRole.CUSTOMER);
   });
 
   return NextResponse.json({ ok: true });

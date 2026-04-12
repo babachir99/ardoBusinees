@@ -199,7 +199,7 @@ export default function ProfileEditForm() {
       return;
     }
 
-    if (passwordForm.newPassword.length < 8) {
+    if (passwordForm.newPassword.length < 10) {
       setPasswordError(t("password.errors.minLength"));
       return;
     }

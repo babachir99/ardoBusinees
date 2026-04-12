@@ -6,6 +6,7 @@ import {
   removeCartItemForUser,
   updateCartItemQuantityForUser,
 } from "@/lib/cart-server";
+import { assertSameOrigin } from "@/lib/request-security";
 
 async function resolveSessionUserId() {
   const session = await getServerSession(authOptions);
@@ -24,6 +25,11 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ lineId: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const userId = await resolveSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -51,9 +57,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ lineId: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const userId = await resolveSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

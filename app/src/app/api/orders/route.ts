@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDiscountedPrice } from "@/lib/format";
@@ -5,6 +6,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { PaymentMethod, ProductType } from "@prisma/client";
 import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
+import {
+  checkRateLimitAsync,
+  getRateLimitHeaders,
+  resolveClientIp,
+} from "@/lib/rate-limit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedTypes = new Set(["PREORDER", "DROPSHIP", "LOCAL"]);
 const allowedPaymentMethods = new Set([
@@ -13,6 +20,8 @@ const allowedPaymentMethods = new Set([
   "CARD",
   "CASH",
 ]);
+const CHECKOUT_PLATFORM_FEE_RATE = 0.04;
+const ORDER_CREATE_WINDOW_MS = 10 * 60 * 1000;
 
 type CheckoutItemInput = {
   productId?: string;
@@ -33,6 +42,58 @@ type MappedItem = {
   optionSize?: string;
 };
 
+function normalizeEmail(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase().slice(0, 120) : "";
+}
+
+function normalizeOptionalText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, maxLength) : undefined;
+}
+
+function normalizeCurrency(value: unknown) {
+  if (typeof value !== "string") return "XOF";
+  const normalized = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(normalized) ? normalized : "XOF";
+}
+
+function buildGuestCheckoutEmail() {
+  return `guest+${randomUUID()}@checkout.local`;
+}
+
+function computeCheckoutFeesCents(subtotalCents: number) {
+  return Math.max(Math.round(subtotalCents * CHECKOUT_PLATFORM_FEE_RATE), 0);
+}
+
+async function enforceOrderCreateRateLimit(request: NextRequest, email: string) {
+  const ip = resolveClientIp(request);
+  const [ipRate, emailRate] = await Promise.all([
+    checkRateLimitAsync({
+      key: `orders:create:ip:${ip}`,
+      limit: 12,
+      windowMs: ORDER_CREATE_WINDOW_MS,
+    }),
+    email
+      ? checkRateLimitAsync({
+          key: `orders:create:email:${email}`,
+          limit: 4,
+          windowMs: ORDER_CREATE_WINDOW_MS,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const blocked = !ipRate.allowed ? ipRate : emailRate && !emailRate.allowed ? emailRate : null;
+  if (!blocked) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { error: "Too many checkout attempts. Please wait a few minutes." },
+    { status: 429, headers: getRateLimitHeaders(blocked) }
+  );
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const { searchParams } = new URL(request.url);
@@ -41,14 +102,14 @@ export async function GET(request: NextRequest) {
     ? Math.min(Math.max(takeParam, 1), 50)
     : 20;
   const status = searchParams.get("status") ?? undefined;
-  const email = searchParams.get("email") ?? undefined;
   const rangeParam = searchParams.get("range");
 
   const isAdmin = session?.user?.role === "ADMIN";
   const isSeller = session?.user?.role === "SELLER";
   const userId = isAdmin ? searchParams.get("userId") ?? undefined : undefined;
+  const email = isAdmin ? normalizeEmail(searchParams.get("email")) || undefined : undefined;
 
-  if (!session && !email) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -86,14 +147,10 @@ export async function GET(request: NextRequest) {
       ? sellerScopeId
         ? { sellerId: sellerScopeId, ...(Object.keys(where).length > 0 ? where : {}) }
         : { sellerId: "__missing__" }
-      : session?.user?.id
-      ? {
+      : {
           userId: session.user.id,
           ...(Object.keys(where).length > 0 ? where : {}),
-        }
-      : email
-      ? where
-      : undefined,
+        },
     include: {
       items: {
         include: {
@@ -129,6 +186,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const sameOriginError = assertSameOrigin(request);
+  if (sameOriginError) {
+    return sameOriginError;
+  }
+
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -137,10 +199,17 @@ export async function POST(request: NextRequest) {
 
   const session = await getServerSession(authOptions);
   const sessionUserId = session?.user?.id ?? null;
+  const sessionEmail = normalizeEmail(session?.user?.email);
+  const guestEmail = normalizeEmail(body.email);
+  const buyerEmail = sessionUserId ? sessionEmail || guestEmail || undefined : guestEmail || undefined;
+  const buyerName = normalizeOptionalText(body.name, 120);
+  const buyerPhone = normalizeOptionalText(body.phone, 40);
+  const shippingAddress = normalizeOptionalText(body.shippingAddress, 240);
+  const shippingCity = normalizeOptionalText(body.shippingCity, 120);
 
   let userId = body.userId ? String(body.userId).trim() : "";
   const requestedSellerId = body.sellerId ? String(body.sellerId) : undefined;
-  const currency = body.currency ?? "XOF";
+  const currency = normalizeCurrency(body.currency);
 
   if (sessionUserId) {
     if (userId && userId !== sessionUserId) {
@@ -162,11 +231,16 @@ export async function POST(request: NextRequest) {
     : undefined;
   const items = Array.isArray(body.items) ? (body.items as CheckoutItemInput[]) : [];
 
-  if (!userId && !body.email) {
+  if (!userId && !buyerEmail) {
     return NextResponse.json(
-      { error: "userId or email is required" },
+      { error: "email is required" },
       { status: 400 }
     );
+  }
+
+  const rateLimited = await enforceOrderCreateRateLimit(request, buyerEmail ?? sessionEmail);
+  if (rateLimited) {
+    return rateLimited;
   }
 
   if (items.length === 0) {
@@ -248,20 +322,6 @@ export async function POST(request: NextRequest) {
     : [];
 
   const offerMap = new Map(offers.map((offer) => [offer.id, offer]));
-
-  if (!userId) {
-    const email = String(body.email);
-    const name = body.name ? String(body.name) : undefined;
-    const phone = body.phone ? String(body.phone) : undefined;
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { name, phone, role: "CUSTOMER" },
-      create: { email, name, phone, role: "CUSTOMER" },
-    });
-
-    userId = user.id;
-  }
 
   let subtotalCents = 0;
   const mappedItems: MappedItem[] = [];
@@ -366,9 +426,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const shippingCents = Number(body.shippingCents ?? 0);
-  const feesCents = Number(body.feesCents ?? 0);
-
   if (paymentMethod && !allowedPaymentMethods.has(paymentMethod)) {
     return NextResponse.json(
       { error: "paymentMethod must be WAVE, ORANGE_MONEY, CARD, or CASH" },
@@ -377,6 +434,8 @@ export async function POST(request: NextRequest) {
   }
 
   const typedPaymentMethod = paymentMethod as PaymentMethod | undefined;
+  const shippingCents = 0;
+  const feesCents = computeCheckoutFeesCents(subtotalCents);
 
   const localRequestedByProduct = new Map<string, number>();
   for (const item of mappedItems) {
@@ -400,6 +459,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const orders = await prisma.$transaction(async (tx) => {
+      let resolvedUserId = userId;
+      if (!resolvedUserId) {
+        const guestUser = await tx.user.create({
+          data: {
+            email: buildGuestCheckoutEmail(),
+            name: buyerName,
+            phone: buyerPhone,
+            role: "CUSTOMER",
+          },
+        });
+
+        await tx.userRoleAssignment.create({
+          data: {
+            userId: guestUser.id,
+            role: "CLIENT",
+            status: "ACTIVE",
+          },
+        });
+
+        resolvedUserId = guestUser.id;
+        userId = guestUser.id;
+      }
+
       const groupedBySeller = new Map<string, { sellerId: string; subtotalCents: number; items: MappedItem[] }>();
 
       for (const item of mappedItems) {
@@ -469,13 +551,13 @@ export async function POST(request: NextRequest) {
 
         const createdOrder = await tx.order.create({
           data: {
-            userId,
+            userId: resolvedUserId,
             sellerId: group.sellerId,
-            buyerName: body.name ?? undefined,
-            buyerEmail: body.email ?? undefined,
-            buyerPhone: body.phone ?? undefined,
-            shippingAddress: body.shippingAddress ?? undefined,
-            shippingCity: body.shippingCity ?? undefined,
+            buyerName,
+            buyerEmail,
+            buyerPhone,
+            shippingAddress,
+            shippingCity,
             paymentMethod: typedPaymentMethod ?? undefined,
             subtotalCents: group.subtotalCents,
             shippingCents: groupShipping,
@@ -516,7 +598,7 @@ export async function POST(request: NextRequest) {
 
       await tx.activityLog.createMany({
         data: createdOrders.map((order) => ({
-          userId,
+          userId: resolvedUserId,
           action: "ORDER_CREATED",
           entityType: "Order",
           entityId: order.id,
@@ -527,11 +609,13 @@ export async function POST(request: NextRequest) {
       return createdOrders;
     });
 
-    await prisma.userCartItem.deleteMany({
-      where: {
-        cart: { userId },
-      },
-    });
+    if (sessionUserId) {
+      await prisma.userCartItem.deleteMany({
+        where: {
+          cart: { userId: sessionUserId },
+        },
+      });
+    }
 
     const primaryOrder = orders[0];
 

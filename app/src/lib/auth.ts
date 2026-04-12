@@ -6,7 +6,10 @@ import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import {
-  getUserRoles,
+  getUserSecurityState,
+  getUserSecurityStateByEmail,
+} from "@/lib/account-security";
+import {
   mapLegacyRoleToUserRoleType,
   mapUserRoleTypeToLegacyRole,
   normalizeRole,
@@ -73,23 +76,25 @@ providers.push(
       if (!email || !password) {
         return null;
       }
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
-      if (!user?.passwordHash || !user.emailVerified) {
+      const securityState = await getUserSecurityStateByEmail(email);
+      if (!securityState) {
+        return null;
+      }
+      const user = securityState.user;
+      if (!user.passwordHash || !user.emailVerified || !user.isActive) {
         return null;
       }
       const ok = await compare(password, user.passwordHash);
       if (!ok) return null;
-      const roles = await getUserRoles(user.id);
       return {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        roles,
+        roles: securityState.roles,
         image: user.image,
         emailVerified: user.emailVerified,
+        securityStamp: securityState.securityStamp,
       };
     },
   })
@@ -110,20 +115,43 @@ export const authOptions: NextAuthOptions = {
         token.roles = (user as { roles?: string[] }).roles ?? [];
         token.image = (user as { image?: string | null }).image ?? null;
         token.name = user.name ?? token.name;
+        token.securityStamp =
+          (user as { securityStamp?: string }).securityStamp ?? token.securityStamp;
       }
 
-      const tokenUserId = typeof token.id === "string" ? token.id : null;
-      if (tokenUserId && (!Array.isArray(token.roles) || token.roles.length === 0)) {
-        const roles = await getUserRoles(tokenUserId);
-        token.roles = roles;
-      }
+      let securityInvalidated = false;
+      const tokenUserId = typeof token.id === "string" && token.id.trim() ? token.id : null;
+      if (tokenUserId) {
+        const securityState = await getUserSecurityState(tokenUserId);
 
-      if (Array.isArray(token.roles) && token.roles.length > 0) {
-        if (token.roles.includes("ADMIN")) {
-          token.role = "ADMIN";
-        } else if (!token.role) {
-          const normalized = normalizeRole(token.roles[0]);
-          token.role = mapUserRoleTypeToLegacyRole(normalized ?? "CLIENT");
+        if (!securityState?.user.isActive) {
+          securityInvalidated = true;
+        } else {
+          token.roles = securityState.roles;
+          token.image = securityState.user.image ?? null;
+          token.name = securityState.user.name ?? token.name ?? null;
+
+          if (securityState.roles.includes("ADMIN")) {
+            token.role = "ADMIN";
+          } else {
+            token.role = securityState.user.role;
+            if (!token.role && securityState.roles.length > 0) {
+              const normalized = normalizeRole(securityState.roles[0]);
+              token.role = mapUserRoleTypeToLegacyRole(normalized ?? "CLIENT");
+            }
+          }
+
+          const previousSecurityStamp =
+            typeof token.securityStamp === "string" ? token.securityStamp : null;
+          if (!previousSecurityStamp && !user) {
+            securityInvalidated = true;
+          } else if (
+            previousSecurityStamp &&
+            previousSecurityStamp !== securityState.securityStamp
+          ) {
+            securityInvalidated = true;
+          }
+          token.securityStamp = securityState.securityStamp;
         }
       }
 
@@ -131,17 +159,22 @@ export const authOptions: NextAuthOptions = {
         token.role = "CUSTOMER";
       }
 
-      token.authInvalidated = isSessionTokenMarkedStale(
-        token,
-        user as { id?: string } | null | undefined
-      );
+      token.authInvalidated =
+        securityInvalidated ||
+        isSessionTokenMarkedStale(token, user as { id?: string } | null | undefined);
+
+      if (token.authInvalidated) {
+        token.id = "";
+        token.role = undefined;
+        token.roles = [];
+      }
 
       return token;
     },
     async session({ session, token }) {
       session.authInvalidated = token.authInvalidated === true;
       if (session.user) {
-        session.user.id = token.id as string;
+        session.user.id = typeof token.id === "string" ? token.id : "";
         session.user.role = (token.role as string) ?? "CUSTOMER";
         session.user.roles = Array.isArray(token.roles)
           ? token.roles.map((role) => String(role))

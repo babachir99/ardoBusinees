@@ -322,7 +322,8 @@
     "errors": {
       "email": "Email requis.",
       "generic": "Impossible de charger les commandes."
-    }
+    },
+    "secureAccessNote": "Pour proteger ton historique de commandes, l'acces se fait maintenant uniquement depuis un compte connecte."
   },
   "Checkout": {
     "nav": {
@@ -1366,7 +1367,7 @@
       },
       "errors": {
         "required": "Merci de remplir tous les champs du mot de passe.",
-        "minLength": "Le mot de passe doit contenir au moins 8 caracteres.",
+        "minLength": "Le mot de passe doit contenir au moins 10 caracteres.",
         "mismatch": "La confirmation ne correspond pas.",
         "invalidCurrent": "Le mot de passe actuel est incorrect.",
         "unavailable": "La modification du mot de passe n'est pas disponible pour ce compte.",
