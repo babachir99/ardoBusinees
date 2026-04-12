@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "next-intl";
 import { formatMoney } from "@/lib/format";
 
-type PayoutStatus = "PENDING" | "PAID" | "FAILED";
+type PayoutStatus = "PENDING" | "HOLD" | "PAID" | "FAILED";
 
 type PayoutItem = {
   id: string;
@@ -40,9 +40,11 @@ type PayoutItem = {
 type PayoutSummary = {
   totalCount: number;
   pendingCount: number;
+  holdCount: number;
   paidCount: number;
   failedCount: number;
   pendingCents: number;
+  holdCents: number;
   paidCents: number;
   failedCents: number;
 };
@@ -52,14 +54,16 @@ type PayoutResponse = {
   summary: PayoutSummary;
 };
 
-const statusOptions: PayoutStatus[] = ["PENDING", "PAID", "FAILED"];
+const statusOptions: PayoutStatus[] = ["PENDING", "HOLD", "PAID", "FAILED"];
 
 const emptySummary: PayoutSummary = {
   totalCount: 0,
   pendingCount: 0,
+  holdCount: 0,
   paidCount: 0,
   failedCount: 0,
   pendingCents: 0,
+  holdCents: 0,
   paidCents: 0,
   failedCents: 0,
 };
@@ -150,7 +154,7 @@ export default function AdminPayoutsBoard() {
     }
   };
 
-  const markSelectedPaid = async () => {
+  const markSelectedHold = async () => {
     if (selectedIds.length === 0) return;
     setBulkSaving(true);
     setError(null);
@@ -158,7 +162,7 @@ export default function AdminPayoutsBoard() {
       const response = await fetch("/api/admin/payouts/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds, status: "PAID" }),
+        body: JSON.stringify({ ids: selectedIds, status: "HOLD" }),
       });
 
       if (!response.ok) {
@@ -247,7 +251,7 @@ export default function AdminPayoutsBoard() {
   };
 
   const totalAmount =
-    summary.pendingCents + summary.paidCents + summary.failedCents;
+    summary.pendingCents + summary.holdCents + summary.paidCents + summary.failedCents;
 
   const allVisibleSelected = items.length > 0 && selectedIds.length === items.length;
 
@@ -306,7 +310,7 @@ export default function AdminPayoutsBoard() {
         </button>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
           <p className="text-[11px] text-zinc-400">Total virements</p>
           <p className="mt-2 text-lg font-semibold text-white">{summary.totalCount}</p>
@@ -319,6 +323,13 @@ export default function AdminPayoutsBoard() {
           <p className="mt-2 text-lg font-semibold text-amber-200">{summary.pendingCount}</p>
           <p className="mt-1 text-xs text-zinc-400">
             {formatMoney(summary.pendingCents, "XOF", locale)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
+          <p className="text-[11px] text-zinc-400">Hold</p>
+          <p className="mt-2 text-lg font-semibold text-orange-200">{summary.holdCount}</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            {formatMoney(summary.holdCents, "XOF", locale)}
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-zinc-950/50 p-4">
@@ -350,10 +361,10 @@ export default function AdminPayoutsBoard() {
         <button
           type="button"
           disabled={selectedIds.length === 0 || bulkSaving}
-          onClick={markSelectedPaid}
-          className="rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 disabled:opacity-60"
+          onClick={markSelectedHold}
+          className="rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-semibold text-zinc-950 disabled:opacity-60"
         >
-          {bulkSaving ? "Traitement..." : "Marquer selection en PAID"}
+          {bulkSaving ? "Traitement..." : "Mettre la selection en HOLD"}
         </button>
       </div>
 
@@ -396,6 +407,9 @@ export default function AdminPayoutsBoard() {
                   <div className="text-right text-xs text-zinc-300">
                     <p>{formatMoney(payout.amountCents, payout.currency, locale)}</p>
                     <p className="mt-1 text-zinc-400">{payout.status}</p>
+                    {payout.status === "HOLD" ? (
+                      <p className="mt-1 text-[11px] text-amber-300">Payout bloque en attente de revue.</p>
+                    ) : null}
                     <p className="mt-1 text-zinc-500">
                       {new Date(payout.createdAt).toLocaleString(locale)}
                     </p>
@@ -491,6 +505,9 @@ export default function AdminPayoutsBoard() {
                     {savingId === payout.id ? "Sauvegarde..." : "Enregistrer"}
                   </button>
                 </div>
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  `PAID` demande une reference payout et reste bloque s&apos;il existe un litige actif.
+                </p>
               </div>
             );
           })}

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Prisma, PayoutStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -111,9 +111,11 @@ export async function GET(request: NextRequest) {
   const summary = {
     totalCount,
     pendingCount: 0,
+    holdCount: 0,
     paidCount: 0,
     failedCount: 0,
     pendingCents: 0,
+    holdCents: 0,
     paidCents: 0,
     failedCents: 0,
   };
@@ -122,6 +124,10 @@ export async function GET(request: NextRequest) {
     if (row.status === "PENDING") {
       summary.pendingCount = row._count._all;
       summary.pendingCents = row._sum.amountCents ?? 0;
+    }
+    if (row.status === "HOLD") {
+      summary.holdCount = row._count._all;
+      summary.holdCents = row._sum.amountCents ?? 0;
     }
     if (row.status === "PAID") {
       summary.paidCount = row._count._all;

@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { PayoutStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assertSameOrigin } from "@/lib/request-security";
 
-const allowedStatuses = new Set(Object.values(PayoutStatus));
+const allowedStatuses = new Set<PayoutStatus>(["HOLD", "FAILED"]);
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -15,6 +16,11 @@ async function requireAdmin() {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,14 +41,40 @@ export async function POST(request: NextRequest) {
   }
 
   if (!allowedStatuses.has(status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Bulk payout updates only support HOLD or FAILED" },
+      { status: 400 }
+    );
   }
 
-  const result = await prisma.payout.updateMany({
+  const currentPayouts = await prisma.payout.findMany({
     where: { id: { in: ids } },
-    data: { status },
+    select: {
+      id: true,
+      status: true,
+    },
   });
 
-  return NextResponse.json({ ok: true, updatedCount: result.count });
-}
+  const allowedCurrentStatuses =
+    status === "HOLD"
+      ? (["PENDING", "FAILED"] as PayoutStatus[])
+      : (["PENDING", "HOLD"] as PayoutStatus[]);
 
+  const eligibleIds = currentPayouts
+    .filter((payout) => allowedCurrentStatuses.includes(payout.status))
+    .map((payout) => payout.id);
+
+  const result =
+    eligibleIds.length > 0
+      ? await prisma.payout.updateMany({
+          where: { id: { in: eligibleIds } },
+          data: { status },
+        })
+      : { count: 0 };
+
+  return NextResponse.json({
+    ok: true,
+    updatedCount: result.count,
+    skippedCount: ids.length - result.count,
+  });
+}
