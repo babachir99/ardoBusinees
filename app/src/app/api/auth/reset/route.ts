@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
+import {
+  buildAuthTokenIdentifier,
+  buildLegacyAuthTokenIdentifier,
+} from "@/lib/auth-tokens";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
 import { assertSameOrigin, sha256Hex } from "@/lib/request-security";
 
@@ -37,6 +41,8 @@ export async function POST(request: NextRequest) {
 
   const tokenHash = sha256Hex(token);
   const now = new Date();
+  const purposeIdentifier = buildAuthTokenIdentifier("reset", email);
+  const legacyIdentifier = buildLegacyAuthTokenIdentifier(email);
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -47,13 +53,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });
   }
 
-  const consumed = await prisma.verificationToken.deleteMany({
+  let consumed = await prisma.verificationToken.deleteMany({
     where: {
-      identifier: email,
+      identifier: purposeIdentifier,
       token: tokenHash,
       expires: { gt: now },
     },
   });
+
+  if (consumed.count === 0 && legacyIdentifier) {
+    consumed = await prisma.verificationToken.deleteMany({
+      where: {
+        identifier: legacyIdentifier,
+        token: tokenHash,
+        expires: { gt: now },
+      },
+    });
+  }
 
   if (consumed.count === 0) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });

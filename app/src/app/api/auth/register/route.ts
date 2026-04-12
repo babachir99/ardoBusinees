@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import crypto from "crypto";
 import { getMinPasswordLength, validatePassword } from "@/lib/account-security";
+import { buildAuthTokenIdentifier, getAuthTokenPurgeIdentifiers } from "@/lib/auth-tokens";
 import { mapLegacyRoleToUserRoleType } from "@/lib/userRoles";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
 import { assertSameOrigin, sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
@@ -89,11 +90,15 @@ export async function POST(request: NextRequest) {
     })
     .catch(() => null);
 
-  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
+  const tokenIdentifier = buildAuthTokenIdentifier("verify", email);
+
+  await prisma.verificationToken.deleteMany({
+    where: { identifier: { in: getAuthTokenPurgeIdentifiers("verify", email) } },
+  });
 
   await prisma.verificationToken.create({
     data: {
-      identifier: email,
+      identifier: tokenIdentifier,
       token: tokenHash,
       expires,
     },

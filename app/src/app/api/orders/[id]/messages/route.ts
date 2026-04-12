@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { UserRole } from "@prisma/client";
+import { assertActionRateLimit } from "@/lib/action-rate-limit";
 import {
   getMessagePolicyErrorMessage,
   getMessagePolicyViolation,
@@ -128,6 +129,20 @@ export async function POST(
     } else if (session.user.id !== order.userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+  }
+
+  const rateLimited = await assertActionRateLimit(request, {
+    routeKey: "order-message",
+    label: "messages",
+    windowMs: 10 * 60 * 1000,
+    ipLimit: 60,
+    scopes: [
+      { prefix: "user", id: session.user.id, limit: 25 },
+      { prefix: "order-user", id: `${session.user.id}:${order.id}`, limit: 10 },
+    ],
+  });
+  if (rateLimited) {
+    return rateLimited;
   }
 
   const created = await prisma.orderMessage.create({

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { PrestaBookingStatus, Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assertActionRateLimit } from "@/lib/action-rate-limit";
 
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
@@ -180,6 +181,20 @@ export async function POST(request: NextRequest) {
 
   if (existing) {
     return errorResponse(409, "ALREADY_REVIEWED", "You already reviewed this booking.");
+  }
+
+  const rateLimited = await assertActionRateLimit(request, {
+    routeKey: "review-create",
+    label: "reviews",
+    windowMs: 60 * 60 * 1000,
+    ipLimit: 40,
+    scopes: [
+      { prefix: "user", id: session.user.id, limit: 10 },
+      { prefix: "booking-user", id: `${session.user.id}:${booking.id}`, limit: 3 },
+    ],
+  });
+  if (rateLimited) {
+    return rateLimited;
   }
 
   try {

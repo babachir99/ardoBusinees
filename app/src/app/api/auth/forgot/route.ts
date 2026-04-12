@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { assertAuthRateLimit } from "@/lib/auth-rate-limit";
+import { buildAuthTokenIdentifier, getAuthTokenPurgeIdentifiers } from "@/lib/auth-tokens";
 import { assertSameOrigin, sha256Hex, shouldEchoAuthDebugTokens } from "@/lib/request-security";
 
 export async function POST(request: NextRequest) {
@@ -35,11 +36,15 @@ export async function POST(request: NextRequest) {
   const tokenHash = sha256Hex(token);
   const expires = new Date(Date.now() + 1000 * 60 * 30);
 
-  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
+  const tokenIdentifier = buildAuthTokenIdentifier("reset", email);
+
+  await prisma.verificationToken.deleteMany({
+    where: { identifier: { in: getAuthTokenPurgeIdentifiers("reset", email) } },
+  });
 
   await prisma.verificationToken.create({
     data: {
-      identifier: email,
+      identifier: tokenIdentifier,
       token: tokenHash,
       expires,
     },

@@ -28,6 +28,13 @@ const AUTH_GUARD_PATTERNS = [
 ];
 
 const MUTATION_EXPORT_PATTERN = /export\s+async\s+function\s+(POST|PATCH|PUT|DELETE)\s*\(/g;
+const REQUIRED_ROUTE_PATTERNS = new Map([
+  ["auth/[...nextauth]/route.ts", [/assertAuthRateLimit\s*\(/, /callback\/credentials/]],
+  ["auth/forgot/route.ts", [/assertAuthRateLimit\s*\(/]],
+  ["auth/register/route.ts", [/assertAuthRateLimit\s*\(/]],
+  ["auth/reset/route.ts", [/assertAuthRateLimit\s*\(/]],
+  ["auth/verify/route.ts", [/assertAuthRateLimit\s*\(/]],
+]);
 
 async function listRouteFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -68,6 +75,7 @@ function hasAuthGuard(source) {
 async function main() {
   const routeFiles = await listRouteFiles(API_DIR);
   const findings = [];
+  const requiredRouteFailures = [];
 
   for (const absoluteFile of routeFiles) {
     const relativeFile = toRelative(absoluteFile);
@@ -90,14 +98,35 @@ async function main() {
     }
   }
 
-  if (findings.length === 0) {
+  for (const [relativeFile, patterns] of REQUIRED_ROUTE_PATTERNS.entries()) {
+    const absoluteFile = path.join(API_DIR, ...relativeFile.split("/"));
+    const source = await readFile(absoluteFile, "utf8");
+    const missingPatterns = patterns.filter((pattern) => !pattern.test(source));
+    if (missingPatterns.length > 0) {
+      requiredRouteFailures.push({
+        file: relativeFile,
+        missingPatterns: missingPatterns.map((pattern) => String(pattern)),
+      });
+    }
+  }
+
+  if (findings.length === 0 && requiredRouteFailures.length === 0) {
     console.log("[qa:auth] OK - no unauthenticated mutation routes detected.");
     return;
   }
 
-  console.error("[qa:auth] Potential unauthenticated mutation routes detected:");
-  for (const finding of findings) {
-    console.error(`- ${finding.file} [${finding.methods.join(", ")}]`);
+  if (findings.length > 0) {
+    console.error("[qa:auth] Potential unauthenticated mutation routes detected:");
+    for (const finding of findings) {
+      console.error(`- ${finding.file} [${finding.methods.join(", ")}]`);
+    }
+  }
+
+  if (requiredRouteFailures.length > 0) {
+    console.error("[qa:auth] Required auth protections missing:");
+    for (const failure of requiredRouteFailures) {
+      console.error(`- ${failure.file} missing ${failure.missingPatterns.join(", ")}`);
+    }
   }
   process.exitCode = 1;
 }

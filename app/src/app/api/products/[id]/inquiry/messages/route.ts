@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assertActionRateLimit } from "@/lib/action-rate-limit";
 import { getInquiryReadTrackingUpdate } from "@/lib/inquiryReadTracking";
 import {
   getMessagePolicyErrorMessage,
@@ -98,6 +99,20 @@ export async function POST(
       { error: "You cannot start a buyer conversation on your own product." },
       { status: 403 }
     );
+  }
+
+  const rateLimited = await assertActionRateLimit(request, {
+    routeKey: "product-inquiry-message",
+    label: "messages",
+    windowMs: 10 * 60 * 1000,
+    ipLimit: 60,
+    scopes: [
+      { prefix: "user", id: session.user.id, limit: 25 },
+      { prefix: "pair", id: `${session.user.id}:${product.id}`, limit: 8 },
+    ],
+  });
+  if (rateLimited) {
+    return rateLimited;
   }
 
   const now = new Date();

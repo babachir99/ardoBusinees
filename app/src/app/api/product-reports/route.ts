@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { assertActionRateLimit } from "@/lib/action-rate-limit";
 import {
   createProductReport,
   PRODUCT_REPORT_REASONS,
@@ -28,6 +29,20 @@ export async function POST(request: NextRequest) {
 
   if (!productId || !reason || !PRODUCT_REPORT_REASONS.includes(reason as ProductReportReason)) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const rateLimited = await assertActionRateLimit(request, {
+    routeKey: "product-report",
+    label: "reports",
+    windowMs: 60 * 60 * 1000,
+    ipLimit: 30,
+    scopes: [
+      { prefix: "user", id: session.user.id, limit: 12 },
+      { prefix: "product-user", id: `${session.user.id}:${productId}`, limit: 2 },
+    ],
+  });
+  if (rateLimited) {
+    return rateLimited;
   }
 
   const result = await createProductReport({
