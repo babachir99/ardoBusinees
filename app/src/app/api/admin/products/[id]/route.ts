@@ -11,11 +11,17 @@ import {
   notifySellerAboutListingReactivated,
 } from "@/lib/productReports";
 import { PRODUCT_REPORT_AUTO_HIDE_THRESHOLD } from "@/lib/productReports.shared";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -131,6 +137,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(_request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

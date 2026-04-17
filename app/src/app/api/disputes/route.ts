@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical } from "@/lib/verticals";
 import { AuditReason, auditLog, getCorrelationId, withCorrelationId } from "@/lib/audit";
+import { assertSameOrigin } from "@/lib/request-security";
 
 type ContextResolution = {
   contextType: DisputeContextType;
@@ -332,6 +333,11 @@ export async function POST(request: NextRequest) {
   const correlationId = getCorrelationId(request);
   const respond = (response: NextResponse) => withCorrelationId(response, correlationId);
   const action = "dispute.create";
+
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return respond(csrfBlocked);
+  }
 
   if (!hasRequiredDelegates()) {
     auditLog({

@@ -7,6 +7,7 @@ import {
   persistHomePromoEntries,
   resolveHomePromoEntries,
 } from "@/lib/homePromos";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -19,6 +20,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || !hasUserRole(session.user, "ADMIN")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

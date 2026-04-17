@@ -12,6 +12,10 @@ import { assertAllowedHost } from "@/lib/request-security";
 import { NotificationService } from "@/lib/notifications/NotificationService";
 import { groupLocalItemsByProduct, incrementLocalProductStock } from "@/lib/order-stock";
 
+function hasWebhookVerifierConfigured() {
+  return Boolean(process.env.PAYDUNYA_WEBHOOK_SECRET || process.env.PAYMENTS_CALLBACK_TOKEN);
+}
+
 function errorResponse(status: number, error: string, message: string) {
   return NextResponse.json({ error, message }, { status });
 }
@@ -68,6 +72,24 @@ export async function POST(request: NextRequest) {
 
   const hostBlocked = assertAllowedHost(request);
   if (hostBlocked) return respond(hostBlocked);
+
+  if (process.env.NODE_ENV === "production" && !hasWebhookVerifierConfigured()) {
+    auditLog({
+      correlationId,
+      actor,
+      action,
+      entity: { type: "PaymentLedger" },
+      outcome: "ERROR",
+      reason: AuditReason.FORBIDDEN,
+    });
+    return respond(
+      errorResponse(
+        503,
+        "WEBHOOK_VERIFIER_MISCONFIGURED",
+        "Webhook verifier is not configured for production."
+      )
+    );
+  }
 
   const rawBody = await request.text();
   if (!verifySignature(rawBody, request)) {

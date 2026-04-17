@@ -3,11 +3,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { reviewAdRequest } from "@/lib/adRequests";
 import { hasUserRole } from "@/lib/userRoles";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || !hasUserRole(session.user, "ADMIN")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

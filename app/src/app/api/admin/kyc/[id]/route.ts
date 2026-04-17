@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { KycStatus } from "@prisma/client";
 import { mapKycRoleToUserRoleType, normalizeKycRole } from "@/lib/kyc/requirements";
 import { mapUserRoleTypeToLegacyRole } from "@/lib/userRoles";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedStatus = new Set(["APPROVED", "REJECTED"]);
 
@@ -18,6 +19,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

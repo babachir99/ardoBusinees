@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { Prisma, StoreType } from "@prisma/client";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedStoreTypes = new Set(Object.values(StoreType));
 
@@ -100,6 +101,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

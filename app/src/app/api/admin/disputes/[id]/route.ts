@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Vertical } from "@/lib/verticals";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allDisputeStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "REJECTED"] as const;
 type DisputeStatusValue = (typeof allDisputeStatuses)[number];
@@ -20,6 +21,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

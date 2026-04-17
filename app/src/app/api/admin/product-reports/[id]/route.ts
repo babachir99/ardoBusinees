@@ -6,11 +6,17 @@ import {
   type ProductReportStatus,
   updateProductReportReview,
 } from "@/lib/productReports";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
