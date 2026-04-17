@@ -180,12 +180,28 @@ export default async function GpPage({
               >
                 {locale === "fr" ? "Publier" : "Publish"}
               </a>
+              {session?.user?.id ? (
+                <Link
+                  href="/stores/jontaado-gp/bookings"
+                  className={marketplaceActionSecondaryClass}
+                >
+                  {locale === "fr" ? "Mes reservations" : "My bookings"}
+                </Link>
+              ) : null}
               {canOpenTransporterDashboard ? (
                 <Link
                   href="/stores/jontaado-gp/dashboard"
                   className={marketplaceActionSecondaryClass}
                 >
                   {locale === "fr" ? "Dashboard" : "Dashboard"}
+                </Link>
+              ) : null}
+              {session?.user?.id ? (
+                <Link
+                  href="/stores/jontaado-gp/shipments"
+                  className={marketplaceActionSecondaryClass}
+                >
+                  {locale === "fr" ? "Shipments" : "Shipments"}
                 </Link>
               ) : null}
             </>

@@ -392,6 +392,15 @@ export default function GpTripBookingForm({
           </span>
         ) : null}
 
+        {status ? (
+          <Link
+            href="/stores/jontaado-gp/bookings"
+            className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-zinc-100 transition hover:border-cyan-300/60 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
+          >
+            {locale === "fr" ? "Mes reservations" : "My bookings"}
+          </Link>
+        ) : null}
+
         {canContact ? (
           <Link
             href={`/messages?tripId=${tripId}`}

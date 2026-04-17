@@ -133,6 +133,9 @@ export default async function TransporterProfilePage({
           </Link>
         ) : null
       }
+      showBookings={Boolean(session?.user?.id)}
+      showDashboard={isOwner}
+      showShipments={Boolean(session?.user?.id)}
     >
       <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-300/15 via-zinc-900 to-zinc-900 p-6">

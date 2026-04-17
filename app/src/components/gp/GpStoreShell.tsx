@@ -7,7 +7,7 @@ import MarketplaceActions, {
   marketplaceActionSecondaryClass,
 } from "@/components/marketplace/MarketplaceActions";
 
-type SectionKey = "home" | "dashboard" | "shipments";
+type SectionKey = "home" | "bookings" | "dashboard" | "shipments";
 
 type Props = {
   locale: string;
@@ -15,6 +15,9 @@ type Props = {
   description: string;
   activeSection?: SectionKey;
   topAction?: ReactNode;
+  showBookings?: boolean;
+  showDashboard?: boolean;
+  showShipments?: boolean;
   children: ReactNode;
 };
 
@@ -28,6 +31,9 @@ export default async function GpStoreShell({
   description,
   activeSection = "home",
   topAction,
+  showBookings = false,
+  showDashboard = true,
+  showShipments = true,
   children,
 }: Props) {
   return (
@@ -52,18 +58,30 @@ export default async function GpStoreShell({
               <Link href="/stores/jontaado-gp" className={resolveClass(activeSection === "home")}>
                 {locale === "fr" ? "Explorer" : "Explore"}
               </Link>
-              <Link
-                href="/stores/jontaado-gp/dashboard"
-                className={resolveClass(activeSection === "dashboard")}
-              >
-                {locale === "fr" ? "Dashboard" : "Dashboard"}
-              </Link>
-              <Link
-                href="/stores/jontaado-gp/shipments"
-                className={resolveClass(activeSection === "shipments")}
-              >
-                {locale === "fr" ? "Shipments" : "Shipments"}
-              </Link>
+              {showBookings ? (
+                <Link
+                  href="/stores/jontaado-gp/bookings"
+                  className={resolveClass(activeSection === "bookings")}
+                >
+                  {locale === "fr" ? "Mes reservations" : "My bookings"}
+                </Link>
+              ) : null}
+              {showDashboard ? (
+                <Link
+                  href="/stores/jontaado-gp/dashboard"
+                  className={resolveClass(activeSection === "dashboard")}
+                >
+                  {locale === "fr" ? "Dashboard" : "Dashboard"}
+                </Link>
+              ) : null}
+              {showShipments ? (
+                <Link
+                  href="/stores/jontaado-gp/shipments"
+                  className={resolveClass(activeSection === "shipments")}
+                >
+                  {locale === "fr" ? "Shipments" : "Shipments"}
+                </Link>
+              ) : null}
             </>
           }
         />

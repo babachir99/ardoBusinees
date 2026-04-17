@@ -72,6 +72,9 @@ export default async function TransporterDashboardPage({
             ? "Ce dashboard est reserve aux transporteurs GP."
             : "This dashboard is reserved for GP transporters."
         }
+        showBookings={Boolean(session?.user?.id)}
+        showDashboard={canAccess}
+        showShipments={Boolean(session?.user?.id)}
       >
         <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
           <h2 className="text-2xl font-semibold text-white">
@@ -306,6 +309,9 @@ export default async function TransporterDashboardPage({
         activeSection="dashboard"
         title={locale === "fr" ? "Dashboard transporteur" : "Transporter dashboard"}
         description={locale === "fr" ? "Profil introuvable." : "Profile not found."}
+        showBookings={Boolean(session?.user?.id)}
+        showDashboard={canAccess}
+        showShipments={Boolean(session?.user?.id)}
       >
         <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
           <p className="text-sm text-zinc-300">
@@ -379,6 +385,9 @@ export default async function TransporterDashboardPage({
           {locale === "fr" ? "Profil" : "Profile"}
         </Link>
       }
+      showBookings={Boolean(session?.user?.id)}
+      showDashboard={canAccess}
+      showShipments={Boolean(session?.user?.id)}
     >
       <div className="flex flex-col gap-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-300/15 via-zinc-900 to-zinc-900 p-6">

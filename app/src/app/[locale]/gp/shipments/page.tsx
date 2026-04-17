@@ -52,6 +52,9 @@ export default async function GpShipmentsPage({
             ? "Le suivi detaille est reserve aux participants GP."
             : "Detailed tracking is reserved for GP participants."
         }
+        showBookings={Boolean(session?.user?.id)}
+        showDashboard={["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER"].includes(session?.user?.role ?? "")}
+        showShipments={Boolean(session?.user?.id)}
       >
         <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
           <h2 className="text-2xl font-semibold text-white">
@@ -83,6 +86,9 @@ export default async function GpShipmentsPage({
           ? "Suivi des shipments actifs avec timeline, preuves et confirmation de reception."
           : "Track active shipments with timeline, proofs and receipt confirmation."
       }
+      showBookings={Boolean(session?.user?.id)}
+      showDashboard={["ADMIN", "TRANSPORTER", "GP_CARRIER", "TRAVELER"].includes(session?.user?.role ?? "")}
+      showShipments={Boolean(session?.user?.id)}
     >
       <div className="flex flex-col gap-6">
         <GpShipmentsTimelineClient locale={locale} currentUserId={session.user.id} currentUserRole={session.user.role ?? null} />
