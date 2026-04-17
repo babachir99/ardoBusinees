@@ -1,12 +1,11 @@
-import Image from "next/image";
 import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
-import Footer from "@/components/layout/Footer";
 import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import GpPendingBookingsPanel from "@/components/gp/GpPendingBookingsPanel";
 import GpTripsManagerPanel from "@/components/gp/GpTripsManagerPanel";
+import GpStoreShell from "@/components/gp/GpStoreShell";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
@@ -28,7 +27,7 @@ export async function generateMetadata({
 
   return buildStoreMetadata({
     locale,
-    path: "/transporter",
+    path: "/stores/jontaado-gp/dashboard",
     title: isFr ? "Dashboard GP | Espace transporteur prive" : "GP dashboard | Private carrier space",
     description: isFr
       ? "Suis tes trajets, tes expeditions et tes gains depuis ton dashboard GP prive."
@@ -64,27 +63,33 @@ export default async function TransporterDashboardPage({
 
   if (!session?.user?.id || !canAccess) {
     return (
-      <div className="min-h-screen bg-jonta text-zinc-100">
-        <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <h1 className="text-2xl font-semibold">
-              {locale === "fr" ? "Acces transporteur requis" : "Transporter access required"}
-            </h1>
-            <p className="mt-2 text-sm text-zinc-300">
-              {locale === "fr"
-                ? "Ce dashboard est reserve aux transporteurs GP."
-                : "This dashboard is reserved for GP transporters."}
-            </p>
-            <Link
-              href="/stores/jontaado-gp"
-              className="mt-6 inline-flex rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
-            >
-              {locale === "fr" ? "Retour a GP" : "Back to GP"}
-            </Link>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <GpStoreShell
+        locale={locale}
+        activeSection="dashboard"
+        title={locale === "fr" ? "Dashboard transporteur" : "Transporter dashboard"}
+        description={
+          locale === "fr"
+            ? "Ce dashboard est reserve aux transporteurs GP."
+            : "This dashboard is reserved for GP transporters."
+        }
+      >
+        <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+          <h2 className="text-2xl font-semibold text-white">
+            {locale === "fr" ? "Acces transporteur requis" : "Transporter access required"}
+          </h2>
+          <p className="mt-2 text-sm text-zinc-300">
+            {locale === "fr"
+              ? "Ce dashboard est reserve aux transporteurs GP."
+              : "This dashboard is reserved for GP transporters."}
+          </p>
+          <Link
+            href="/stores/jontaado-gp"
+            className="mt-6 inline-flex rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950"
+          >
+            {locale === "fr" ? "Retour a GP" : "Back to GP"}
+          </Link>
+        </div>
+      </GpStoreShell>
     );
   }
 
@@ -296,14 +301,18 @@ export default async function TransporterDashboardPage({
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-jonta text-zinc-100">
-        <main className="mx-auto w-full max-w-4xl px-6 pb-24 pt-12">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
-            <p className="text-sm text-zinc-300">{locale === "fr" ? "Profil introuvable" : "Profile not found"}</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <GpStoreShell
+        locale={locale}
+        activeSection="dashboard"
+        title={locale === "fr" ? "Dashboard transporteur" : "Transporter dashboard"}
+        description={locale === "fr" ? "Profil introuvable." : "Profile not found."}
+      >
+        <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-8">
+          <p className="text-sm text-zinc-300">
+            {locale === "fr" ? "Profil introuvable" : "Profile not found"}
+          </p>
+        </div>
+      </GpStoreShell>
     );
   }
 
@@ -353,45 +362,30 @@ export default async function TransporterDashboardPage({
   ];
 
   return (
-    <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
+    <GpStoreShell
+      locale={locale}
+      activeSection="dashboard"
+      title={locale === "fr" ? "Dashboard transporteur" : "Transporter dashboard"}
+      description={
+        locale === "fr"
+          ? `Ravis de vous retrouver ${user.name ?? ""}. Suivez vos gains, vos colis et vos clients sur la duree.`
+          : `Welcome back ${user.name ?? ""}. Track revenue, parcels and customers over time.`
+      }
+      topAction={
+        <Link
+          href="/profile"
+          className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60"
+        >
+          {locale === "fr" ? "Profil" : "Profile"}
         </Link>
-        <div className="flex items-center gap-2 text-xs">
-          <Link
-            href="/stores/jontaado-gp"
-            className="rounded-full border border-white/20 px-4 py-2 text-white transition hover:border-white/60"
-          >
-            {locale === "fr" ? "Voir GP" : "Go to GP"}
-          </Link>
-          <Link
-            href="/profile"
-            className="rounded-full border border-white/20 px-4 py-2 text-white transition hover:border-white/60"
-          >
-            {locale === "fr" ? "Profil" : "Profile"}
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-24">
+      }
+    >
+      <div className="flex flex-col gap-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-300/15 via-zinc-900 to-zinc-900 p-6">
           <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">JONTAADO GP</p>
           <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">
             {locale === "fr" ? "Dashboard transporteur" : "Transporter dashboard"}
           </h1>
-          <p className="mt-2 text-sm text-zinc-300">
-            {locale === "fr"
-              ? `Ravis de vous retrouver ${user.name ?? ""}. Suivez vos gains, vos colis et vos clients sur la duree.`
-              : `Welcome back ${user.name ?? ""}. Track revenue, parcels and customers over time.`}
-          </p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
             <span className="rounded-full border border-white/15 px-3 py-1">
               Note {user.transporterRating.toFixed(1)} ({user.transporterReviewCount})
@@ -641,9 +635,7 @@ export default async function TransporterDashboardPage({
             </div>
           </div>
         </section>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </GpStoreShell>
   );
 }

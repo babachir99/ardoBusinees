@@ -182,7 +182,7 @@ export default async function GpPage({
               </a>
               {canOpenTransporterDashboard ? (
                 <Link
-                  href="/transporter"
+                  href="/stores/jontaado-gp/dashboard"
                   className={marketplaceActionSecondaryClass}
                 >
                   {locale === "fr" ? "Dashboard" : "Dashboard"}

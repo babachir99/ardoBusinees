@@ -1,10 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
-
 import Image from "next/image";
 import { getServerSession } from "next-auth";
 import { Link } from "@/i18n/navigation";
-import Footer from "@/components/layout/Footer";
 import GpTripReviewForm from "@/components/gp/GpTripReviewForm";
+import GpStoreShell from "@/components/gp/GpStoreShell";
 import UserSafetyActions from "@/components/trust/UserSafetyActions";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
@@ -116,45 +114,37 @@ export default async function TransporterProfilePage({
   );
 
   return (
-    <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-2 text-xs">
+    <GpStoreShell
+      locale={locale}
+      activeSection="home"
+      title={transporter.name ?? (locale === "fr" ? "Transporteur GP" : "GP transporter")}
+      description={
+        locale === "fr"
+          ? "Profil public du transporteur et ses trajets actifs."
+          : "Public transporter profile and active trips."
+      }
+      topAction={
+        isOwner ? (
           <Link
-            href="/stores/jontaado-gp"
-            className="rounded-full border border-white/20 px-4 py-2 text-white transition hover:border-white/60"
+            href="/stores/jontaado-gp/dashboard"
+            className="rounded-full border border-cyan-300/40 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/80"
           >
-            {locale === "fr" ? "Retour a GP" : "Back to GP"}
+            {locale === "fr" ? "Mon dashboard" : "My dashboard"}
           </Link>
-          {isOwner && (
-            <Link
-              href="/transporter"
-              className="rounded-full border border-cyan-300/40 px-4 py-2 text-cyan-100 transition hover:border-cyan-300/80"
-            >
-              {locale === "fr" ? "Mon dashboard" : "My dashboard"}
-            </Link>
-          )}
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl space-y-6 px-6 pb-24">
+        ) : null
+      }
+    >
+      <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-300/15 via-zinc-900 to-zinc-900 p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="h-16 w-16 overflow-hidden rounded-full border border-white/10 bg-zinc-950/70">
                 {transporter.image ? (
-                  <img
+                  <Image
                     src={transporter.image}
                     alt={transporter.name ?? "Transporter"}
+                    width={64}
+                    height={64}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -168,11 +158,6 @@ export default async function TransporterProfilePage({
                 <h1 className="mt-2 text-2xl font-semibold text-white md:text-3xl">
                   {transporter.name ?? (locale === "fr" ? "Transporteur" : "Transporter")}
                 </h1>
-                <p className="mt-2 text-sm text-zinc-300">
-                  {locale === "fr"
-                    ? "Profil public du transporteur et ses trajets actifs."
-                    : "Public transporter profile and active trips."}
-                </p>
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-zinc-950/50 px-4 py-3 text-right text-xs text-zinc-300">
@@ -288,9 +273,7 @@ export default async function TransporterProfilePage({
             )}
           </div>
         </section>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </GpStoreShell>
   );
 }

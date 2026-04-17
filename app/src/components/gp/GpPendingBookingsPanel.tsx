@@ -209,7 +209,7 @@ export default function GpPendingBookingsPanel({ locale, bookings }: Props) {
                     {locale === "fr" ? "Refuser" : "Reject"}
                   </button>
                   <Link
-                    href="/gp/shipments"
+                    href="/stores/jontaado-gp/shipments"
                     className="rounded-full border border-cyan-300/25 px-3 py-2 text-[11px] font-semibold text-cyan-100 transition hover:border-cyan-300/55"
                   >
                     {locale === "fr" ? "Voir le suivi" : "Open tracking"}

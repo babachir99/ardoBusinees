@@ -184,7 +184,7 @@ export default function GpTripCard({
               notes={trip.notes}
             />
             <Link
-              href={`/transporters/${trip.transporter.id}`}
+              href={`/stores/jontaado-gp/transporters/${trip.transporter.id}`}
               className="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-zinc-200 transition hover:border-cyan-300/60 hover:bg-cyan-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
               aria-label={locale === "fr" ? "Voir les avis du transporteur" : "View transporter reviews"}
             >
