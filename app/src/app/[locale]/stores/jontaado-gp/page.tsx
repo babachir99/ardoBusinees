@@ -138,12 +138,12 @@ export default async function GpPage({
         OR: [
           { role: "TRANSPORTER" },
           {
-            roleAssignments: {
-              some: {
-                role: { in: ["GP_CARRIER", "TRANSPORTER", "ADMIN"] },
-                status: "ACTIVE",
+              roleAssignments: {
+                some: {
+                  role: { in: ["GP_CARRIER", "ADMIN"] },
+                  status: "ACTIVE",
+                },
               },
-            },
           },
         ],
         gpTrips: {

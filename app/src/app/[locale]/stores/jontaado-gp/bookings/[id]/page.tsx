@@ -240,7 +240,7 @@ export default async function GpBookingDetailPage({
                 {formatMoney(amount, booking.trip.currency, locale)}
               </p>
               <p className="mt-2 text-sm text-zinc-400">
-                {booking.requestedKg} kg · {booking.packageCount} {locale === "fr" ? "colis" : "parcels"}
+                {booking.requestedKg} kg | {booking.packageCount} {locale === "fr" ? "colis" : "parcels"}
               </p>
             </div>
           </div>
@@ -298,13 +298,24 @@ export default async function GpBookingDetailPage({
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
               {locale === "fr" ? "Suivi reservation" : "Booking timeline"}
             </p>
-            <div className="mt-4 space-y-4">
+            <div className="mt-5 space-y-0">
               {milestoneDates.map((step) => (
-                <div key={step.key} className="flex gap-3">
-                  <div className="mt-1 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-zinc-950/70 text-xs">
-                    {step.done ? "OK" : "X"}
+                <div key={step.key} className="relative flex gap-4 pb-5 last:pb-0">
+                  <div className="relative flex w-8 shrink-0 justify-center">
+                    {step.key !== milestoneDates[milestoneDates.length - 1]?.key ? (
+                      <span className="absolute top-8 bottom-[-8px] w-px bg-white/10" />
+                    ) : null}
+                    <div
+                      className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${
+                        step.done
+                          ? "border-emerald-300/40 bg-emerald-300/12 text-emerald-100"
+                          : "border-white/10 bg-zinc-950/70 text-zinc-400"
+                      }`}
+                    >
+                      {step.done ? "OK" : "X"}
+                    </div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-white">{step.label}</p>
                     <p className="mt-1 text-xs text-zinc-400">{formatDate(locale, step.value)}</p>
                   </div>
@@ -326,7 +337,7 @@ export default async function GpBookingDetailPage({
                   {locale === "fr" ? "Derniere mise a jour" : "Latest update"}: {formatDate(locale, booking.shipment.updatedAt)}
                 </p>
                 <Link
-                  href="/stores/jontaado-gp/shipments"
+                  href={`/stores/jontaado-gp/shipments?shipmentId=${booking.shipment.id}`}
                   className="inline-flex rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:brightness-110"
                 >
                   {locale === "fr" ? "Ouvrir le suivi" : "Open tracking"}
@@ -345,3 +356,4 @@ export default async function GpBookingDetailPage({
     </GpStoreShell>
   );
 }
+

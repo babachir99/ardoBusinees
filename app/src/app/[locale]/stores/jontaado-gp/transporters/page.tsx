@@ -48,9 +48,10 @@ export default async function GpTransportersPage({
     route?: string;
     minRating?: string;
     availability?: string;
+    page?: string;
   }>;
 }) {
-  const [{ locale }, { q, route, minRating, availability }] = await Promise.all([params, searchParams]);
+  const [{ locale }, { q, route, minRating, availability, page }] = await Promise.all([params, searchParams]);
   const session = await getServerSession(authOptions);
   const canOpenDashboard = hasAnyUserRole(session?.user, getVerticalRules(Vertical.GP).publishRoles);
   const normalizedQuery = q?.trim() ?? "";
@@ -59,6 +60,9 @@ export default async function GpTransportersPage({
   const parsedMinRating = Number(minRating ?? "");
   const normalizedMinRating =
     Number.isFinite(parsedMinRating) && parsedMinRating > 0 ? Math.min(5, parsedMinRating) : 0;
+  const parsedPage = Number(page ?? "1");
+  const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? Math.floor(parsedPage) : 1;
+  const pageSize = 6;
 
   const transporters = await prisma.user.findMany({
     where: {
@@ -68,7 +72,7 @@ export default async function GpTransportersPage({
         {
           roleAssignments: {
             some: {
-              role: { in: ["GP_CARRIER", "TRANSPORTER", "ADMIN"] },
+              role: { in: ["GP_CARRIER", "ADMIN"] },
               status: "ACTIVE",
             },
           },
@@ -139,6 +143,20 @@ export default async function GpTransportersPage({
 
     return matchesQuery && matchesRoute && matchesRating && matchesAvailability;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredTransporters.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedTransporters = filteredTransporters.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const makePageHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    if (normalizedQuery) params.set("q", normalizedQuery);
+    if (normalizedRoute) params.set("route", normalizedRoute);
+    if (normalizedMinRating > 0) params.set("minRating", String(normalizedMinRating));
+    if (normalizedAvailability !== "ALL") params.set("availability", normalizedAvailability);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    const queryString = params.toString();
+    return queryString ? `/stores/jontaado-gp/transporters?${queryString}` : "/stores/jontaado-gp/transporters";
+  };
 
   return (
     <GpStoreShell
@@ -275,7 +293,7 @@ export default async function GpTransportersPage({
         </section>
       ) : (
         <section className="grid gap-5 xl:grid-cols-2">
-          {filteredTransporters.map((transporter) => {
+          {paginatedTransporters.map((transporter) => {
             const nextTrip = transporter.gpTrips[0] ?? null;
 
             return (
@@ -393,6 +411,40 @@ export default async function GpTransportersPage({
           })}
         </section>
       )}
+
+      {filteredTransporters.length > pageSize ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-white/10 bg-zinc-900/60 px-5 py-4">
+          <p className="text-sm text-zinc-400">
+            {locale === "fr"
+              ? `Page ${safePage} sur ${totalPages}`
+              : `Page ${safePage} of ${totalPages}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <Link
+              href={makePageHref(Math.max(1, safePage - 1))}
+              aria-disabled={safePage === 1}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                safePage === 1
+                  ? "pointer-events-none border-white/10 text-zinc-600"
+                  : "border-white/15 bg-white/5 text-zinc-100 hover:border-cyan-300/60 hover:bg-cyan-300/10"
+              }`}
+            >
+              {locale === "fr" ? "Precedent" : "Previous"}
+            </Link>
+            <Link
+              href={makePageHref(Math.min(totalPages, safePage + 1))}
+              aria-disabled={safePage === totalPages}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                safePage === totalPages
+                  ? "pointer-events-none border-white/10 text-zinc-600"
+                  : "border-white/15 bg-white/5 text-zinc-100 hover:border-cyan-300/60 hover:bg-cyan-300/10"
+              }`}
+            >
+              {locale === "fr" ? "Suivant" : "Next"}
+            </Link>
+          </div>
+        </section>
+      ) : null}
     </GpStoreShell>
   );
 }

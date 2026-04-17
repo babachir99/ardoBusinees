@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Shipment = {
   id: string;
@@ -137,6 +138,8 @@ export default function GpShipmentsTimelineClient({
   currentUserId,
   currentUserRole,
 }: Props) {
+  const searchParams = useSearchParams();
+  const requestedShipmentId = searchParams.get("shipmentId");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -198,6 +201,11 @@ export default function GpShipmentsTimelineClient({
   useEffect(() => {
     void loadShipments(false);
   }, [loadShipments]);
+
+  useEffect(() => {
+    if (!requestedShipmentId) return;
+    setSelectedShipmentId(requestedShipmentId);
+  }, [requestedShipmentId]);
 
   const visibleShipments = useMemo(() => {
     const filtered = shipments.filter((shipment) =>
