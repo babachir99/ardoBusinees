@@ -158,9 +158,21 @@ export default function GpTripCard({
       </div>
 
       <div className="mt-5 border-t border-white/10 pt-3 text-xs text-zinc-300">
-        <p className="truncate">
-          {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={`/stores/jontaado-gp/transporters/${trip.transporter.id}`}
+            className="truncate text-zinc-200 transition hover:text-white"
+            title={locale === "fr" ? "Ouvrir le profil du transporteur" : "Open transporter profile"}
+          >
+            {locale === "fr" ? "Transporteur" : "Transporter"}: {trip.transporter.name ?? "-"}
+          </Link>
+          <Link
+            href={`/stores/jontaado-gp/transporters/${trip.transporter.id}`}
+            className="shrink-0 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-zinc-100 transition hover:border-cyan-300/60 hover:bg-cyan-300/10"
+          >
+            {locale === "fr" ? "Profil" : "Profile"}
+          </Link>
+        </div>
         <p className="mt-1 text-[11px] text-amber-200">
           {"\u2605"} {trip.transporter.transporterRating.toFixed(1)} ({trip.transporter.transporterReviewCount} {locale === "fr" ? "avis" : "reviews"})
         </p>

@@ -459,14 +459,37 @@ export default async function GpPage({
         <section className="grid gap-4 xl:grid-cols-3">
           {featuredTransporters.map((transporter) => {
             const nextTrip = transporter.gpTrips[0] ?? null;
+            const badgeLabel =
+              transporter.transporterReviewCount >= 12
+                ? locale === "fr"
+                  ? "Tres demande"
+                  : "High demand"
+                : transporter.transporterRating >= 4.8 && transporter.transporterReviewCount >= 3
+                  ? locale === "fr"
+                    ? "Fiable"
+                    : "Trusted"
+                  : locale === "fr"
+                    ? "Actif"
+                    : "Active";
+            const badgeClass =
+              transporter.transporterReviewCount >= 12
+                ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                : transporter.transporterRating >= 4.8 && transporter.transporterReviewCount >= 3
+                  ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+                  : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100";
             return (
               <article
                 key={transporter.id}
-                className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-[0_12px_30px_rgba(2,6,23,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35"
+                className="group rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-[0_12px_30px_rgba(2,6,23,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">JONTAADO GP</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${badgeClass}`}>
+                        {badgeLabel}
+                      </span>
+                    </div>
                     <h3 className="mt-2 text-lg font-semibold text-white">
                       {transporter.name ?? (locale === "fr" ? "Transporteur" : "Transporter")}
                     </h3>
@@ -496,15 +519,38 @@ export default async function GpPage({
                 ) : null}
 
                 <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-xs text-zinc-500">
-                    {transporter.phone ?? (locale === "fr" ? "Contact via profil" : "Contact via profile")}
-                  </p>
                   <Link
                     href={`/stores/jontaado-gp/transporters/${transporter.id}`}
-                    className="rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:brightness-110"
+                    className="min-w-0 text-xs text-zinc-500 transition group-hover:text-zinc-300"
+                    title={
+                      locale === "fr"
+                        ? "Ouvrir le profil transporteur"
+                        : "Open carrier profile"
+                    }
                   >
-                    {locale === "fr" ? "Voir le profil" : "View profile"}
+                    {transporter.phone ?? (locale === "fr" ? "Contact via profil" : "Contact via profile")}
                   </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/stores/jontaado-gp/transporters/${transporter.id}`}
+                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300/60 hover:bg-cyan-300/10"
+                    >
+                      {locale === "fr" ? "Profil" : "Profile"}
+                    </Link>
+                    <Link
+                      href={`/stores/jontaado-gp/transporters/${transporter.id}`}
+                      className="rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:brightness-110"
+                      title={
+                        nextTrip
+                          ? `${nextTrip.originCity} -> ${nextTrip.destinationCity}`
+                          : locale === "fr"
+                            ? "Voir le transporteur"
+                            : "View carrier"
+                      }
+                    >
+                      {locale === "fr" ? "Voir" : "Open"}
+                    </Link>
+                  </div>
                 </div>
               </article>
             );

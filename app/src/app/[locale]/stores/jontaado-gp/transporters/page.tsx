@@ -45,17 +45,19 @@ export default async function GpTransportersPage({
   params: Promise<{ locale: string }>;
   searchParams: Promise<{
     q?: string;
-    route?: string;
+    from?: string;
+    to?: string;
     minRating?: string;
     availability?: string;
     page?: string;
   }>;
 }) {
-  const [{ locale }, { q, route, minRating, availability, page }] = await Promise.all([params, searchParams]);
+  const [{ locale }, { q, from, to, minRating, availability, page }] = await Promise.all([params, searchParams]);
   const session = await getServerSession(authOptions);
   const canOpenDashboard = hasAnyUserRole(session?.user, getVerticalRules(Vertical.GP).publishRoles);
   const normalizedQuery = q?.trim() ?? "";
-  const normalizedRoute = route?.trim() ?? "";
+  const normalizedFrom = from?.trim() ?? "";
+  const normalizedTo = to?.trim() ?? "";
   const normalizedAvailability = availability?.trim().toUpperCase() === "HIGH" ? "HIGH" : "ALL";
   const parsedMinRating = Number(minRating ?? "");
   const normalizedMinRating =
@@ -128,12 +130,13 @@ export default async function GpTransportersPage({
       transporter.name?.toLowerCase().includes(normalizedQuery.toLowerCase()) ||
       transporter.phone?.toLowerCase().includes(normalizedQuery.toLowerCase());
 
-    const matchesRoute =
-      normalizedRoute.length === 0 ||
-      transporter.gpTrips.some((trip) => {
-        const routeLabel = `${trip.originCity} ${trip.destinationCity}`.toLowerCase();
-        return routeLabel.includes(normalizedRoute.toLowerCase());
-      });
+    const matchesFrom =
+      normalizedFrom.length === 0 ||
+      transporter.gpTrips.some((trip) => trip.originCity.toLowerCase().includes(normalizedFrom.toLowerCase()));
+
+    const matchesTo =
+      normalizedTo.length === 0 ||
+      transporter.gpTrips.some((trip) => trip.destinationCity.toLowerCase().includes(normalizedTo.toLowerCase()));
 
     const matchesRating = transporter.transporterRating >= normalizedMinRating;
 
@@ -141,7 +144,7 @@ export default async function GpTransportersPage({
       normalizedAvailability === "ALL" ||
       transporter.gpTrips.some((trip) => trip.availableKg >= 10);
 
-    return matchesQuery && matchesRoute && matchesRating && matchesAvailability;
+    return matchesQuery && matchesFrom && matchesTo && matchesRating && matchesAvailability;
   });
   const totalPages = Math.max(1, Math.ceil(filteredTransporters.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -150,7 +153,8 @@ export default async function GpTransportersPage({
   const makePageHref = (targetPage: number) => {
     const params = new URLSearchParams();
     if (normalizedQuery) params.set("q", normalizedQuery);
-    if (normalizedRoute) params.set("route", normalizedRoute);
+    if (normalizedFrom) params.set("from", normalizedFrom);
+    if (normalizedTo) params.set("to", normalizedTo);
     if (normalizedMinRating > 0) params.set("minRating", String(normalizedMinRating));
     if (normalizedAvailability !== "ALL") params.set("availability", normalizedAvailability);
     if (targetPage > 1) params.set("page", String(targetPage));
@@ -181,7 +185,7 @@ export default async function GpTransportersPage({
       }
     >
       <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
-        <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.1fr_1fr_0.8fr_0.8fr_auto]" method="GET">
+        <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_0.8fr_0.8fr_auto]" method="GET">
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
               {locale === "fr" ? "Transporteur" : "Carrier"}
@@ -195,12 +199,23 @@ export default async function GpTransportersPage({
           </label>
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
-              {locale === "fr" ? "Trajet" : "Route"}
+              {locale === "fr" ? "Depart" : "From"}
             </span>
             <input
-              name="route"
-              defaultValue={normalizedRoute}
-              placeholder={locale === "fr" ? "Ex: Dakar Paris" : "Ex: Dakar Paris"}
+              name="from"
+              defaultValue={normalizedFrom}
+              placeholder={locale === "fr" ? "Ville de depart" : "Departure city"}
+              className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+              {locale === "fr" ? "Arrivee" : "To"}
+            </span>
+            <input
+              name="to"
+              defaultValue={normalizedTo}
+              placeholder={locale === "fr" ? "Ville d'arrivee" : "Arrival city"}
               className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
             />
           </label>
@@ -295,6 +310,24 @@ export default async function GpTransportersPage({
         <section className="grid gap-5 xl:grid-cols-2">
           {paginatedTransporters.map((transporter) => {
             const nextTrip = transporter.gpTrips[0] ?? null;
+            const demandBadge =
+              transporter.transporterReviewCount >= 12
+                ? locale === "fr"
+                  ? "Tres demande"
+                  : "High demand"
+                : transporter.transporterRating >= 4.8 && transporter.transporterReviewCount >= 3
+                  ? locale === "fr"
+                    ? "Fiable"
+                    : "Trusted"
+                  : locale === "fr"
+                    ? "Actif"
+                    : "Active";
+            const demandBadgeClass =
+              transporter.transporterReviewCount >= 12
+                ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                : transporter.transporterRating >= 4.8 && transporter.transporterReviewCount >= 3
+                  ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+                  : "border-cyan-300/30 bg-cyan-300/10 text-cyan-100";
 
             return (
               <article
@@ -320,6 +353,11 @@ export default async function GpTransportersPage({
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">JONTAADO GP</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${demandBadgeClass}`}>
+                          {demandBadge}
+                        </span>
+                      </div>
                       <h2 className="mt-2 text-xl font-semibold text-white">
                         {transporter.name ?? (locale === "fr" ? "Transporteur" : "Transporter")}
                       </h2>
