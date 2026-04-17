@@ -180,6 +180,12 @@ export default async function GpPage({
               >
                 {locale === "fr" ? "Publier" : "Publish"}
               </a>
+              <Link
+                href="/stores/jontaado-gp/transporters"
+                className={marketplaceActionSecondaryClass}
+              >
+                {locale === "fr" ? "Transporteurs" : "Carriers"}
+              </Link>
               {session?.user?.id ? (
                 <Link
                   href="/stores/jontaado-gp/bookings"

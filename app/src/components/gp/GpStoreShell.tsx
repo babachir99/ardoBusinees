@@ -7,7 +7,7 @@ import MarketplaceActions, {
   marketplaceActionSecondaryClass,
 } from "@/components/marketplace/MarketplaceActions";
 
-type SectionKey = "home" | "bookings" | "dashboard" | "shipments";
+type SectionKey = "home" | "transporters" | "bookings" | "dashboard" | "shipments";
 
 type Props = {
   locale: string;
@@ -15,6 +15,7 @@ type Props = {
   description: string;
   activeSection?: SectionKey;
   topAction?: ReactNode;
+  showTransporters?: boolean;
   showBookings?: boolean;
   showDashboard?: boolean;
   showShipments?: boolean;
@@ -31,6 +32,7 @@ export default async function GpStoreShell({
   description,
   activeSection = "home",
   topAction,
+  showTransporters = true,
   showBookings = false,
   showDashboard = true,
   showShipments = true,
@@ -58,6 +60,14 @@ export default async function GpStoreShell({
               <Link href="/stores/jontaado-gp" className={resolveClass(activeSection === "home")}>
                 {locale === "fr" ? "Explorer" : "Explore"}
               </Link>
+              {showTransporters ? (
+                <Link
+                  href="/stores/jontaado-gp/transporters"
+                  className={resolveClass(activeSection === "transporters")}
+                >
+                  {locale === "fr" ? "Transporteurs" : "Carriers"}
+                </Link>
+              ) : null}
               {showBookings ? (
                 <Link
                   href="/stores/jontaado-gp/bookings"

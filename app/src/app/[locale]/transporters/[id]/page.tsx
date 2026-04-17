@@ -116,7 +116,7 @@ export default async function TransporterProfilePage({
   return (
     <GpStoreShell
       locale={locale}
-      activeSection="home"
+      activeSection="transporters"
       title={transporter.name ?? (locale === "fr" ? "Transporteur GP" : "GP transporter")}
       description={
         locale === "fr"
