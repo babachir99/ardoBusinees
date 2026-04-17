@@ -114,7 +114,7 @@ export default async function GpPage({
   const hasMinPrice = Number.isFinite(parsedMinPrice) && parsedMinPrice > 0;
   const hasMaxPrice = Number.isFinite(parsedMaxPrice) && parsedMaxPrice > 0;
 
-  const [marketplaceSnapshot, myBookings] = await Promise.all([
+  const [marketplaceSnapshot, myBookings, featuredTransporters] = await Promise.all([
     getGpMarketplaceSnapshot(store.id, {
       from: normalizedFrom,
       to: normalizedTo,
@@ -132,6 +132,53 @@ export default async function GpPage({
           select: { tripId: true, status: true },
         })
       : Promise.resolve([]),
+    prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { role: "TRANSPORTER" },
+          {
+            roleAssignments: {
+              some: {
+                role: { in: ["GP_CARRIER", "TRANSPORTER", "ADMIN"] },
+                status: "ACTIVE",
+              },
+            },
+          },
+        ],
+        gpTrips: {
+          some: {
+            isActive: true,
+            status: "OPEN",
+            storeId: store.id,
+          },
+        },
+      },
+      orderBy: [{ transporterRating: "desc" }, { transporterReviewCount: "desc" }, { createdAt: "desc" }],
+      take: 3,
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        transporterRating: true,
+        transporterReviewCount: true,
+        gpTrips: {
+          where: {
+            isActive: true,
+            status: "OPEN",
+            storeId: store.id,
+          },
+          orderBy: [{ flightDate: "asc" }, { createdAt: "desc" }],
+          take: 1,
+          select: {
+            originCity: true,
+            destinationCity: true,
+            flightDate: true,
+            availableKg: true,
+          },
+        },
+      },
+    }),
   ]);
 
   const trips = marketplaceSnapshot.trips.map((trip) => ({
@@ -386,6 +433,82 @@ export default async function GpPage({
                 : "No active GP listings for this filter."}
             </div>
           )}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white md:text-xl">
+                {locale === "fr" ? "Transporteurs recommandes" : "Recommended carriers"}
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                {locale === "fr"
+                  ? "Des profils solides pour t'aider a choisir plus vite."
+                  : "Strong profiles to help you choose faster."}
+              </p>
+            </div>
+            <Link
+              href="/stores/jontaado-gp/transporters"
+              className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-white/30"
+            >
+              {locale === "fr" ? "Tous les transporteurs" : "All carriers"}
+            </Link>
+          </div>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          {featuredTransporters.map((transporter) => {
+            const nextTrip = transporter.gpTrips[0] ?? null;
+            return (
+              <article
+                key={transporter.id}
+                className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5 shadow-[0_12px_30px_rgba(2,6,23,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">JONTAADO GP</p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">
+                      {transporter.name ?? (locale === "fr" ? "Transporteur" : "Transporter")}
+                    </h3>
+                    <p className="mt-1 text-sm text-amber-200">
+                      * {transporter.transporterRating.toFixed(1)} ({transporter.transporterReviewCount}{" "}
+                      {locale === "fr" ? "avis" : "reviews"})
+                    </p>
+                  </div>
+                  {nextTrip ? (
+                    <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">
+                      {nextTrip.availableKg} kg
+                    </span>
+                  ) : null}
+                </div>
+
+                {nextTrip ? (
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/50 p-4 text-sm text-zinc-300">
+                    <p className="font-semibold text-white">
+                      {nextTrip.originCity} {"->"} {nextTrip.destinationCity}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
+                        dateStyle: "medium",
+                      }).format(nextTrip.flightDate)}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p className="text-xs text-zinc-500">
+                    {transporter.phone ?? (locale === "fr" ? "Contact via profil" : "Contact via profile")}
+                  </p>
+                  <Link
+                    href={`/stores/jontaado-gp/transporters/${transporter.id}`}
+                    className="rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:brightness-110"
+                  >
+                    {locale === "fr" ? "Voir le profil" : "View profile"}
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
         </section>
       </main>
       <Footer />

@@ -250,6 +250,12 @@ export default async function GpBookingsPage({
                       <p className="text-sm text-zinc-400">
                         {locale === "fr" ? "Demande envoyee" : "Request sent"}: {formatDate(locale, booking.createdAt)}
                       </p>
+                      <Link
+                        href={`/stores/jontaado-gp/bookings/${booking.id}`}
+                        className="inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300/60 hover:bg-cyan-300/10"
+                      >
+                        {locale === "fr" ? "Voir le detail" : "View detail"}
+                      </Link>
                     </div>
 
                     <div className="text-right">
@@ -257,7 +263,7 @@ export default async function GpBookingsPage({
                         {formatMoney(amount, booking.trip.currency, locale)}
                       </p>
                       <p className="mt-1 text-sm text-zinc-400">
-                        {booking.requestedKg} kg · {booking.packageCount}{" "}
+                        {booking.requestedKg} kg | {booking.packageCount}{" "}
                         {locale === "fr" ? "colis" : "parcels"}
                       </p>
                     </div>
@@ -329,3 +335,4 @@ export default async function GpBookingsPage({
     </GpStoreShell>
   );
 }
+

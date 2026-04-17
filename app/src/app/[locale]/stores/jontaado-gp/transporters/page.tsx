@@ -40,12 +40,25 @@ export async function generateMetadata({
 
 export default async function GpTransportersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{
+    q?: string;
+    route?: string;
+    minRating?: string;
+    availability?: string;
+  }>;
 }) {
-  const { locale } = await params;
+  const [{ locale }, { q, route, minRating, availability }] = await Promise.all([params, searchParams]);
   const session = await getServerSession(authOptions);
   const canOpenDashboard = hasAnyUserRole(session?.user, getVerticalRules(Vertical.GP).publishRoles);
+  const normalizedQuery = q?.trim() ?? "";
+  const normalizedRoute = route?.trim() ?? "";
+  const normalizedAvailability = availability?.trim().toUpperCase() === "HIGH" ? "HIGH" : "ALL";
+  const parsedMinRating = Number(minRating ?? "");
+  const normalizedMinRating =
+    Number.isFinite(parsedMinRating) && parsedMinRating > 0 ? Math.min(5, parsedMinRating) : 0;
 
   const transporters = await prisma.user.findMany({
     where: {
@@ -105,6 +118,28 @@ export default async function GpTransportersPage({
     },
   });
 
+  const filteredTransporters = transporters.filter((transporter) => {
+    const matchesQuery =
+      normalizedQuery.length === 0 ||
+      transporter.name?.toLowerCase().includes(normalizedQuery.toLowerCase()) ||
+      transporter.phone?.toLowerCase().includes(normalizedQuery.toLowerCase());
+
+    const matchesRoute =
+      normalizedRoute.length === 0 ||
+      transporter.gpTrips.some((trip) => {
+        const routeLabel = `${trip.originCity} ${trip.destinationCity}`.toLowerCase();
+        return routeLabel.includes(normalizedRoute.toLowerCase());
+      });
+
+    const matchesRating = transporter.transporterRating >= normalizedMinRating;
+
+    const matchesAvailability =
+      normalizedAvailability === "ALL" ||
+      transporter.gpTrips.some((trip) => trip.availableKg >= 10);
+
+    return matchesQuery && matchesRoute && matchesRating && matchesAvailability;
+  });
+
   return (
     <GpStoreShell
       locale={locale}
@@ -127,12 +162,81 @@ export default async function GpTransportersPage({
         </Link>
       }
     >
+      <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
+        <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.1fr_1fr_0.8fr_0.8fr_auto]" method="GET">
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+              {locale === "fr" ? "Transporteur" : "Carrier"}
+            </span>
+            <input
+              name="q"
+              defaultValue={normalizedQuery}
+              placeholder={locale === "fr" ? "Nom ou telephone" : "Name or phone"}
+              className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+              {locale === "fr" ? "Trajet" : "Route"}
+            </span>
+            <input
+              name="route"
+              defaultValue={normalizedRoute}
+              placeholder={locale === "fr" ? "Ex: Dakar Paris" : "Ex: Dakar Paris"}
+              className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+              {locale === "fr" ? "Note mini" : "Min rating"}
+            </span>
+            <select
+              name="minRating"
+              defaultValue={normalizedMinRating > 0 ? String(normalizedMinRating) : ""}
+              className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+            >
+              <option value="">{locale === "fr" ? "Toutes" : "All"}</option>
+              <option value="4">4.0+</option>
+              <option value="4.5">4.5+</option>
+              <option value="4.8">4.8+</option>
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+              {locale === "fr" ? "Disponibilite" : "Availability"}
+            </span>
+            <select
+              name="availability"
+              defaultValue={normalizedAvailability}
+              className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/70 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/20"
+            >
+              <option value="ALL">{locale === "fr" ? "Toutes" : "All"}</option>
+              <option value="HIGH">{locale === "fr" ? "10 kg et plus" : "10 kg and more"}</option>
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button
+              type="submit"
+              className="h-11 rounded-xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-4 text-sm font-semibold text-zinc-950 transition hover:brightness-110"
+            >
+              {locale === "fr" ? "Filtrer" : "Filter"}
+            </button>
+            <Link
+              href="/stores/jontaado-gp/transporters"
+              className="inline-flex h-11 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-zinc-200 transition hover:border-white/30"
+            >
+              {locale === "fr" ? "Reset" : "Reset"}
+            </Link>
+          </div>
+        </form>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
             {locale === "fr" ? "Profils actifs" : "Active profiles"}
           </p>
-          <p className="mt-3 text-3xl font-semibold text-white">{transporters.length}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{filteredTransporters.length}</p>
           <p className="mt-1 text-sm text-zinc-400">
             {locale === "fr" ? "Avec au moins un trajet ouvert" : "With at least one open trip"}
           </p>
@@ -142,7 +246,9 @@ export default async function GpTransportersPage({
             {locale === "fr" ? "Meilleure note" : "Top rating"}
           </p>
           <p className="mt-3 text-3xl font-semibold text-amber-100">
-            {transporters.length > 0 ? Math.max(...transporters.map((entry) => entry.transporterRating)).toFixed(1) : "0.0"}
+            {filteredTransporters.length > 0
+              ? Math.max(...filteredTransporters.map((entry) => entry.transporterRating)).toFixed(1)
+              : "0.0"}
           </p>
           <p className="mt-1 text-sm text-zinc-400">
             {locale === "fr" ? "Moyenne visible publique" : "Public rating average"}
@@ -153,7 +259,7 @@ export default async function GpTransportersPage({
             {locale === "fr" ? "Trajets visibles" : "Visible trips"}
           </p>
           <p className="mt-3 text-3xl font-semibold text-cyan-100">
-            {transporters.reduce((sum, entry) => sum + entry.gpTrips.length, 0)}
+            {filteredTransporters.reduce((sum, entry) => sum + entry.gpTrips.length, 0)}
           </p>
           <p className="mt-1 text-sm text-zinc-400">
             {locale === "fr" ? "Echantillon charge sur cette page" : "Sample loaded on this page"}
@@ -161,7 +267,7 @@ export default async function GpTransportersPage({
         </div>
       </section>
 
-      {transporters.length === 0 ? (
+      {filteredTransporters.length === 0 ? (
         <section className="rounded-3xl border border-dashed border-white/10 bg-zinc-900/50 p-8 text-sm text-zinc-400">
           {locale === "fr"
             ? "Aucun transporteur GP avec trajet ouvert pour le moment."
@@ -169,7 +275,7 @@ export default async function GpTransportersPage({
         </section>
       ) : (
         <section className="grid gap-5 xl:grid-cols-2">
-          {transporters.map((transporter) => {
+          {filteredTransporters.map((transporter) => {
             const nextTrip = transporter.gpTrips[0] ?? null;
 
             return (
@@ -245,7 +351,7 @@ export default async function GpTransportersPage({
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-zinc-400">
-                            {formatDate(locale, trip.flightDate)} · {trip.pricePerKgCents}{" "}
+                            {formatDate(locale, trip.flightDate)} | {trip.pricePerKgCents}{" "}
                             {trip.currency === "XOF" ? "FCFA" : trip.currency}/kg
                           </p>
                         </div>
@@ -290,3 +396,4 @@ export default async function GpTransportersPage({
     </GpStoreShell>
   );
 }
+
