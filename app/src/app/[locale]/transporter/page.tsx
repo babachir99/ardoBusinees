@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import Footer from "@/components/layout/Footer";
 import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
+import GpPendingBookingsPanel from "@/components/gp/GpPendingBookingsPanel";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
@@ -104,6 +105,7 @@ export default async function TransporterDashboardPage({
     trips,
     recentReviews,
     recentClientBookings,
+    pendingBookings,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
@@ -255,6 +257,36 @@ export default async function TransporterDashboardPage({
         },
       },
     }),
+    prisma.gpTripBooking.findMany({
+      where: {
+        transporterId: session.user.id,
+        status: "PENDING",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      select: {
+        id: true,
+        tripId: true,
+        requestedKg: true,
+        packageCount: true,
+        message: true,
+        createdAt: true,
+        customer: {
+          select: {
+            name: true,
+          },
+        },
+        trip: {
+          select: {
+            originCity: true,
+            destinationCity: true,
+            flightDate: true,
+            currency: true,
+            pricePerKgCents: true,
+          },
+        },
+      },
+    }),
   ]);
 
   if (!user) {
@@ -378,6 +410,18 @@ export default async function TransporterDashboardPage({
             </div>
           ))}
         </section>
+
+        <GpPendingBookingsPanel
+          locale={locale}
+          bookings={pendingBookings.map((booking) => ({
+            ...booking,
+            createdAt: booking.createdAt.toISOString(),
+            trip: {
+              ...booking.trip,
+              flightDate: booking.trip.flightDate.toISOString(),
+            },
+          }))}
+        />
 
         <PartnerTrendsPanel
           locale={locale}
