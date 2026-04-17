@@ -6,6 +6,7 @@ import Footer from "@/components/layout/Footer";
 import DashboardListExportButton from "@/components/dashboard/DashboardListExportButton";
 import PartnerTrendsPanel from "@/components/dashboard/PartnerTrendsPanel";
 import GpPendingBookingsPanel from "@/components/gp/GpPendingBookingsPanel";
+import GpTripsManagerPanel from "@/components/gp/GpTripsManagerPanel";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { buildTrendPoints, toDayKey } from "@/lib/dashboard/trends";
@@ -199,19 +200,23 @@ export default async function TransporterDashboardPage({
       where: { transporterId: session.user.id },
       orderBy: [{ flightDate: "asc" }, { createdAt: "desc" }],
       take: 12,
-      select: {
-        id: true,
-        originCity: true,
-        destinationCity: true,
-        flightDate: true,
-        availableKg: true,
-        pricePerKgCents: true,
-        currency: true,
-        status: true,
-        isActive: true,
-        createdAt: true,
-      },
-    }),
+        select: {
+          id: true,
+          originCity: true,
+          destinationCity: true,
+          flightDate: true,
+          availableKg: true,
+          pricePerKgCents: true,
+          currency: true,
+          status: true,
+          isActive: true,
+          maxPackages: true,
+          contactPhone: true,
+          notes: true,
+          acceptedPaymentMethods: true,
+          createdAt: true,
+        },
+      }),
     prisma.transporterReview.findMany({
       where: { transporterId: session.user.id },
       orderBy: { createdAt: "desc" },
@@ -460,16 +465,13 @@ export default async function TransporterDashboardPage({
         />
 
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/70 p-6">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-white">
-                {locale === "fr" ? "Mes trajets GP" : "My GP trips"}
-              </h2>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Link
                 href="/stores/jontaado-gp"
                 className="rounded-full border border-cyan-300/40 px-3 py-1 text-[11px] text-cyan-100 transition hover:border-cyan-300/80"
               >
-                {locale === "fr" ? "Publier / gerer" : "Publish / manage"}
+                {locale === "fr" ? "Publier un nouveau trajet" : "Publish a new trip"}
               </Link>
               <DashboardListExportButton
                 filename="gp-trips.csv"
@@ -492,39 +494,13 @@ export default async function TransporterDashboardPage({
               />
             </div>
 
-            {trips.length === 0 ? (
-              <p className="mt-4 text-sm text-zinc-400">
-                {locale === "fr" ? "Aucun trajet publie pour l'instant." : "No trips published yet."}
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-3">
-                {trips.map((trip) => (
-                  <div key={trip.id} className="rounded-2xl border border-white/10 bg-zinc-950/60 p-4 text-xs text-zinc-300">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-white">
-                        {trip.originCity} {"->"} {trip.destinationCity}
-                      </p>
-                      <span
-                        className={`rounded-full px-2 py-1 text-[10px] uppercase ${
-                          trip.status === "OPEN"
-                            ? "bg-emerald-400/20 text-emerald-200"
-                            : trip.status === "CLOSED"
-                              ? "bg-amber-400/20 text-amber-200"
-                              : "bg-rose-400/20 text-rose-200"
-                        }`}
-                      >
-                        {trip.status}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400">
-                      <span>{formatDateOnly(locale, trip.flightDate)}</span>
-                      <span>{trip.availableKg}kg</span>
-                      <span>{formatMoney(trip.pricePerKgCents, trip.currency, locale)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <GpTripsManagerPanel
+              locale={locale}
+              trips={trips.map((trip) => ({
+                ...trip,
+                flightDate: trip.flightDate.toISOString(),
+              }))}
+            />
           </div>
 
           <div className="grid gap-6">

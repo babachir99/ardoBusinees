@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { GpBookingStatus, GpTripStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const allowedPaymentMethods = new Set<PaymentMethod>(Object.values(PaymentMethod));
 const allowedStatuses = new Set<GpTripStatus>(Object.values(GpTripStatus));
@@ -166,6 +167,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -335,6 +341,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const csrfBlocked = assertSameOrigin(_request);
+  if (csrfBlocked) {
+    return csrfBlocked;
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -343,7 +354,16 @@ export async function DELETE(
   const { id } = await params;
   const existing = await prisma.gpTrip.findUnique({
     where: { id },
-    select: { id: true, transporterId: true },
+    select: {
+      id: true,
+      transporterId: true,
+      _count: {
+        select: {
+          bookings: true,
+          shipments: true,
+        },
+      },
+    },
   });
 
   if (!existing) {
@@ -353,6 +373,15 @@ export async function DELETE(
   const userRole = session.user.role as UserRole;
   if (!canManageTrip(session.user.id, userRole, existing.transporterId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (existing._count.bookings > 0 || existing._count.shipments > 0) {
+    return NextResponse.json(
+      {
+        error: "Trip cannot be deleted once bookings or shipments exist",
+      },
+      { status: 409 }
+    );
   }
 
   await prisma.gpTrip.delete({ where: { id: existing.id } });
