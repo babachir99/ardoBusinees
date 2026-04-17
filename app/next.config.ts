@@ -74,6 +74,25 @@ const cspMode = resolveCspMode();
 const cspValue = buildCspValue();
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/:locale(fr|en)/gp/shipments",
+        destination: "/:locale/stores/jontaado-gp/shipments",
+        permanent: true,
+      },
+      {
+        source: "/:locale(fr|en)/transporter",
+        destination: "/:locale/stores/jontaado-gp/dashboard",
+        permanent: true,
+      },
+      {
+        source: "/:locale(fr|en)/transporters/:id",
+        destination: "/:locale/stores/jontaado-gp/transporters/:id",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     const headers = [
       { key: "X-Content-Type-Options", value: "nosniff" },
