@@ -717,7 +717,7 @@ export default function ConversationsList({
 
   const listPanel = (
     <aside className="rounded-2xl border border-white/10 bg-zinc-900/55 p-3 shadow-[0_10px_28px_rgba(0,0,0,0.25)]">
-      <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
+      <div className="sticky top-[108px] z-10 rounded-xl border border-white/10 bg-zinc-950/95 p-3 backdrop-blur">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {availableServiceTabs.map((service) => (
             <button

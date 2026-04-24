@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 type FavoriteButtonProps = {
   productId: string;
   initialIsFavorite?: boolean;
+  serverHydrated?: boolean;
   addLabel?: string;
   removeLabel?: string;
   variant?: "default" | "icon";
@@ -16,6 +17,7 @@ type FavoriteButtonProps = {
 export default function FavoriteButton({
   productId,
   initialIsFavorite,
+  serverHydrated = false,
   addLabel,
   removeLabel,
   variant = "default",
@@ -29,6 +31,7 @@ export default function FavoriteButton({
 
   useEffect(() => {
     if (!sessionUserId) return;
+    if (serverHydrated) return;
 
     const load = async () => {
       const res = await fetch(`/api/favorites?productId=${productId}`);
@@ -40,7 +43,7 @@ export default function FavoriteButton({
 
     };
     void load();
-  }, [productId, sessionUserId]);
+  }, [productId, serverHydrated, sessionUserId]);
 
   const announceFavoriteUpdate = (nextIsFavorite: boolean) => {
     if (typeof window === "undefined") {

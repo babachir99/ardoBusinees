@@ -1,20 +1,45 @@
 /* eslint-disable @next/next/no-img-element */
 
-﻿import { Link } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import Image from "next/image";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
 import Footer from "@/components/layout/Footer";
-import UserHeaderActions from "@/components/layout/UserHeaderActions";
-
+import AppHeader from "@/components/layout/AppHeader";
 import FavoriteButton from "@/components/favorites/FavoriteButton";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { buildStoreMetadata } from "@/lib/storeSeo";
+
 type ShopFilters = {
   type?: string;
   category?: string;
   store?: string;
+  page?: string;
 };
+
+const PRODUCTS_PER_PAGE = 24;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const isFr = locale === "fr";
+
+  return buildStoreMetadata({
+    locale,
+    path: "/shop",
+    title: isFr ? "Marketplace | JONTAADO Shop" : "Marketplace | JONTAADO Shop",
+    description: isFr
+      ? "Explore les produits locaux, preorder et dropship de la marketplace JONTAADO."
+      : "Browse local, preorder and dropship products on the JONTAADO marketplace.",
+    imagePath: "/logo.png",
+  });
+}
 
 export default async function ShopPage({
   searchParams,
@@ -23,16 +48,19 @@ export default async function ShopPage({
   searchParams: Promise<ShopFilters>;
   params: Promise<{ locale: string }>;
 }) {
-  const [{ type, category, store }, { locale }] = await Promise.all([
+  const [{ type, category, store, page }, { locale }, t, session] = await Promise.all([
     searchParams,
     params,
+    getTranslations("Shop"),
+    getServerSession(authOptions),
   ]);
-  const t = await getTranslations("Shop");
 
   const normalizedType = type?.toUpperCase();
   const activeCategory = category ?? undefined;
   const activeStore = store ?? undefined;
   const storeScopeSlug = activeStore ?? "marketplace";
+  const currentPage = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const now = new Date();
 
   const where: Prisma.ProductWhereInput = { isActive: true };
 
@@ -59,15 +87,25 @@ export default async function ShopPage({
     where.store = { slug: activeStore };
   }
 
-  const [products, scopedCategories, stores] = await Promise.all([
-    prisma.product.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        images: { orderBy: { position: "asc" }, take: 1 },
-        seller: { select: { displayName: true } },
-      },
-    }),
+  const activeBoostWhere: Prisma.ProductWhereInput = {
+    ...where,
+    boostStatus: "APPROVED",
+    OR: [{ boostedUntil: null }, { boostedUntil: { gt: now } }],
+  };
+
+  const nonBoostedWhere: Prisma.ProductWhereInput = {
+    ...where,
+    OR: [
+      { boostStatus: { not: "APPROVED" } },
+      { boostStatus: "APPROVED", boostedUntil: { lte: now } },
+    ],
+  };
+
+  const pageOffset = (currentPage - 1) * PRODUCTS_PER_PAGE;
+
+  const [productsTotalCount, activeBoostedCount, scopedCategories, stores] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.count({ where: activeBoostWhere }),
     prisma.category.findMany({
       where: {
         isActive: true,
@@ -90,6 +128,43 @@ export default async function ShopPage({
     }),
   ]);
 
+  const boostedSkip = Math.min(pageOffset, activeBoostedCount);
+  const boostedTake = Math.max(
+    0,
+    Math.min(PRODUCTS_PER_PAGE, activeBoostedCount - boostedSkip)
+  );
+  const regularSkip = Math.max(0, pageOffset - activeBoostedCount);
+  const regularTake = PRODUCTS_PER_PAGE - boostedTake;
+
+  const [boostedProducts, regularProducts] = await Promise.all([
+    boostedTake > 0
+      ? prisma.product.findMany({
+          where: activeBoostWhere,
+          orderBy: [{ createdAt: "desc" }],
+          skip: boostedSkip,
+          take: boostedTake,
+          include: {
+            images: { orderBy: { position: "asc" }, take: 1 },
+            seller: { select: { displayName: true } },
+          },
+        })
+      : Promise.resolve([]),
+    regularTake > 0
+      ? prisma.product.findMany({
+          where: nonBoostedWhere,
+          orderBy: [{ createdAt: "desc" }],
+          skip: regularSkip,
+          take: regularTake,
+          include: {
+            images: { orderBy: { position: "asc" }, take: 1 },
+            seller: { select: { displayName: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const products = [...boostedProducts, ...regularProducts];
+
   const categories =
     scopedCategories.length > 0
       ? scopedCategories
@@ -101,16 +176,27 @@ export default async function ShopPage({
           orderBy: [{ parentId: "asc" }, { name: "asc" }],
         });
 
-  const now = new Date();
+  const favoriteProductIds = session?.user?.id
+    ? new Set(
+        (
+          await prisma.favorite.findMany({
+            where: {
+              userId: session.user.id,
+              productId: { in: products.map((product) => product.id) },
+            },
+            select: { productId: true },
+          })
+        ).map((favorite) => favorite.productId)
+      )
+    : new Set<string>();
+
   const isBoosted = (product: (typeof products)[number]) =>
     product.boostStatus === "APPROVED" &&
     (!product.boostedUntil || new Date(product.boostedUntil) > now);
 
-  const sortedProducts = [...products].sort((a, b) => {
-    const boostDiff = Number(isBoosted(b)) - Number(isBoosted(a));
-    if (boostDiff !== 0) return boostDiff;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  const totalPages = Math.max(1, Math.ceil(productsTotalCount / PRODUCTS_PER_PAGE));
+  const visibleRangeStart = productsTotalCount === 0 ? 0 : (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
+  const visibleRangeEnd = Math.min(currentPage * PRODUCTS_PER_PAGE, productsTotalCount);
 
   const rootCategories = categories
     .filter((entry) => !entry.parentId)
@@ -150,12 +236,16 @@ export default async function ShopPage({
     type: nextType,
     category: nextCategory,
     store: nextStore,
+    page: nextPage,
   }: {
     type?: string | null;
     category?: string | null;
     store?: string | null;
+    page?: number | null;
   }) => {
     const params = new URLSearchParams();
+    const filtersChanged =
+      nextType !== undefined || nextCategory !== undefined || nextStore !== undefined;
 
     const finalType =
       nextType === undefined ? normalizedType : nextType ?? undefined;
@@ -163,10 +253,21 @@ export default async function ShopPage({
       nextCategory === undefined ? activeCategory : nextCategory ?? undefined;
     const finalStore =
       nextStore === undefined ? activeStore : nextStore ?? undefined;
+    const finalPage =
+      nextPage == undefined
+        ? filtersChanged
+          ? undefined
+          : currentPage > 1
+          ? currentPage
+          : undefined
+        : nextPage > 1
+        ? nextPage
+        : undefined;
 
     if (finalType) params.set("type", finalType);
     if (finalCategory) params.set("category", finalCategory);
     if (finalStore) params.set("store", finalStore);
+    if (finalPage) params.set("page", String(finalPage));
 
     const query = params.toString();
     return query ? `/shop?${query}` : "/shop";
@@ -178,53 +279,9 @@ export default async function ShopPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-3 text-xs text-zinc-300">
-          <Link
-            href="/shop"
-            className={`rounded-full border px-3 py-1 ${
-              !normalizedType
-                ? "border-emerald-300/60 text-emerald-200"
-                : "border-white/15"
-            }`}
-          >
-            {t("filters.all")}
-          </Link>
-          <Link
-            href="/shop?type=PREORDER"
-            className={`rounded-full border px-3 py-1 ${
-              normalizedType === "PREORDER"
-                ? "border-emerald-300/60 text-emerald-200"
-                : "border-white/15"
-            }`}
-          >
-            {t("filters.preorder")}
-          </Link>
-          <Link
-            href="/shop?type=DROPSHIP"
-            className={`rounded-full border px-3 py-1 ${
-              normalizedType === "DROPSHIP"
-                ? "border-emerald-300/60 text-emerald-200"
-                : "border-white/15"
-            }`}
-          >
-            {t("filters.dropship")}
-          </Link>
-        </div>
-        <UserHeaderActions locale={locale} className="flex items-center gap-3" />
-      </header>
+      <AppHeader locale={locale} containerClassName="max-w-6xl" />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-24 pt-[92px] sm:pt-[100px]">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/15 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -239,7 +296,7 @@ export default async function ShopPage({
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-zinc-950/70 px-5 py-4 text-xs text-zinc-300">
               <span>{t("hero.metrics.title")}</span>
               <span className="text-sm font-semibold text-emerald-200">
-                {products.length}
+                {productsTotalCount}
               </span>
               <span>{t("hero.metrics.note")}</span>
             </div>
@@ -325,7 +382,7 @@ export default async function ShopPage({
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] fade-up">
-          <aside className="h-fit rounded-3xl border border-white/10 bg-zinc-900/70 p-4 lg:sticky lg:top-20">
+          <aside className="h-fit rounded-3xl border border-white/10 bg-zinc-900/70 p-4 lg:sticky lg:top-[108px]">
             <p className="mb-3 text-xs uppercase tracking-[0.2em] text-zinc-400">
               {t("filters.categories")}
             </p>
@@ -454,7 +511,7 @@ export default async function ShopPage({
             </section>
 
             <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {sortedProducts.map((product) => {
+              {products.map((product) => {
                 const boosted = isBoosted(product);
                 const localStock =
                   product.type === "LOCAL"
@@ -476,6 +533,8 @@ export default async function ShopPage({
                     <div className="relative mb-4 h-32 w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60">
                       <FavoriteButton
                         productId={product.id}
+                        initialIsFavorite={favoriteProductIds.has(product.id)}
+                        serverHydrated
                         variant="icon"
                         className="absolute left-3 top-3 z-20"
                       />
@@ -591,10 +650,47 @@ export default async function ShopPage({
                 );
               })}
             </section>
+
+            {productsTotalCount > PRODUCTS_PER_PAGE ? (
+              <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-zinc-900/70 px-4 py-3">
+                <p className="text-xs text-zinc-400">
+                  {locale === "fr"
+                    ? `${visibleRangeStart}-${visibleRangeEnd} sur ${productsTotalCount} produits`
+                    : `${visibleRangeStart}-${visibleRangeEnd} of ${productsTotalCount} products`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={buildShopHref({ page: currentPage - 1 })}
+                    aria-disabled={currentPage <= 1}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                      currentPage <= 1
+                        ? "pointer-events-none border-white/10 text-zinc-600"
+                        : "border-white/20 text-zinc-200 hover:border-white/40"
+                    }`}
+                  >
+                    {locale === "fr" ? "Precedent" : "Previous"}
+                  </Link>
+                  <span className="rounded-full border border-white/10 px-3 py-2 text-xs text-zinc-300">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Link
+                    href={buildShopHref({ page: currentPage + 1 })}
+                    aria-disabled={currentPage >= totalPages}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                      currentPage >= totalPages
+                        ? "pointer-events-none border-white/10 text-zinc-600"
+                        : "border-white/20 text-zinc-200 hover:border-white/40"
+                    }`}
+                  >
+                    {locale === "fr" ? "Suivant" : "Next"}
+                  </Link>
+                </div>
+              </section>
+            ) : null}
           </div>
         </section>
 
-        {products.length === 0 && (
+        {productsTotalCount === 0 && (
           <section className="rounded-3xl border border-white/10 bg-zinc-900/70 p-10 text-center fade-up">
             <p className="text-sm text-zinc-300">{t("empty")}</p>
           </section>

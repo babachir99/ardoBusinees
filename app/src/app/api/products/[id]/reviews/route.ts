@@ -206,6 +206,12 @@ export async function POST(
     },
   });
 
+  const productStats = await prisma.productReview.aggregate({
+    where: { productId: product.id },
+    _avg: { rating: true },
+    _count: { _all: true },
+  });
+
   const sellerStats = await prisma.productReview.aggregate({
     where: {
       sellerId: product.sellerId,
@@ -232,6 +238,10 @@ export async function POST(
       createdAt: saved.createdAt,
       buyer: saved.buyer,
       mine: true,
+      stats: {
+        average: productStats._avg.rating ?? 0,
+        count: productStats._count._all,
+      },
     },
     { status: 201 }
   );

@@ -26,6 +26,8 @@ type ProductSuggestionGridProps = {
   products: ProductSuggestionItem[];
   locale: string;
   className?: string;
+  initialFavoriteIds?: string[];
+  favoritesResolved?: boolean;
 };
 
 export default function ProductSuggestionGrid({
@@ -34,6 +36,8 @@ export default function ProductSuggestionGrid({
   products,
   locale,
   className = "rounded-2xl border border-white/10 bg-zinc-950/50 p-4",
+  initialFavoriteIds = [],
+  favoritesResolved = false,
 }: ProductSuggestionGridProps) {
   if (products.length === 0) return null;
 
@@ -74,6 +78,8 @@ export default function ProductSuggestionGrid({
               <div className="relative h-28 overflow-hidden rounded-lg border border-white/10 bg-zinc-950">
                 <FavoriteButton
                   productId={product.id}
+                  initialIsFavorite={initialFavoriteIds.includes(product.id)}
+                  serverHydrated={favoritesResolved}
                   variant="icon"
                   className="absolute left-2 top-2 z-20"
                 />

@@ -1,6 +1,7 @@
 ﻿/* eslint-disable @next/next/no-img-element */
 
 import { Link } from "@/i18n/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { formatMoney, getDiscountedPrice } from "@/lib/format";
@@ -13,10 +14,11 @@ import { releaseExpiredPendingLocalOrders } from "@/lib/order-stock";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 import PurchaseInfoPanel from "@/components/shop/PurchaseInfoPanel";
 import ProductReviewsPanel from "@/components/shop/ProductReviewsPanel";
-import UserHeaderActions from "@/components/layout/UserHeaderActions";
+import AppHeader from "@/components/layout/AppHeader";
 import RecentProductViewTracker from "@/components/home/RecentProductViewTracker";
 
 import FavoriteButton from "@/components/favorites/FavoriteButton";
+import { buildStoreMetadata } from "@/lib/storeSeo";
 type RelatedProductCard = {
   id: string;
   title: string;
@@ -32,6 +34,55 @@ function getStars(value: number) {
   const safe = Number.isFinite(value) ? Math.max(0, Math.min(5, value)) : 0;
   const filled = Math.round(safe);
   return `${"\u2605".repeat(filled)}${"\u2606".repeat(5 - filled)}`;
+}
+
+function getProductSlugCandidates(slug: string) {
+  const normalizedSlug = slugify(slug);
+  return normalizedSlug && normalizedSlug !== slug ? [slug, normalizedSlug] : [slug];
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const isFr = locale === "fr";
+  const product = await prisma.product.findFirst({
+    where: {
+      isActive: true,
+      OR: getProductSlugCandidates(slug).map((candidate) => ({ slug: candidate })),
+    },
+    select: {
+      title: true,
+      slug: true,
+      description: true,
+      images: { orderBy: { position: "asc" }, take: 1, select: { url: true } },
+    },
+  });
+
+  if (!product) {
+    return buildStoreMetadata({
+      locale,
+      path: `/shop/${slug}`,
+      title: isFr ? "Produit introuvable | JONTAADO Shop" : "Product not found | JONTAADO Shop",
+      description: isFr ? "Cette fiche produit n'est plus disponible." : "This product page is no longer available.",
+      imagePath: "/logo.png",
+      noIndex: true,
+    });
+  }
+
+  return buildStoreMetadata({
+    locale,
+    path: `/shop/${product.slug}`,
+    title: `${product.title} | JONTAADO Shop`,
+    description:
+      product.description?.slice(0, 160) ||
+      (isFr
+        ? `Decouvre ${product.title} sur la marketplace JONTAADO.`
+        : `Discover ${product.title} on the JONTAADO marketplace.`),
+    imagePath: product.images[0]?.url || "/logo.png",
+  });
 }
 
 function normalizeStringArray(
@@ -112,9 +163,7 @@ export default async function ProductPage({
     resolvedSearchParams?.chat === "1" || resolvedSearchParams?.chat === "true";
   const session = await getServerSession(authOptions);
   const t = await getTranslations("Product");
-  const normalizedSlug = slugify(slug);
-  const slugCandidates =
-    normalizedSlug && normalizedSlug !== slug ? [slug, normalizedSlug] : [slug];
+  const slugCandidates = getProductSlugCandidates(slug);
 
   let product = await prisma.product.findFirst({
     where: {
@@ -172,6 +221,20 @@ export default async function ProductPage({
   if (product.slug !== slug) {
     redirect(`/${locale}/shop/${product.slug}${openChatDefault ? "?chat=1" : ""}`);
   }
+
+  const isFavorite = session?.user?.id
+    ? Boolean(
+        await prisma.favorite.findUnique({
+          where: {
+            userId_productId: {
+              userId: session.user.id,
+              productId: product.id,
+            },
+          },
+          select: { productId: true },
+        })
+      )
+    : false;
 
   const sellerProductsCount = await prisma.product.count({
     where: { sellerId: product.sellerId, isActive: true },
@@ -258,23 +321,8 @@ export default async function ProductPage({
   const explicitSizeOptions = normalizeStringArray(product.sizeOptions, 20, 32);
   const attributeEntries = readAttributeEntries(product.attributes);
 
-  const sizeCategorySlugs = new Set(["vetements", "chaussures", "enfants", "mode"]);
-  const colorCategorySlugs = new Set([
-    "vetements",
-    "chaussures",
-    "cosmetiques",
-    "maison",
-    "electronique",
-    "local",
-  ]);
-
-  const showSizeOptions =
-    explicitSizeOptions.length > 0 ||
-    product.categories.some((entry) => sizeCategorySlugs.has(entry.category.slug));
-  const showColorOptions =
-    explicitColorOptions.length > 0 ||
-    product.categories.some((entry) => colorCategorySlugs.has(entry.category.slug)) ||
-    product.type === "LOCAL";
+  const showSizeOptions = explicitSizeOptions.length > 0;
+  const showColorOptions = explicitColorOptions.length > 0;
 
   const sellerPhone = product.seller?.user?.phone?.trim();
   const isSellerOwner = session?.user?.id === product.seller?.userId;
@@ -372,6 +420,19 @@ export default async function ProductPage({
     new Set([...similarProducts, ...bundleProducts].map((item) => item.id))
   );
   const relatedRatingMap = new Map<string, { average: number; count: number }>();
+  const relatedFavoriteIds = session?.user?.id
+    ? new Set(
+        (
+          await prisma.favorite.findMany({
+            where: {
+              userId: session.user.id,
+              productId: { in: relatedProductIds },
+            },
+            select: { productId: true },
+          })
+        ).map((favorite) => favorite.productId)
+      )
+    : new Set<string>();
 
   if (relatedProductIds.length > 0) {
     const relatedRatingStats = await reviewDelegate.groupBy({
@@ -397,6 +458,8 @@ export default async function ProductPage({
       <div className="relative h-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
         <FavoriteButton
           productId={item.id}
+          initialIsFavorite={relatedFavoriteIds.has(item.id)}
+          serverHydrated
           variant="icon"
           className="absolute left-3 top-3 z-20"
         />
@@ -475,18 +538,9 @@ export default async function ProductPage({
         }}
         storageScope={session?.user?.id ?? null}
       />
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 fade-up">
-        <Link href="/" className="flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="JONTAADO logo"
-            className="h-[115px] w-auto md:h-[135px]"
-          />
-        </Link>
-        <UserHeaderActions locale={locale} className="flex items-center gap-3" />
-      </header>
+      <AppHeader locale={locale} containerClassName="max-w-6xl" />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-12 md:flex-row">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 pb-12 pt-[92px] sm:pt-[100px] md:flex-row">
         <section className="flex-1 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/10 via-zinc-900 to-zinc-900 p-8 card-glow fade-up">
           <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
             <span className="rounded-full bg-emerald-400/20 px-3 py-1 text-emerald-200">
@@ -546,6 +600,8 @@ export default async function ProductPage({
             colorOptions={explicitColorOptions}
             sizeOptions={explicitSizeOptions}
             isAuthenticated={Boolean(session?.user?.id)}
+            initialIsFavorite={isFavorite}
+            favoriteServerHydrated
           />
 
           <div className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-zinc-950/70 p-5 text-sm text-zinc-300">

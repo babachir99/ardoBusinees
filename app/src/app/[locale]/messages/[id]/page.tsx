@@ -124,7 +124,7 @@ export default async function MessageDetailPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 pb-16 pt-10">
+      <main className="mx-auto w-full max-w-6xl px-6 pb-16 pt-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">

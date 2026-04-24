@@ -740,7 +740,7 @@ export default function AdminOpsHub({ kpis, queueItems, insights }: Props) {
 
   return (
     <section className="space-y-6">
-      <header className="sticky top-0 z-30 rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
+      <header className="sticky top-[108px] z-30 rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold text-white">Ops Hub</h2>

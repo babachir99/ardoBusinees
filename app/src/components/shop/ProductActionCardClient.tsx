@@ -184,12 +184,6 @@ export default function ProductActionCardClient({
   }, [autoOpenedChat, blockedByTrust, canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, openChatDefault, payload]);
 
   useEffect(() => {
-    if (!isAuthenticated || disabledByOwner || !canNegotiate || payload) return;
-    void loadInquiry();
-  }, [canNegotiate, disabledByOwner, isAuthenticated, loadInquiry, payload]);
-
-
-  useEffect(() => {
     setContactTemplateLoaded(false);
   }, [productId]);
 
@@ -370,11 +364,7 @@ export default function ProductActionCardClient({
             </button>
           </>
           )
-        ) : (
-          <p className="rounded-xl border border-white/10 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
-            {labels.localOnly}
-          </p>
-        )
+        ) : null
       ) : (
         <Link
           href="/login"

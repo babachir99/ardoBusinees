@@ -50,6 +50,10 @@ export default function FavoritesList() {
     () => Array.from(new Set(items.map((item) => item.product.id))).slice(0, 12),
     [items]
   );
+  const favoriteProductIds = useMemo(
+    () => Array.from(new Set(items.map((item) => item.product.id))),
+    [items]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -277,6 +281,8 @@ export default function FavoritesList() {
               products={suggestedProducts}
               locale={locale}
               className="border-0 bg-transparent p-0"
+              initialFavoriteIds={favoriteProductIds}
+              favoritesResolved
             />
           )}
         </div>

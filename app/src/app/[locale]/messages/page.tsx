@@ -374,8 +374,8 @@ export default async function MessagesPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-8 sm:px-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-white/8 bg-white/[0.02] px-5 py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
               {isFr ? "Espace client" : "Customer area"}

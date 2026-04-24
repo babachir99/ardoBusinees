@@ -4,7 +4,6 @@ import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
-import Image from "next/image";
 import { buildStoreMetadata } from "@/lib/storeSeo";
 
 export async function generateMetadata({
@@ -59,32 +58,6 @@ export default async function SellerOrderDetailPage({
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3">
-          <Image
-            src="/logo.png"
-            alt="JONTAADO logo"
-            width={140}
-            height={140}
-            className="h-[115px] w-auto md:h-[135px]"
-            priority
-          />
-        </Link>
-        <div className="flex items-center gap-3 text-xs">
-          <Link
-            href="/seller"
-            className="rounded-full border border-white/20 px-4 py-2 text-white transition hover:border-white/60"
-          >
-            Espace vendeur
-          </Link>
-          <Link
-            href="/seller/orders"
-            className="rounded-full border border-white/20 px-4 py-2 text-white transition hover:border-white/60"
-          >
-            Commandes
-          </Link>
-        </div>
-      </header>
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-12">
         <SellerOrderDetail orderId={id} />
       </main>

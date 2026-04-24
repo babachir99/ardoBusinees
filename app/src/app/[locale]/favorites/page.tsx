@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import FavoritesList from "@/components/favorites/FavoritesList";
+import AppHeader from "@/components/layout/AppHeader";
 import Footer from "@/components/layout/Footer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -26,7 +27,12 @@ export async function generateMetadata({
   });
 }
 
-export default async function FavoritesPage() {
+export default async function FavoritesPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return (
@@ -52,7 +58,8 @@ export default async function FavoritesPage() {
 
   return (
     <div className="min-h-screen bg-jonta text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-12">
+      <AppHeader locale={locale} containerClassName="max-w-6xl" />
+      <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-[92px] sm:pt-[100px]">
         <FavoritesList />
       </main>
       <Footer />

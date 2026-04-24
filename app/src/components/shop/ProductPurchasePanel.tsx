@@ -33,6 +33,8 @@ type ProductPurchasePanelProps = {
   colorOptions?: string[];
   sizeOptions?: string[];
   isAuthenticated?: boolean;
+  initialIsFavorite?: boolean;
+  favoriteServerHydrated?: boolean;
 };
 
 export default function ProductPurchasePanel({
@@ -56,6 +58,8 @@ export default function ProductPurchasePanel({
   colorOptions,
   sizeOptions,
   isAuthenticated = false,
+  initialIsFavorite = false,
+  favoriteServerHydrated = false,
 }: ProductPurchasePanelProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -73,12 +77,8 @@ export default function ProductPurchasePanel({
       .slice(0, 20);
 
     if (normalized.length > 0) return normalized;
-    if (!showColorOptions) return [];
-
-    return locale === "fr"
-      ? ["Noir", "Blanc", "Bleu", "Rouge", "Vert"]
-      : ["Black", "White", "Blue", "Red", "Green"];
-  }, [colorOptions, locale, showColorOptions]);
+    return [];
+  }, [colorOptions]);
 
   const resolvedSizeOptions = useMemo(() => {
     const normalized = (sizeOptions ?? [])
@@ -87,10 +87,8 @@ export default function ProductPurchasePanel({
       .slice(0, 20);
 
     if (normalized.length > 0) return normalized;
-    if (!showSizeOptions) return [];
-
-    return ["S", "M", "L", "XL", "XXL"];
-  }, [showSizeOptions, sizeOptions]);
+    return [];
+  }, [sizeOptions]);
 
   const [selectedColor, setSelectedColor] = useState(() => resolvedColorOptions[0] ?? "");
   const [selectedSize, setSelectedSize] = useState(() => resolvedSizeOptions[0] ?? "");
@@ -466,6 +464,8 @@ export default function ProductPurchasePanel({
 
               <FavoriteButton
                 productId={productId}
+                initialIsFavorite={initialIsFavorite}
+                serverHydrated={favoriteServerHydrated}
                 addLabel={favoriteAddLabel}
                 removeLabel={favoriteRemoveLabel}
                 className="w-full whitespace-nowrap rounded-xl border-white/20 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-100"

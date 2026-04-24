@@ -78,8 +78,8 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "productId is required" }, { status: 400 });
   }
 
-  await prisma.favorite.delete({
-    where: { userId_productId: { userId: session.user.id, productId } },
+  await prisma.favorite.deleteMany({
+    where: { userId: session.user.id, productId },
   });
 
   return NextResponse.json({ ok: true });

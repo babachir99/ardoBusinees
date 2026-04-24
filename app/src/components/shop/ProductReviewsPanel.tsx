@@ -17,6 +17,13 @@ type ReviewItem = {
   };
 };
 
+type ReviewSubmitResponse = ReviewItem & {
+  stats?: {
+    average?: number;
+    count?: number;
+  };
+};
+
 type ProductReviewsPanelProps = {
   locale: string;
   productId: string;
@@ -86,13 +93,20 @@ export default function ProductReviewsPanel({
         throw new Error(data?.error || "Review request failed");
       }
 
-      const created = (await res.json()) as ReviewItem;
+      const created = (await res.json()) as ReviewSubmitResponse;
       const withoutMine = reviews.filter((item) => !item.mine);
       const next = [{ ...created, mine: true }, ...withoutMine];
       setReviews(next);
-      setCount(next.length);
-      const total = next.reduce((sum, item) => sum + item.rating, 0);
-      setAverage(next.length > 0 ? total / next.length : 0);
+      setCount(
+        typeof created.stats?.count === "number" ? created.stats.count : next.length
+      );
+      setAverage(
+        typeof created.stats?.average === "number"
+          ? created.stats.average
+          : next.length > 0
+          ? next.reduce((sum, item) => sum + item.rating, 0) / next.length
+          : 0
+      );
       setTitle("");
       setComment("");
     } catch (err) {

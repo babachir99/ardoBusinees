@@ -133,7 +133,7 @@ export default function PurchaseInfoPanel({
       : "Growing reliability";
 
   return (
-    <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:sticky md:top-6 md:p-6 fade-up">
+    <aside className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-900/70 p-5 md:sticky md:top-[108px] md:p-6 fade-up">
       <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
         <div className="flex items-start gap-3">
           <div className="h-14 w-14 overflow-hidden rounded-full border border-white/10 bg-zinc-800">

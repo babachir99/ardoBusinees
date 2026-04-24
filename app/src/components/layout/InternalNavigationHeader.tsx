@@ -195,11 +195,12 @@ export default function InternalNavigationHeader({
 
   const rawPath = pathname || `/${locale}`;
   const withoutLocale = rawPath.replace(new RegExp(`^/${locale}(?=/|$)`), "") || "/";
-  const hideForMarketplaceStores = /^\/stores\/jontaado-(cars|gp|immo|cares|presta|tiak-tiak)(\/|$)/.test(
-    withoutLocale
-  );
+  const hideForImmersiveHeaders =
+    /^\/stores\/jontaado-(cars|gp|immo|cares|presta|tiak-tiak)(\/|$)/.test(withoutLocale) ||
+    /^\/orders(\/|$)/.test(withoutLocale) ||
+    /^\/(cart|checkout|favorites|messages|seller|profile|admin)(\/|$)/.test(withoutLocale);
 
-  if (!meta || hideForMarketplaceStores) {
+  if (!meta || hideForImmersiveHeaders) {
     return null;
   }
 

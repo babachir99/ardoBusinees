@@ -46,6 +46,10 @@ export default function CartView() {
   const [complementaryProducts, setComplementaryProducts] = useState<RecommendedProduct[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
+  const favoriteProductIds = useMemo(
+    () => Array.from(new Set(favorites.map((item) => item.productId))),
+    [favorites]
+  );
 
   const sourceProductIds = useMemo(
     () => Array.from(new Set(items.map((item) => item.id))).slice(0, 18),
@@ -370,12 +374,16 @@ export default function CartView() {
             subtitle={t("recommendedSimilarSubtitle")}
             products={similarProducts}
             locale={locale}
+            initialFavoriteIds={favoriteProductIds}
+            favoritesResolved={!favoritesLoading}
           />
           <ProductSuggestionGrid
             title={t("recommendedComplementaryTitle")}
             subtitle={t("recommendedComplementarySubtitle")}
             products={complementaryProducts}
             locale={locale}
+            initialFavoriteIds={favoriteProductIds}
+            favoritesResolved={!favoritesLoading}
           />
 
           {!favoritesLoading && favorites.length > 0 && (

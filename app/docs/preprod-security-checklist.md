@@ -29,7 +29,7 @@
 - `npm run build`
 - `npm run qa:smoke -- --readonly`
 
-## 5. Base fraiche locale / CI
+## 5. Base fraiche locale / CI 
 ```bash
 npx prisma migrate deploy
 npm run seed
